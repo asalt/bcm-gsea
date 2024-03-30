@@ -1,0 +1,13 @@
+# Ignore data files
+data/
+
+# Ignore results
+results/
+
+# Ignore SQLite database files
+*.sqlite
+
+# Ignore R user files
+.Rproj.user
+.Rhistory
+.RData
