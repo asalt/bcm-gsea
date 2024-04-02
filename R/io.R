@@ -11,6 +11,7 @@ create_rnkfiles <- function(volcanodir){
   if (is.null(volcanodir)){
     stop("volcanodir not defined")
   }
+
   ( volcanofiles <- fs::dir_ls(path=volcanodir, regexp = ".*tsv") )
   lst <- volcanofiles %>%
     purrr::set_names( nm = ~basename(.) %>% fs::path_ext_remove() ) %>%   # set names first
@@ -22,11 +23,12 @@ create_rnkfiles <- function(volcanodir){
 }
 
 
-write_rnkfiles <- function(lst){
+write_rnkfiles <- function(lst, dir = "rnkfiles" ){
+  if (!fs::dir_exists(dir)) fs::dir_create(dir)
   ._ <- lst %>% purrr::imap( # .x is the value, .y is the name
     ~{
       .outname <- fs::path_join(
-        c( rnk_file_dir, paste0(.y, ".rnk"))
+        c( rnk_file_dir, paste0(.y, ".rnk") )
       )
       if (!fs::file_exists(.outname)){
           .x %>% select(GeneID, signedlogP) %>% write_tsv(.outname, col_names = FALSE)
@@ -43,8 +45,11 @@ load_rnkfiles <- function(rnkfiles){
                                             col_names = c("geneid", "signedlogp"),
                                             show_col_types = F
                 ) %>%
-                mutate(geneid = as.character(geneid)) %>%
-                arrange(signedlogp)
+                mutate(geneid = as.character(geneid),
+                       signedlogp = as.numeric(signedlogp)
+                ) %>%
+                arrange(signedlogp) %>%
+                drop_na()
     )
     data
 

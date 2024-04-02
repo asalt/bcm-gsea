@@ -42,6 +42,18 @@ test_render <- function(){
     )
 }
 
+test_invalid_dir <- function(){
+    rmarkdown::render("../run.Rmd",
+        output_format = "html_document",
+        output_dir = output_dir,
+        output_file = "test_invalid_dir.html",
+        params = list(
+            rankfiledir="does-not-exist",
+            genesets_json='[{"category": "H", "subcategory": ""}]'
+        )
+    )
+}
+
 test_one <- function(){
 
 
@@ -57,8 +69,8 @@ test_one <- function(){
 
         .values <- rnorm(n=length(genes))
         .data <- data.frame(
-            GeneID = genes,
-            signedlogP = .values
+            geneid = genes,
+            signedlogp = .values
         )
         .out <- file.path(data_dir, f)
         write_tsv(.data, .out)
@@ -78,8 +90,9 @@ test_one <- function(){
 }
 
 
-setup()
-test_render()
+# setup()
+# test_render()
+# test_invalid_dir()
 test_one()
 
 # teardown()

@@ -14,7 +14,7 @@ params:
       {"category": "C2", "subcategory": "CP:REACTOME"},
       {"category": "C5", "subcategory": "GO:MF"},
       {"category": "C5", "subcategory": "GO:BP"},
-      {"category": "C5", "subcategory": "GO:CP"}
+      {"category": "C5", "subcategory": "GO:CC"}
       /* {"category": "C2", "subcategory": "CP:KEGG"}
       */
     ]
@@ -25,11 +25,65 @@ params:
 
 ```{r}
 
-params$genesets_json
 json_data <- jsonlite::parse_json(params$genesets_json)
+species <- params$species
+
+
+json_data %>% purrr::map(~{print(.x$category); print(.x$subcategory)}) 
+
+
 #SPECIES <- "Homo sapiens" # or "Mus musculus" or Saccharomyces cerevisiae, and others
 #params$species
 ```
+
+
+```{r}
+
+# Properly applying get_genesets using pmap() and creating a named list
+pathways_of_interest <- json_data
+SPECIES <- params$species
+
+get_genesets <- function(category, subcategory) {
+  msigdbr::msigdbr(species = SPECIES, category = category, subcategory = subcategory)
+}
+
+list_of_geneset_dfs <- pathways_of_interest %>%
+  purrr::map(  # we use pmap for rowwise access to multiple values (?)
+    ~ {
+    # Here you can customize how you want to name each list element based on the inputs
+    list_name <- paste(.x$category, .x$subcategory, sep = "_")
+    list_data <- get_genesets(.x$category, .x$subcategory)
+    # Return a named list for each row
+    setNames(list(list_data), list_name)
+  }) %>% 
+  purrr::reduce(c) # reduce a list to a single value by applying a binary function, in this case c. 
+
+get_pathway_info <- function(gsname){
+  pathways_dfs[[gsname]] 
+}
+# now turn each pathway dataframe into a named list
+# Transform each DataFrame and convert it into a named list of gene ids
+pathways_df_to_list <- function(list_of_geneset_dfs){
+  pathways_list <- list_of_geneset_dfs %>%
+    #mutate(gs_fullname = str_c(gs_exact_source, gs_name, sep=" ")) %>% 
+    #group_by(gs_fullname) %>%
+    group_by(gs_name) %>% 
+    summarise(entrez_gene_ids = list(as.character(entrez_gene)), .groups = 'drop') %>%
+    tibble::deframe()
+  pathways_list
+}
+
+pathways_list_of_lists <- map(list_of_geneset_dfs, pathways_df_to_list)
+```
+
+```{r}
+
+results_list <- .GlobalEnv$run_all_pathways(pathways_list_of_lists, ranks_list)
+
+#pathways_list_of_lists %>% purrr::pluck(1) %>% str %>% head()
+```
+
+
 
 
 
@@ -48,6 +102,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 source("./R/io.R")
+source("./R/fgsea.R")
 ```
 
 
@@ -76,15 +131,51 @@ if ( (!file.exists(params$volcanodir)) &
      (!file.exists(params$rankfiledir))
 ){
   print("no files present")
+  knitr::knit_exit()
 }
 
 ```
 
 ```{r}
-if (file.exists(params$rankfiledir) ){
-  ( rnkfiles <- dir_ls(params$rankfiledir, pattern = ".rnk$") )
+
+rankfiledir <- params$rankfiledir
+if ( length(fs::dir_ls(rankfiledir, fail=F))==0 ){
+  #print('yes')
+  rnkdfs <- .GlobalEnv$create_rnkfiles(params$volcanodir) 
+  rnkdfs %>% .GlobalEnv$write_rnkfiles(dir = rankfiledir)
+} else{
+  
+  ( rnkfiles <- dir_ls(rankfiledir, pattern = ".rnk$", fail=F) )
+  rnkdfs <- rnkfiles %>% .GlobalEnv$load_rnkfiles()
+  #print('no')
 }
-# rnkfile_data <- rnkfiles %>% .GlobalEnv$load_rnkfiles()
+
+ranks_list <- rnkdfs %>% map(
+  ~ with(.x, setNames(signedlogp, geneid))
+)
+
+rnkdfs %>% str()
+```
+
+
+# prepare ranks
+
+
+```{r, label='prepare ranks'}
+# make a named list
+#ranks_list <- data %>% map(
+ranks_list <- rnkdfs %>% map(
+  ~ with(.x, setNames(signedlogp, geneid))
+)
+# ranks2 = ranks$`./rnkfiles/treatcntrl_vs_treatABBV_075.rnk`
+
+```
+
+
+# load gene sets
+
+```{r}
+
 
 ```
 
