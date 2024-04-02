@@ -1,0 +1,38 @@
+library(magrittr)
+library(purrr)
+library(fs)
+library(readr)
+library(stringr)
+
+
+
+
+load_rnkfiles <- function(volcanodir){
+  if (is.null(volcanodir)){
+    stop("volcanodir not defined")
+  }
+  ( volcanofiles <- fs::dir_ls(path=volcanodir, regexp = ".*tsv") )
+  lst <- volcanofiles %>%
+    purrr::set_names( nm = ~basename(.) %>% fs::path_ext_remove() ) %>%   # set names first
+    purrr::map(~read_tsv(.x, show_col_types = F) )
+  shorternames <- names(lst) %>% stringr::str_extract(., pattern = "(?<=group_)(.*)(?=_di*)")
+  names(lst) <- shorternames
+  lst
+
+}
+
+
+write_rnk_files <- function(lst){
+  ._ <- lst %>% purrr::imap( # .x is the value, .y is the name
+    ~{
+      .outname <- fs::path_join(
+        c( rnk_file_dir, paste0(.y, ".rnk"))
+      )
+      if (!fs::file_exists(.outname)){
+          .x %>% select(GeneID, signedlogP) %>% write_tsv(.outname, col_names = FALSE)
+          print(paste0("Wrote ", .outname))
+      }
+
+  }
+)
+}

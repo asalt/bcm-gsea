@@ -1,0 +1,65 @@
+---
+title: "run.Rmd"
+author: "BCM MSPC"
+date: '`r Sys.Date()`'
+output: html_document
+params:
+  volcanodir: 
+  rankfiledir:
+  species: "Homo sapiens"
+  genesets_json: >
+    [
+      {"category": "H", "subcategory": ""},
+      {"category": "C2", "subcategory": "CP:KEGG"},
+      {"category": "C2", "subcategory": "CP:REACTOME"},
+      {"category": "C5", "subcategory": "GO:MF"},
+      {"category": "C5", "subcategory": "GO:BP"},
+      {"category": "C5", "subcategory": "GO:CP"}
+      /* {"category": "C2", "subcategory": "CP:KEGG"}
+      */
+    ]
+  
+---
+
+# setup
+
+```{r}
+
+params$genesets_json
+json_data <- jsonlite::parse_json(params$genesets_json)
+#SPECIES <- "Homo sapiens" # or "Mus musculus" or Saccharomyces cerevisiae, and others
+#params$species
+```
+
+
+
+```{r setup, include=FALSE}
+library(purrr) # for map()
+library(magrittr)
+library(ggplot2)
+library(fs) # for dir_ls()
+library(fgsea)
+library(dplyr)
+library(msigdbr)
+library(stringr)
+library(readr)
+library(tidyr)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, eval=F, include=F}
+msigdbr::msigdbr_species()
+```
+```{r, eval=F, include=F}
+
+msigdbr::msigdbr_collections()
+```
+
+
+
+
+```{r}
+( params )
+```
+
