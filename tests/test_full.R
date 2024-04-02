@@ -15,8 +15,8 @@ trycatch <- function(expr, silent = TRUE) {
 }
 
 
-data_dir <- "test_data"
-output_dir <- "test_output"
+data_dir <- "test_data" %>% fs::path_abs()
+output_dir <- "test_output" %>% fs::path_abs()
 
 setup <- function(){
 
@@ -82,4 +82,4 @@ setup()
 test_render()
 test_one()
 
-teardown()
+# teardown()

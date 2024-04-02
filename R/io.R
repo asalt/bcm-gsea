@@ -7,7 +7,7 @@ library(stringr)
 
 
 
-load_rnkfiles <- function(volcanodir){
+create_rnkfiles <- function(volcanodir){
   if (is.null(volcanodir)){
     stop("volcanodir not defined")
   }
@@ -22,7 +22,7 @@ load_rnkfiles <- function(volcanodir){
 }
 
 
-write_rnk_files <- function(lst){
+write_rnkfiles <- function(lst){
   ._ <- lst %>% purrr::imap( # .x is the value, .y is the name
     ~{
       .outname <- fs::path_join(
@@ -35,4 +35,17 @@ write_rnk_files <- function(lst){
 
   }
 )
+}
+
+load_rnkfiles <- function(rnkfiles){
+
+    data <- map(rnkfiles, ~ readr::read_tsv(.x,
+                                            col_names = c("geneid", "signedlogp"),
+                                            show_col_types = F
+                ) %>%
+                mutate(geneid = as.character(geneid)) %>%
+                arrange(signedlogp)
+    )
+    data
+
 }

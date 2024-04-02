@@ -4,8 +4,8 @@ author: "BCM MSPC"
 date: '`r Sys.Date()`'
 output: html_document
 params:
-  volcanodir: 
-  rankfiledir:
+  volcanodir: none
+  rankfiledir: none
   species: "Homo sapiens"
   genesets_json: >
     [
@@ -45,6 +45,9 @@ library(stringr)
 library(readr)
 library(tidyr)
 knitr::opts_chunk$set(echo = TRUE)
+
+
+source("./R/io.R")
 ```
 
 
@@ -61,5 +64,27 @@ msigdbr::msigdbr_collections()
 
 ```{r}
 ( params )
+```
+
+
+
+# load
+
+```{r, label='load'}
+
+if ( (!file.exists(params$volcanodir)) & 
+     (!file.exists(params$rankfiledir))
+){
+  print("no files present")
+}
+
+```
+
+```{r}
+if (file.exists(params$rankfiledir) ){
+  ( rnkfiles <- dir_ls(params$rankfiledir, pattern = ".rnk$") )
+}
+# rnkfile_data <- rnkfiles %>% .GlobalEnv$load_rnkfiles()
+
 ```
 
