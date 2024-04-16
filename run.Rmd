@@ -18,7 +18,7 @@ params:
       /* {"category": "C2", "subcategory": "CP:KEGG"}
       */
     ]
-  
+
 ---
 
 # setup
@@ -29,7 +29,7 @@ json_data <- jsonlite::parse_json(params$genesets_json)
 species <- params$species
 
 
-json_data %>% purrr::map(~{print(.x$category); print(.x$subcategory)}) 
+json_data %>% purrr::map(~{print(.x$category); print(.x$subcategory)})
 
 
 #SPECIES <- "Homo sapiens" # or "Mus musculus" or Saccharomyces cerevisiae, and others
@@ -55,19 +55,19 @@ list_of_geneset_dfs <- pathways_of_interest %>%
     list_data <- get_genesets(.x$category, .x$subcategory)
     # Return a named list for each row
     setNames(list(list_data), list_name)
-  }) %>% 
-  purrr::reduce(c) # reduce a list to a single value by applying a binary function, in this case c. 
+  }) %>%
+  purrr::reduce(c) # reduce a list to a single value by applying a binary function, in this case c.
 
 get_pathway_info <- function(gsname){
-  pathways_dfs[[gsname]] 
+  pathways_dfs[[gsname]]
 }
 # now turn each pathway dataframe into a named list
 # Transform each DataFrame and convert it into a named list of gene ids
 pathways_df_to_list <- function(list_of_geneset_dfs){
   pathways_list <- list_of_geneset_dfs %>%
-    #mutate(gs_fullname = str_c(gs_exact_source, gs_name, sep=" ")) %>% 
+    #mutate(gs_fullname = str_c(gs_exact_source, gs_name, sep=" ")) %>%
     #group_by(gs_fullname) %>%
-    group_by(gs_name) %>% 
+    group_by(gs_name) %>%
     summarise(entrez_gene_ids = list(as.character(entrez_gene)), .groups = 'drop') %>%
     tibble::deframe()
   pathways_list
@@ -87,7 +87,7 @@ results_list <- .GlobalEnv$run_all_pathways(pathways_list_of_lists, ranks_list)
 
 
 
-```{r setup, include=FALSE}
+```{r setup, include=TRUE}
 library(purrr) # for map()
 library(magrittr)
 library(ggplot2)
@@ -127,7 +127,7 @@ msigdbr::msigdbr_collections()
 
 ```{r, label='load'}
 
-if ( (!file.exists(params$volcanodir)) & 
+if ( (!file.exists(params$volcanodir)) &
      (!file.exists(params$rankfiledir))
 ){
   print("no files present")
@@ -141,10 +141,10 @@ if ( (!file.exists(params$volcanodir)) &
 rankfiledir <- params$rankfiledir
 if ( length(fs::dir_ls(rankfiledir, fail=F))==0 ){
   #print('yes')
-  rnkdfs <- .GlobalEnv$create_rnkfiles(params$volcanodir) 
+  rnkdfs <- .GlobalEnv$create_rnkfiles(params$volcanodir)
   rnkdfs %>% .GlobalEnv$write_rnkfiles(dir = rankfiledir)
 } else{
-  
+
   ( rnkfiles <- dir_ls(rankfiledir, pattern = ".rnk$", fail=F) )
   rnkdfs <- rnkfiles %>% .GlobalEnv$load_rnkfiles()
   #print('no')
