@@ -21,7 +21,10 @@ test_get_geneset <- function(){
     species <- "Homo sapiens"
 
 
-    .GlobalEnv$get_collections(genesets, species=species)
+    genesets_dfs <- .GlobalEnv$get_collections(genesets, species=species)
+
+    genesets_lists <- purrr::map(genesets_dfs, .GlobalEnv$genesets_df_to_list)
+
 
 
 }
