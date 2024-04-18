@@ -23,70 +23,6 @@ params:
 
 # setup
 
-```{r}
-
-json_data <- jsonlite::parse_json(params$genesets_json)
-species <- params$species
-
-
-json_data %>% purrr::map(~{print(.x$category); print(.x$subcategory)})
-
-
-#SPECIES <- "Homo sapiens" # or "Mus musculus" or Saccharomyces cerevisiae, and others
-#params$species
-```
-
-
-```{r}
-
-# Properly applying get_genesets using pmap() and creating a named list
-pathways_of_interest <- json_data
-SPECIES <- params$species
-
-get_genesets <- function(category, subcategory) {
-  msigdbr::msigdbr(species = SPECIES, category = category, subcategory = subcategory)
-}
-
-list_of_geneset_dfs <- pathways_of_interest %>%
-  purrr::map(  # we use pmap for rowwise access to multiple values (?)
-    ~ {
-    # Here you can customize how you want to name each list element based on the inputs
-    list_name <- paste(.x$category, .x$subcategory, sep = "_")
-    list_data <- get_genesets(.x$category, .x$subcategory)
-    # Return a named list for each row
-    setNames(list(list_data), list_name)
-  }) %>%
-  purrr::reduce(c) # reduce a list to a single value by applying a binary function, in this case c.
-
-get_pathway_info <- function(gsname){
-  pathways_dfs[[gsname]]
-}
-# now turn each pathway dataframe into a named list
-# Transform each DataFrame and convert it into a named list of gene ids
-pathways_df_to_list <- function(list_of_geneset_dfs){
-  pathways_list <- list_of_geneset_dfs %>%
-    #mutate(gs_fullname = str_c(gs_exact_source, gs_name, sep=" ")) %>%
-    #group_by(gs_fullname) %>%
-    group_by(gs_name) %>%
-    summarise(entrez_gene_ids = list(as.character(entrez_gene)), .groups = 'drop') %>%
-    tibble::deframe()
-  pathways_list
-}
-
-pathways_list_of_lists <- map(list_of_geneset_dfs, pathways_df_to_list)
-```
-
-```{r}
-
-results_list <- .GlobalEnv$run_all_pathways(pathways_list_of_lists, ranks_list)
-
-#pathways_list_of_lists %>% purrr::pluck(1) %>% str %>% head()
-```
-
-
-
-
-
 ```{r setup, include=TRUE}
 library(purrr) # for map()
 library(magrittr)
@@ -102,8 +38,38 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 source("./R/io.R")
+source("./R/geneset_utils.R")
 source("./R/fgsea.R")
 ```
+
+```{r}
+
+genesets_of_interest <- jsonlite::parse_json(params$genesets_json)
+species <- params$species
+
+genesets_of_interest %>% purrr::map(~{print(.x$category); print(.x$subcategory)})
+
+#SPECIES <- "Homo sapiens" # or "Mus musculus" or Saccharomyces cerevisiae, and others
+#params$species
+```
+
+# load gene sets
+
+```{r, label='get genesets'}
+list_of_geneset_dfs <- genesets_of_interest %>% .GlobalEnv$get_collections()
+```
+
+```{r, label='convert geneset objects'}
+pathways_list_of_lists <-
+  list_of_geneset_dfs %>% purrr::map(.GlobalEnv$genesets_df_to_list)
+```
+
+```{r}
+# results_list <- .GlobalEnv$run_all_pathways(pathways_list_of_lists, ranks_list)
+#pathways_list_of_lists %>% purrr::pluck(1) %>% str %>% head()
+```
+
+
 
 
 ```{r, eval=F, include=F}
@@ -114,15 +80,9 @@ msigdbr::msigdbr_species()
 msigdbr::msigdbr_collections()
 ```
 
-
-
-
 ```{r}
 ( params )
 ```
-
-
-
 # load
 
 ```{r, label='load'}
@@ -136,7 +96,10 @@ if ( (!file.exists(params$volcanodir)) &
 
 ```
 
-```{r}
+
+# prepare ranks
+
+```{r, label='prepare ranks'}
 
 rankfiledir <- params$rankfiledir
 if ( length(fs::dir_ls(rankfiledir, fail=F))==0 ){
@@ -150,32 +113,18 @@ if ( length(fs::dir_ls(rankfiledir, fail=F))==0 ){
   #print('no')
 }
 
+ranks_list <- rnkdfs %>% .GlobalEnv$ranks_dfs_to_lists()
 ranks_list <- rnkdfs %>% map(
   ~ with(.x, setNames(signedlogp, geneid))
 )
 
-rnkdfs %>% str()
+# rnkdfs %>% str()
 ```
 
+# run fgsea
+```{r, label='run fgsea'}
 
-# prepare ranks
+results_list <- .GlobalEnv$run_all_pathways(pathways_list_of_lists, ranks_list)
 
-
-```{r, label='prepare ranks'}
-# make a named list
-#ranks_list <- data %>% map(
-ranks_list <- rnkdfs %>% map(
-  ~ with(.x, setNames(signedlogp, geneid))
-)
-# ranks2 = ranks$`./rnkfiles/treatcntrl_vs_treatABBV_075.rnk`
-
+(results_list)
 ```
-
-
-# load gene sets
-
-```{r}
-
-
-```
-

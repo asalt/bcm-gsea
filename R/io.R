@@ -54,3 +54,10 @@ load_rnkfiles <- function(rnkfiles){
     data
 
 }
+
+
+ranks_dfs_to_lists <- function(rnkdfs){
+  ranks_list <- rnkdfs %>% map(
+    ~ with(.x, setNames(signedlogp, geneid))
+  )
+}
