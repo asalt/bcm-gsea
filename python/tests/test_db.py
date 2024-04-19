@@ -35,3 +35,7 @@ def test_get_session_with_engine():
     assert session is not None
     assert session.bind == engine
     session.close()
+
+
+if __name__ == "__main__":
+    os.system(f"pytest -s {__file__}")

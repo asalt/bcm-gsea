@@ -166,7 +166,7 @@ def test_project_edges(session):
     assert project.edges[0].project_id == edge.project_id
 
 
-def test_comparison_deletion_cascade(session):
+def test_comparison_deletion_cascade_query(session):
     project = Project(name="test_project", description="test_description")
     comparison = Comparison(
         name="test_comparison", description="test_description", project=project
@@ -194,13 +194,11 @@ def test_comparison_deletion_cascade(session):
     )  # This line will pass if CASCADE DELETE is set up correctly
 
 
-from sqlalchemy import inspect
 
-
-def test_comparison_deletion_cascade_inspector(session):
+def test_comparison_deletion_cascade_pyobjects(session):
     """
-    this uses the SQLAlchemy inspect function to check if the rank object has been marked as deleted
-    this is a useful way to use an object (inspector) to check the state of another object (rank)
+    basically a redundant test of test_comparison_deletion_cascade_query,
+    but with a different approach to check if the rank object has been deleted
     """
     project = Project(name="test_project", description="test_description")
     comparison = Comparison(
@@ -282,4 +280,5 @@ def test_complex_project_relationships(session):
 
 
 if __name__ == "__main__":
-    os.system("pytest -s test_models.py")
+    # os.system("pytest -s test_models.py")
+    os.system(f"pytest -s {__file__}")
