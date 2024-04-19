@@ -23,6 +23,9 @@ class Project(Base):
     description = Column(String)
 
     edges = relationship("Edge", back_populates="project")
+    ranks = relationship("Ranks", back_populates="project")
+    comparisons = relationship("Comparison", back_populates="project")
+
     # created_at = Column(String)
     # updated_at = Column(String)
     # user_id = Column(Integer, ForeignKey("users.id"))
@@ -40,12 +43,11 @@ class Ranks(Base):
     feature_id = Column(String)
     feature_value = Column(Float)
 
-
-
     project_id = Column(Integer, ForeignKey("projects.id"))
     project = relationship("Project", back_populates="ranks")
 
     comparison_id = Column(Integer, ForeignKey("comparisons.id"))
+    comparison = relationship("Comparison", back_populates="ranks")
 
 
     # user_id = Column(Integer, ForeignKey("users.id"))
@@ -63,8 +65,7 @@ class Comparison(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     project = relationship("Project", back_populates="comparisons")
 
-    rank_id = Column(Integer, ForeignKey("ranks.id"))
-    ranks = relationship("Ranks", back_populates="comparisons")
+    ranks = relationship("Ranks", back_populates="comparison")
 
     edges = relationship("Edge", back_populates="comparison")
 
