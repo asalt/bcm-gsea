@@ -30,7 +30,6 @@ class Project(Base):
     # updated_at = Column(String)
     # user_id = Column(Integer, ForeignKey("users.id"))
     # user = relationship("User", back_populates="projects")
-    # models = relationship("Model", back_populates="project")
 
 
 class Ranks(Base):
@@ -50,10 +49,6 @@ class Ranks(Base):
     comparison = relationship("Comparison", back_populates="ranks")
 
 
-    # user_id = Column(Integer, ForeignKey("users.id"))
-    # user = relationship("User", back_populates="projects")
-    # models = relationship("Model", back_populates="project")
-
 
 class Comparison(Base):
     __tablename__ = "comparisons"
@@ -65,9 +60,10 @@ class Comparison(Base):
     project_id = Column(Integer, ForeignKey("projects.id"))
     project = relationship("Project", back_populates="comparisons")
 
-    ranks = relationship("Ranks", back_populates="comparison")
-
-    edges = relationship("Edge", back_populates="comparison")
+    ranks = relationship("Ranks", back_populates="comparison",
+                        cascade="all, delete-orphan")
+    edges = relationship("Edge", back_populates="comparison",
+                         cascade="all, delete-orphan")
 
 
 class Edge(Base):
