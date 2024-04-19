@@ -167,6 +167,9 @@ def test_project_edges(session):
 
 
 def test_comparison_deletion_cascade_query(session):
+    """
+    this approach is nice because it checks for explicit deletion via query
+    """
     project = Project(name="test_project", description="test_description")
     comparison = Comparison(
         name="test_comparison", description="test_description", project=project
@@ -186,6 +189,8 @@ def test_comparison_deletion_cascade_query(session):
     # Delete comparison and commit to test cascade effects
     session.delete(comparison)
     session.commit()
+    # session.expire_all() # this shouldn't be necessary, I think
+
 
     # Check if rank has been deleted or updated
     refreshed_rank = session.query(Ranks).filter_by(id=rank.id).one_or_none()
