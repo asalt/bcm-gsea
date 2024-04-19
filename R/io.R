@@ -12,6 +12,10 @@ create_rnkfiles <- function(volcanodir){
     stop("volcanodir not defined")
   }
 
+  if (!fs::dir_exists(volcanodir)){
+    stop("volcanodir does not exist")
+  }
+
   ( volcanofiles <- fs::dir_ls(path=volcanodir, regexp = ".*tsv") )
   lst <- volcanofiles %>%
     purrr::set_names( nm = ~basename(.) %>% fs::path_ext_remove() ) %>%   # set names first
@@ -28,7 +32,7 @@ write_rnkfiles <- function(lst, dir = "rnkfiles" ){
   ._ <- lst %>% purrr::imap( # .x is the value, .y is the name
     ~{
       .outname <- fs::path_join(
-        c( rnk_file_dir, paste0(.y, ".rnk") )
+        c( dir, paste0(.y, ".rnk") )
       )
       if (!fs::file_exists(.outname)){
           .x %>% select(GeneID, signedlogP) %>% write_tsv(.outname, col_names = FALSE)
@@ -42,13 +46,13 @@ write_rnkfiles <- function(lst, dir = "rnkfiles" ){
 load_rnkfiles <- function(rnkfiles){
 
     data <- map(rnkfiles, ~ readr::read_tsv(.x,
-                                            col_names = c("geneid", "signedlogp"),
+                                            col_names = c("geneid", "value"),
                                             show_col_types = F
                 ) %>%
                 mutate(geneid = as.character(geneid),
                        signedlogp = as.numeric(signedlogp)
                 ) %>%
-                arrange(signedlogp) %>%
+                # arrange(signedlogp) %>% # do not change order of files here
                 drop_na()
     )
     data
@@ -57,7 +61,7 @@ load_rnkfiles <- function(rnkfiles){
 
 
 ranks_dfs_to_lists <- function(rnkdfs){
-  ranks_list <- rnkdfs %>% map(
+  ranks_list <- rnkdfs %>% purrr::map(
     ~ with(.x, setNames(signedlogp, geneid))
   )
   return(ranks_list)
