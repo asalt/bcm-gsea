@@ -46,7 +46,7 @@ write_rnkfiles <- function(lst, dir = "rnkfiles" ){
 load_rnkfiles <- function(rnkfiles){
 
     data <- map(rnkfiles, ~ readr::read_tsv(.x,
-                                            col_names = c("geneid", "value"),
+                                            col_names = c("geneid", "signedlogp"),
                                             show_col_types = F
                 ) %>%
                 mutate(geneid = as.character(geneid),

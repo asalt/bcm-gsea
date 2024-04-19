@@ -3,6 +3,11 @@ library(withr)
 library(stringr)
 library(readr)
 library(purrr)
+library(dplyr)
+library(tidyr)
+library(tibble)
+
+source("../io.R")
 
 test_that("ranks_dfs_to_lists returns correct list structure and naming", {
   # Create sample data frames
