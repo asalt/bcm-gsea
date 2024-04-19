@@ -60,4 +60,5 @@ ranks_dfs_to_lists <- function(rnkdfs){
   ranks_list <- rnkdfs %>% map(
     ~ with(.x, setNames(signedlogp, geneid))
   )
+  return(ranks_list)
 }

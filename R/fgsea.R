@@ -1,3 +1,7 @@
+library(fgsea)
+library(msigdbr)
+
+
 run_one <- function(rankobj, geneset){
   # to look for duplicate gene names
   # rankobj %>% names %>% table %>% as.data.frame %>% pull(Freq) %>% max
@@ -22,3 +26,25 @@ run_all_pathways <- function(pathways_list, ranks){
 
 # results_list <- run_all_pathways(pathways_list_of_lists, ranks_list)
 
+simulate_preranked_data <- function(...){
+
+  set.seed(4321)
+
+  geneset <- msigdbr::msigdbr(species = "Homo sapiens",
+      category = "H",
+      subcategory = ""
+      )
+  genes <- geneset %>% pull(entrez_gene) %>% unique()
+
+
+  .values <- rnorm(n=length(genes))
+  .data <- data.frame(
+      geneid = genes,
+      signedlogp = .values
+  )
+
+  return(.data)
+
+
+
+}

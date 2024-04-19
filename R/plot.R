@@ -123,3 +123,25 @@ barplot_with_numbers <- function(df, title=''){
 }
 
 
+
+
+
+
+
+edgeplot1 <- function(...){
+
+  rankorder_edge %>% filter(!is.na(stat_stat)) %>% dim()
+  ggplot(aes(x=rank, y=ES)) + geom_point()
+
+  posES <- enplot_data$posES
+  negES <- enplot_data$negES
+  p <- rankorder_edge %>%
+    ggplot(aes(x=stat_tick, y=ES, col=rank)) +
+    geom_point() +
+    scale_color_continuous(type="viridis", option="H")+
+    geom_hline(yintercept = posES, colour = "red", linetype = "dashed") +
+    geom_hline(yintercept = negES, colour = "red", linetype = "dashed")
+
+  p
+
+}
