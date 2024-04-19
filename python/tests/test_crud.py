@@ -225,6 +225,7 @@ def test_proj_rank_misc(session):
         for x in np.random.rand(10)
     ]
     add_many_and_commit(rankobjs, session)
+    # this is all already tested in test_models.py
     assert project.id is not None
     assert project.ranks[0].id is not None
     assert comparison1.id is not None
