@@ -1,9 +1,42 @@
 # geneset_utils.R
+library(here)
+library(fs)
+
 require(magrittr)
 
-get_collection <- function(category, subcategory, species = "Homo sapiens", ...) {
-  msigdbr::msigdbr(species = species, category = category, subcategory = subcategory)
+get_collection <- function(category, subcategory, species = "Homo sapiens", ..., cache = T) {
+
+  collection_id <- paste(category, subcategory, make.names(species), sep="_") # only used if cache = T
+  if (cache == TRUE){
+    cache_dir <- here("cache")
+    if ( !fs::dir_exists(cache_dir) ) {
+      fs::dir_create(cache_dir)
+    }
+    collection_id_path <- file.path(cache_dir, collection_id)
+    if ( fs::file_exists(collection_id_path) ){
+      cat(paste0("reading ", collection_id, "from ", cache_dir, '\n'))
+      df <- readr::read_tsv(collection_id_path, show_col_types=F)
+      return(df)
+    }
+  }
+  df <- msigdbr::msigdbr(species = species, category = category, subcategory = subcategory)
+
+  if (cache == TRUE){
+    cache_dir <- here("cache")
+    collection_id_path <- file.path(cache_dir, collection_id)
+    if ( !fs::file_exists(collection_id_path) ){
+      df %>% readr::write_tsv(collection_id_path)
+      cat(paste0("writing ", collection_id, "to ", cache_dir))
+      return(df)
+    }
+  }
+
+
+
+  return(df)
 }
+
+
 
 
 get_collections <- function(list_of_collections, species = "Homo sapiens"){
