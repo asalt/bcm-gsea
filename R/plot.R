@@ -160,3 +160,39 @@ edgeplot1 <- function(...) {
 
   p
 }
+
+
+other2 <- function() {
+  posES <- enplot_data$posES
+  negES <- enplot_data$negES
+  rankorder_edge %>%
+    ggplot(aes(x = stat_tick, y = ES, col = rank)) +
+    geom_point() +
+    # scale_color_viridis_c(option = "magma") +
+    scale_color_continuous(type = "viridis", option = "H") +
+    # scale_color_continuous(type="viridis")+
+    geom_hline(yintercept = posES, colour = "red", linetype = "dashed") +
+    geom_hline(yintercept = negES, colour = "red", linetype = "dashed")
+}
+
+
+other3 <- function() {
+  with(enplot_data, ggplot(data = stats) +
+    geom_line(aes(x = rank, y = stat),
+      color = "green"
+    ) +
+    geom_segment(data = ticks, mapping = aes(
+      x = rank,
+      y = -spreadES / 16, xend = rank, yend = spreadES / 16
+    ), linewidth = ticksSize) +
+    geom_hline(yintercept = posES, colour = "red", linetype = "dashed") +
+    geom_hline(yintercept = negES, colour = "red", linetype = "dashed") +
+    geom_hline(yintercept = maxAbsStat, colour = "red", linetype = "dashed") +
+    geom_hline(yintercept = -maxAbsStat, colour = "red", linetype = "dashed") +
+    geom_hline(yintercept = 0, colour = "black") +
+    theme(
+      panel.background = element_blank(),
+      panel.grid.major = element_line(color = "grey92")
+    ) +
+    labs(x = "rank", y = "enrichment score"))
+}
