@@ -77,13 +77,16 @@ class Result(Base):
     __tablename__ = "results"
 
     id = Column(Integer, primary_key=True)
-    name = Column(String)
     description = Column(String)
 
+
+    geneset = Column(String)
     p_value = Column(Float)
     adj_p_value = Column(Float)
     ES = Column(Float)
     NES = Column(Float)
+    size = Column(Integer)
+
 
     project_id = Column(Integer, ForeignKey("projects.id"))
     project = relationship("Project", back_populates="results")
