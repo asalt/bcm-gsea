@@ -42,7 +42,27 @@ source("./R/geneset_utils.R")
 source("./R/fgsea.R")
 ```
 
-```{r}
+```{r, label=test, eval=F}
+data <- simulate_preranked_data()
+geneset <- .GlobalEnv$get_collection("H", "")
+geneset_list <- .GlobalEnv$genesets_df_to_list(geneset)
+#named_data = list(data=data)
+rankobj <- ranks_dfs_to_lists(list(data))
+
+.res <- rankobj[[1]] %>% run_one(geneset_list)
+.name <- .res[1, 'pathway'][[1]]
+
+enplot_data <- plotEnrichmentData(geneset_list[[.name]], rankobj[[1]])
+
+.rnkorder <- -rankobj[[1]] %>% (rank)
+rankobj[[1]]['rank'] <- .rnkorder
+
+```
+
+
+
+
+```{r, label='load params'}
 
 genesets_of_interest <- jsonlite::parse_json(params$genesets_json)
 species <- params$species
