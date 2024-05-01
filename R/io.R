@@ -1,8 +1,8 @@
-library(magrittr)
-library(purrr)
-library(fs)
-library(readr)
-library(stringr)
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(fs))
+suppressPackageStartupMessages(library(readr))
+suppressPackageStartupMessages(library(stringr))
 
 
 

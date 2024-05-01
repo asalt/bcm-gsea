@@ -1,7 +1,7 @@
-library(fgsea)
-library(msigdbr)
-library(dplyr)
-library(magrittr)
+suppressPackageStartupMessages(library(fgsea))
+suppressPackageStartupMessages(library(msigdbr))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(magrittr))
 
 
 run_one <- function(rankobj, geneset) {

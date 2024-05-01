@@ -1,11 +1,11 @@
-library(testthat)
-library(withr)
-library(stringr)
-library(readr)
-library(purrr)
-library(dplyr)
-library(tidyr)
-library(tibble)
+suppressPackageStartupMessages(library(testthat))
+suppressPackageStartupMessages(library(withr))
+suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(readr))
+suppressPackageStartupMessages(library(purrr))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(tibble))
 
 source("../io.R")
 
@@ -57,8 +57,10 @@ test_that("create_rnkfiles processes files correctly", {
 
 test_that("write_rnkfiles writes files correctly", {
   withr::with_tempdir("rnk_test", {
-    lst <- list(test1 = tibble(GeneID = c("Gene1", "Gene2"), signedlogP = c(0.5, -1.2)),
-                test2 = tibble(GeneID = c("Gene3", "Gene4"), signedlogP = c(1.5, -0.3)))
+    lst <- list(
+      test1 = tibble(GeneID = c("Gene1", "Gene2"), signedlogP = c(0.5, -1.2)),
+      test2 = tibble(GeneID = c("Gene3", "Gene4"), signedlogP = c(1.5, -0.3))
+    )
     write_rnkfiles(lst, "rnk_test")
     expect_true(fs::file_exists("rnk_test/test1.rnk"))
     expect_true(fs::file_exists("rnk_test/test2.rnk"))

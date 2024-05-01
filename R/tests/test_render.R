@@ -1,8 +1,8 @@
-library(tidyverse)
-library(magrittr)
-library(msigdbr)
-library(rmarkdown)
-library(fs)
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(msigdbr))
+suppressPackageStartupMessages(library(rmarkdown))
+suppressPackageStartupMessages(library(fs))
 
 
 
