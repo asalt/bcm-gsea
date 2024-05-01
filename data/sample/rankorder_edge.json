@@ -1,0 +1,50 @@
+[
+  {
+    "id": "19",
+    "rank": 3023,
+    "stat": -0.4268,
+    "ES": -0.1062,
+    "stat_tick": -0.4268,
+    "geneset": "HALLMARK_ADIPOGENESIS"
+  },
+  {
+    "id": "11194",
+    "rank": 2701,
+    "stat": -0.2236,
+    "ES": -0.0639,
+    "stat_tick": -0.2236,
+    "geneset": "HALLMARK_ADIPOGENESIS"
+  },
+  {
+    "id": "10449",
+    "rank": 1128,
+    "stat": 0.7176,
+    "ES": 0.1728,
+    "stat_tick": 0.7176,
+    "geneset": "HALLMARK_ADIPOGENESIS"
+  },
+  {
+    "id": "33",
+    "rank": 965,
+    "stat": 0.8414,
+    "ES": 0.1632,
+    "stat_tick": 0.8414,
+    "geneset": "HALLMARK_ADIPOGENESIS"
+  },
+  {
+    "id": "34",
+    "rank": 2543,
+    "stat": -0.1284,
+    "ES": -0.0362,
+    "stat_tick": -0.1284,
+    "geneset": "HALLMARK_ADIPOGENESIS"
+  },
+  {
+    "id": "35",
+    "rank": 263,
+    "stat": 1.6093,
+    "ES": 0.0632,
+    "stat_tick": 1.6093,
+    "geneset": "HALLMARK_ADIPOGENESIS"
+  }
+]
