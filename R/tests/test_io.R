@@ -13,11 +13,11 @@ test_that("ranks_dfs_to_lists returns correct list structure and naming", {
   # Create sample data frames
   df1 <- data.frame(
     geneid = c("gene1", "gene2", "gene3"),
-    signedlogp = c(2.3, -1.5, 0.7)
+    value = c(2.3, -1.5, 0.7)
   )
   df2 <- data.frame(
     geneid = c("gene4", "gene5"),
-    signedlogp = c(-0.5, 1.2)
+    value = c(-0.5, 1.2)
   )
 
   # Apply the function
@@ -58,8 +58,8 @@ test_that("create_rnkfiles processes files correctly", {
 test_that("write_rnkfiles writes files correctly", {
   withr::with_tempdir("rnk_test", {
     lst <- list(
-      test1 = tibble(GeneID = c("Gene1", "Gene2"), signedlogP = c(0.5, -1.2)),
-      test2 = tibble(GeneID = c("Gene3", "Gene4"), signedlogP = c(1.5, -0.3))
+      test1 = tibble(GeneID = c("Gene1", "Gene2"), value = c(0.5, -1.2)),
+      test2 = tibble(GeneID = c("Gene3", "Gene4"), value = c(1.5, -0.3))
     )
     write_rnkfiles(lst, "rnk_test")
     expect_true(fs::file_exists("rnk_test/test1.rnk"))
@@ -79,7 +79,7 @@ test_that("load_rnkfiles loads and processes files correctly", {
     expect_equal(nrow(result[[1]]), 2)
     expect_equal(nrow(result[[2]]), 2)
     expect_equal(result[[1]]$geneid[1], "Gene1")
-    expect_true(is.numeric(result[[1]]$signedlogp))
+    expect_true(is.numeric(result[[1]]$value))
   })
 })
 

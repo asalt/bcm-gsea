@@ -35,7 +35,7 @@ write_rnkfiles <- function(lst, dir = "rnkfiles") {
       )
       if (!fs::file_exists(.outname)) {
         .x %>%
-          select(GeneID, signedlogP) %>%
+          select(GeneID, value) %>%
           write_tsv(.outname, col_names = FALSE)
         print(paste0("Wrote ", .outname))
       }
@@ -45,14 +45,14 @@ write_rnkfiles <- function(lst, dir = "rnkfiles") {
 
 load_rnkfiles <- function(rnkfiles) {
   data <- map(rnkfiles, ~ readr::read_tsv(.x,
-    col_names = c("geneid", "signedlogp"),
+    col_names = c("geneid", "value"),
     show_col_types = F
   ) %>%
     mutate(
       geneid = as.character(geneid),
-      signedlogp = as.numeric(signedlogp)
+      value = as.numeric(value)
     ) %>%
-    # arrange(signedlogp) %>% # do not change order of files here
+    # arrange(value) %>% # do not change order of files here
     drop_na())
   data
 }
@@ -60,7 +60,7 @@ load_rnkfiles <- function(rnkfiles) {
 
 ranks_dfs_to_lists <- function(rnkdfs) {
   ranks_list <- rnkdfs %>% purrr::map(
-    ~ with(.x, setNames(signedlogp, geneid))
+    ~ with(.x, setNames(value, geneid))
   )
   return(ranks_list)
 }

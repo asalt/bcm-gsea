@@ -2,6 +2,10 @@ suppressPackageStartupMessages(library(fgsea))
 suppressPackageStartupMessages(library(msigdbr))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(here))
+
+src_dir <- file.path(here(), "./R/")
+source(file.path(src_dir, "./io.R"))
 
 
 run_one <- function(rankobj, geneset) {
@@ -18,7 +22,6 @@ run_one <- function(rankobj, geneset) {
     pathways = geneset, stats = rankobj, minSize = 15, maxSize = 500,
     # eps = 0.0
   ) # , nperm=1000)
-  fgseaRes
 }
 
 run_all_rankobjs <- function(pathway, rankobjs) {
@@ -54,21 +57,41 @@ get_rankorder <- function(rankobj, geneset) {
 simulate_preranked_data <- function(...) {
   set.seed(4321)
 
-  geneset <- msigdbr::msigdbr(
-    species = "Homo sapiens",
-    category = "H",
-    subcategory = ""
-  )
+  # geneset <- msigdbr::msigdbr(
+  #   species = "Homo sapiens",
+  #   category = "H",
+  #   subcategory = ""
+  # )
+
+  geneset <- .GlobalEnv$get_collection("H", "")
+
+  ifn_genes <- geneset %>%
+    filter(str_detect(gs_name, "INTERFERON")) %>%
+    pull(entrez_gene) %>%
+    unique()
+
   genes <- geneset %>%
     pull(entrez_gene) %>%
     unique()
 
+  background_genes <- setdiff(genes, ifn_genes)
 
-  .values <- rnorm(n = length(genes))
-  .data <- data.frame(
-    geneid = genes,
-    signedlogp = .values
+
+  bg_values <- rnorm(n = length(background_genes))
+  ifn_values <- rnorm(n = length(ifn_genes), mean = 1)
+  bg_data <- data.frame(
+    geneid = background_genes,
+    value = bg_values
+  )
+  ifn_data <- data.frame(
+    geneid = ifn_genes,
+    value = ifn_values
   )
 
-  return(.data)
+  data <- bind_rows(
+    bg_data,
+    ifn_data
+  )
+
+  return(data)
 }

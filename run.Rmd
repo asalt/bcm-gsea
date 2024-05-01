@@ -135,7 +135,7 @@ if ( length(fs::dir_ls(rankfiledir, fail=F))==0 ){
 
 ranks_list <- rnkdfs %>% .GlobalEnv$ranks_dfs_to_lists()
 ranks_list <- rnkdfs %>% map(
-  ~ with(.x, setNames(signedlogp, geneid))
+  ~ with(.x, setNames(value, geneid))
 )
 
 # rnkdfs %>% str()
