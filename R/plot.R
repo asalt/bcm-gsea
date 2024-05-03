@@ -87,17 +87,12 @@ prepare_data_for_barplot <- function(df) {
 
 #' @param df dataframe with columns pathway, NES, padj, leadingEdge, size
 #' @param title title of the plot
-barplot_with_numbers <- function(df, title = "") {
-  sel <- df %>%
-    arrange(-abs(NES)) %>%
-    arrange(-NES) %>%
-    mutate(pathway = str_replace_all(pathway, "_", " ") %>% str_wrap(width = 40)) %>%
-    mutate(pathway = factor(pathway, levels = unique(pathway), ordered = T)) %>%
-    arrange(pathway) # %>%
-  sel %<>% mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
-  sel %<>% mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size))
-  sel %<>% mutate(outline_val = if_else(padj < .05, "black", NA))
+barplot_with_numbers <- function(df, title = "", use_custom_labeller = T, ...) {
+  sel <- prepare_data_for_barplot(df)
 
+  if (use_custom_labeller == T) {
+    labeller_func <- custom_labeller
+  } else if (use_custom_labeller == F) labeller_func <- function(x) x
   p <- sel %>%
     ggplot2::ggplot(
       aes(
@@ -115,7 +110,7 @@ barplot_with_numbers <- function(df, title = "") {
     scale_fill_gradient2(high = "grey", mid = "#ba2020", low = "#c92020", midpoint = .25) +
     geom_col(aes(color = sel$outline_val)) +
     scale_color_identity() +
-    labs(title = title) +
+    labs(title = title %>% labeller_func()) +
     # scale_color_manual(values=c("black", 'blue'))+
     # scale_size(range = c(4, 12)) +  # Adjust point sizes
     geom_text(
@@ -131,23 +126,98 @@ barplot_with_numbers <- function(df, title = "") {
     ) +
     theme_bw()
   if ("rankname" %in% colnames(df) && (length(unique(df$rankname)) > 1)) {
-    p <- p + facet_wrap(~rankname, labeller = as_labeller(custom_labeller))
+    p <- p + facet_wrap(~rankname, labeller = as_labeller(labeller_func))
   }
   p
+}
+
+
+process_results_across_rnks <- function(results_list, genesets = NULL, ...) {
+  # Ensure names are aligned and iterate over them
+  # geneset_names <- names(results_list)
+  if (is.null(genesets)) {
+    genesets <- names(results_list)
+  }
+
+  purrr::map(genesets, ~ {
+    geneset_name <- .x
+    fgsea_res_list <- results_list[[geneset_name]]
+    # geneset <- genesets_list[[geneset_name]]
+
+    res <- fgsea_res_list %>% bind_rows(.id = "rankname") # all comparisons 1 gene set
+    res <- res %>% mutate(rankname = rankname %>% fs::path_file() %>% fs::path_ext_remove())
+    # take topn
+    .pathways_for_plot <- res %>%
+      arrange(pval) %>%
+      distinct(pathway) %>%
+      head(20) %>%
+      pull(pathway)
+    res <- res %>% filter(pathway %in% .pathways_for_plot)
+
+
+    # pathway_df <- get_pathway_info(geneset_name)
+    # .merge <- left_join(res , pathway_df, by= )
+    p <- res %>% barplot_with_numbers(title = geneset_name, use_custom_labeller = T)
+
+    return(p)
+
+
+    # maxylab <- res$pathway %>% nchar() %>% max()
+    # res$pathway %>%
+    # width <- maxylab-
+    npathways <- p$data %>%
+      distinct(pathway) %>%
+      dim() %>%
+      .[1]
+    height <- max(6, npathways * .5)
+
+    nfacets <- p$data %>%
+      distinct(rankname) %>%
+      dim() %>%
+      .[1]
+    nfacetrows <- nfacets %/% 3
+    height <- height * nfacetrows
+    height <- min(height, 34)
+    height <- max(height, 6)
+
+    max_facet_len <- res$rankname %>%
+      nchar() %>%
+      max()
+    # width = 10
+    # if (max_facet_len > 100){
+    #   width <- width + 4
+    # }
+    # if (max_facet_len > 200){
+    #   width <- width + 4
+    # }
+
+    # number plotted
+    # height =
+    # outpath <- file.path(ENPLOT_BASEDIR, make.names(geneset_name))
+    # if (!fs::dir_exists(outpath)) fs::dir_create(outpath)
+
+    # c(".png", ".pdf") %>% purrr::walk(
+    #   ~ ggsave(
+    #     filename = paste0(make.names(geneset_name), make.names(.x)),
+    #     path = outpath,
+    #     dpi = 300,
+    #     width = 19,
+    #     height = height,
+    #   )
+    # )
+  })
 }
 
 
 
 
 
-
-
-edgeplot1 <- function(...) {
+edgeplot1 <- function(rankorder_edge, ...) {
   rankorder_edge %>%
     filter(!is.na(stat_stat)) %>%
     dim()
-  ggplot(aes(x = rank, y = ES)) +
-    geom_point()
+  # ggplot(aes(x = rank, y = ES)) +
+  #   geom_point()
 
   posES <- enplot_data$posES
   negES <- enplot_data$negES
@@ -195,4 +265,31 @@ other3 <- function() {
       panel.grid.major = element_line(color = "grey92")
     ) +
     labs(x = "rank", y = "enrichment score"))
+}
+
+
+plot_table <- function(fgsea_res,
+                       ranks,
+                       pathways,
+                       gsea_param = 1.0,
+                       ...) {
+  # top_pathways_u <- fgsea_res[ES > 0][head(order(pval), n=10), pathway]
+  # top_pathways_d <- fgsea_res[ES < 0][head(order(pval), n=10), pathway]
+  top_pathways_u <- fgsea_res %>%
+    filter(ES > 0) %>%
+    arrange(pval) %>%
+    head(10) %>%
+    pull(pathway)
+  top_pathways_d <- fgsea_res %>%
+    filter(ES < 0) %>%
+    arrange(pval) %>%
+    head(10) %>%
+    pull(pathway)
+  top_pathways <- c(top_pathways_u, rev(top_pathways_d)) #  rev reverse order
+  pathways[top_pathways] %>%
+    plotGseaTable(ranks,
+      fgsea_res,
+      gseaParam = gsea_param
+      # gseaParam=1.0
+    )
 }
