@@ -3,11 +3,12 @@ suppressPackageStartupMessages(library(purrr))
 suppressPackageStartupMessages(library(fs))
 suppressPackageStartupMessages(library(readr))
 suppressPackageStartupMessages(library(stringr))
+# suppressPackageStartupMessages(library(janitor))
 
 
 
 
-create_rnkfiles <- function(volcanodir) {
+create_rnkfiles <- function(volcanodir, value_col = "value") {
   if (is.null(volcanodir)) {
     stop("volcanodir not defined")
   }
@@ -19,7 +20,15 @@ create_rnkfiles <- function(volcanodir) {
   (volcanofiles <- fs::dir_ls(path = volcanodir, regexp = ".*tsv"))
   lst <- volcanofiles %>%
     purrr::set_names(nm = ~ basename(.) %>% fs::path_ext_remove()) %>% # set names first
-    purrr::map(~ read_tsv(.x, show_col_types = F))
+    purrr::map(~ {
+      .table <- read_tsv(.x, show_col_types = F)
+      if (value_col %in% colnames(.table)) {
+        .table <- .table %>% rename(value = !!value_col)
+      }
+      return(.table)
+    })
+
+
   shorternames <- names(lst) %>% stringr::str_extract(., pattern = "(?<=group_)(.*)(?=_di*)")
   names(lst) <- shorternames
   lst

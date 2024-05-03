@@ -42,8 +42,8 @@ test_that("create_rnkfiles processes files correctly", {
   withr::with_tempdir({
     # Create a temporary directory and some sample files
     fs::dir_create("volcano_test")
-    write_lines("GeneID\tValue\nGene1\t0.5\nGene2\t-1.2", "volcano_test/group_test1_data.tsv")
-    write_lines("GeneID\tValue\nGene3\t1.5\nGene4\t-0.3", "volcano_test/group_test2_data.tsv")
+    write_lines("GeneID\tvalue\nGene1\t0.5\nGene2\t-1.2", "volcano_test/group_test1_data.tsv")
+    write_lines("GeneID\tvalue\nGene3\t1.5\nGene4\t-0.3", "volcano_test/group_test2_data.tsv")
 
     # Test the function
     result <- create_rnkfiles("volcano_test")
@@ -51,6 +51,23 @@ test_that("create_rnkfiles processes files correctly", {
     expect_true("test2" %in% names(result))
     expect_equal(nrow(result[["test1"]]), 2)
     expect_equal(nrow(result[["test2"]]), 2)
+  })
+})
+
+test_that("create_rnkfiles processes files rename", {
+  withr::with_tempdir({
+    # Create a temporary directory and some sample files
+    fs::dir_create("volcano_test")
+    write_lines("GeneID\tValue\nGene1\t0.5\nGene2\t-1.2", "volcano_test/group_test1_data.tsv")
+    write_lines("GeneID\tValue\nGene3\t1.5\nGene4\t-0.3", "volcano_test/group_test2_data.tsv")
+
+    # Test the function
+    result <- create_rnkfiles("volcano_test", value_col = "Value")
+    expect_true("test1" %in% names(result))
+    expect_true("test2" %in% names(result))
+    expect_equal(nrow(result[["test1"]]), 2)
+    expect_equal(nrow(result[["test2"]]), 2)
+    expect_true("value" %in% colnames(result[["test1"]]))
   })
 })
 
