@@ -3,8 +3,9 @@ suppressPackageStartupMessages(library(msigdbr))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(here))
+suppressPackageStartupMessages(library(furrr))
 
-src_dir <- file.path(here(), "./R/")
+src_dir <- file.path(here("R"))
 source(file.path(src_dir, "./io.R"))
 
 
@@ -25,6 +26,7 @@ run_one <- function(rankobj, geneset) {
 }
 
 run_all_rankobjs <- function(pathway, rankobjs) {
+  # rankobjs %>% furrr::future_map( # maybe later
   rankobjs %>% purrr::map(
     ~ run_one(., geneset = pathway)
   )
@@ -50,6 +52,7 @@ get_rankorder <- function(rankobj, geneset) {
   rankorder_edge %<>% left_join(rename(enplot_data$ticks, stat_tick = stat))
   rankorder_edge %<>% left_join(rename(enplot_data$stats, stat_stat = stat))
   rankorder_edge$stat == rankorder_edge$stat_tick
+
 
   return(rankorder_edge)
 }
