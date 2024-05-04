@@ -25,15 +25,25 @@ run_one <- function(rankobj, geneset) {
   ) # , nperm=1000)
 }
 
-run_all_rankobjs <- function(pathway, rankobjs) {
+run_all_rankobjs <- function(pathway, rankobjs, parallel = F) {
   # rankobjs %>% furrr::future_map( # maybe later
-  rankobjs %>% purrr::map(
-    ~ run_one(., geneset = pathway)
-  )
+  if (parallel) {
+    future::plan(future::multisession, workers = future::availableCores() - 1)
+    rankobjs %>% furrr::future_map(
+      ~ run_one(., geneset = pathway)
+    )
+  } else {
+    rankobjs %>% purrr::map(
+      ~ run_one(., geneset = pathway)
+    )
+  }
+  # rankobjs %>% purrr::map(
+  #   ~ run_one(., geneset = pathway)
+  # )
 }
-run_all_pathways <- function(pathways_list, ranks) {
+run_all_pathways <- function(pathways_list, ranks, parallel = F) {
   pathways_list %>% purrr::map(
-    ~ run_all_rankobjs(., rankobjs = ranks)
+    ~ run_all_rankobjs(., rankobjs = ranks, parallel = parallel)
   )
 }
 # results_list <- run_all_pathways(pathways_list_of_lists, ranks_list)
