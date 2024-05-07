@@ -61,7 +61,7 @@ create_rnkfiles_from_emat <- function(emat, apply_z_score = FALSE, ...) {
 }
 
 
-create_rnkfiles_from_volcano <- function(volcanodir, value_col = "value") {
+create_rnkfiles_from_volcano <- function(volcanodir, id_col = "GeneID", value_col = "value") {
   if (is.null(volcanodir)) {
     stop("volcanodir not defined")
   }
@@ -77,6 +77,9 @@ create_rnkfiles_from_volcano <- function(volcanodir, value_col = "value") {
       .table <- read_tsv(.x, show_col_types = F)
       if (value_col %in% colnames(.table)) {
         .table <- .table %>% rename(value = !!value_col)
+      }
+      if (id_col %in% colnames(.table)) {
+        .table <- .table %>% rename(id = !!id_col)
       }
       return(.table)
     })
@@ -97,7 +100,7 @@ write_rnkfiles <- function(lst, dir = "rnkfiles") {
       )
       if (!fs::file_exists(.outname)) {
         .x %>%
-          select(GeneID, value) %>%
+          dplyr::select(id, value) %>%
           write_tsv(.outname, col_names = FALSE)
         print(paste0("Wrote ", .outname))
       }
@@ -107,11 +110,11 @@ write_rnkfiles <- function(lst, dir = "rnkfiles") {
 
 load_rnkfiles <- function(rnkfiles) {
   data <- map(rnkfiles, ~ readr::read_tsv(.x,
-    col_names = c("geneid", "value"),
+    col_names = c("id", "value"),
     show_col_types = F
   ) %>%
     mutate(
-      geneid = as.character(geneid),
+      id = as.character(id),
       value = as.numeric(value)
     ) %>%
     # arrange(value) %>% # do not change order of files here
@@ -122,7 +125,7 @@ load_rnkfiles <- function(rnkfiles) {
 
 ranks_dfs_to_lists <- function(rnkdfs) {
   ranks_list <- rnkdfs %>% purrr::map(
-    ~ with(.x, setNames(value, geneid))
+    ~ with(.x, setNames(value, id))
   )
   return(ranks_list)
 }

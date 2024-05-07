@@ -13,11 +13,11 @@ source("../io.R")
 test_that("ranks_dfs_to_lists returns correct list structure and naming", {
   # Create sample data frames
   df1 <- data.frame(
-    geneid = c("gene1", "gene2", "gene3"),
+    id = c("gene1", "gene2", "gene3"),
     value = c(2.3, -1.5, 0.7)
   )
   df2 <- data.frame(
-    geneid = c("gene4", "gene5"),
+    id = c("gene4", "gene5"),
     value = c(-0.5, 1.2)
   )
 
@@ -63,12 +63,14 @@ test_that("create_rnkfiles_from_volcano processes files rename", {
     write_lines("GeneID\tValue\nGene3\t1.5\nGene4\t-0.3", "volcano_test/group_test2_data.tsv")
 
     # Test the function
-    result <- create_rnkfiles_from_volcano("volcano_test", value_col = "Value")
+    result <- create_rnkfiles_from_volcano("volcano_test", id_col = "GeneID", value_col = "Value")
     expect_true("test1" %in% names(result))
     expect_true("test2" %in% names(result))
     expect_equal(nrow(result[["test1"]]), 2)
     expect_equal(nrow(result[["test2"]]), 2)
     expect_true("value" %in% colnames(result[["test1"]]))
+
+    expect_true("id" %in% colnames(result[["test1"]]))
   })
 })
 
@@ -92,11 +94,11 @@ test_that("load_rnkfiles loads and processes files correctly", {
     write_lines("Gene1\t0.5\nGene2\t-1.2", "file1.rnk")
     write_lines("Gene3\t1.5\nGene4\t-0.3", "file2.rnk")
 
-    result <- load_rnkfiles(c("file1.rnk", "file2.rnk"))
+    result <- load_rnkfiles(c("file1.rnk", "file2.rnk")) # returns a dataframe with columns: id, value
     expect_equal(length(result), 2)
     expect_equal(nrow(result[[1]]), 2)
     expect_equal(nrow(result[[2]]), 2)
-    expect_equal(result[[1]]$geneid[1], "Gene1")
+    expect_equal(result[[1]]$id[1], "Gene1")
     expect_true(is.numeric(result[[1]]$value))
   })
 })
