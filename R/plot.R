@@ -1,6 +1,10 @@
+suppressPackageStartupMessages(library(grid))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(ComplexHeatmap))
+suppressPackageStartupMessages(library(circlize))
+
 
 
 
@@ -209,7 +213,128 @@ process_results_across_rnks <- function(results_list, genesets = NULL, ...) {
 }
 
 
+# maybe these should be somewhere else
 
+concat_results_one_collection <- function(list_of_dfs) {
+  res <- list_of_dfs %>%
+    purrr::imap(
+      .f = ~ {
+        .x %>% dplyr::mutate(var = .y)
+      }
+    ) %>%
+    dplyr::bind_rows()
+
+  return(res)
+}
+
+concat_results_all_collections <- function(list_of_lists) {
+  res <- list_of_lists %>%
+    purrr::map(
+      ~ concat_results_one_collection(.x)
+    ) %>%
+    # purrr::reduce(rbind)
+    return(res)
+}
+
+plot_results_all_collections <- function(list_of_lists, ...) {
+  args <- list(...)
+
+  # res <- list_of_lists %>%
+  #   purrr::map(
+  #     ~ plot_results_one_collection(.x, ...)
+  #   )
+
+  res <- purrr::map(list_of_lists, function(item) {
+    do.call("plot_results_one_collection", c(list(df = item), args))
+  })
+  return(res)
+}
+
+plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limit = 120) {
+  if (!"pathway" %in% colnames(df)) {
+    stop("pathway column not found")
+  }
+
+  if (!"NES" %in% colnames(df)) {
+    stop("NES column not found")
+  }
+
+  if (!is.null(metadata) && !all(rownames(metadata) %in% df$var)) {
+    browser()
+    stop("metadata not aligned with df")
+  }
+
+  if (is.null(metadata)) {
+    metadata <- data.frame(id = unique(df$var))
+  }
+
+  if (!is.null(cut_by) && !cut_by %in% colnames(metadata)) {
+    stop("cut_by not found in metadata")
+  } else if (is.null(cut_by)) {
+    cut_by <- NULL
+  } else if (cut_by %in% colnames(metadata)) {
+    cut_by <- metadata[[cut_by]]
+  }
+
+
+
+
+  if (dim(df)[1] > limit) {
+    pathways_for_plot <- df %>%
+      arrange(-abs(NES)) %>%
+      distinct(pathway, .keep_all = T) %>%
+      head(limit) %>%
+      pull(pathway)
+
+    df <- df %>% dplyr::filter(pathway %in% pathways_for_plot)
+  }
+
+  maxval <- df %>%
+    pull(NES) %>%
+    abs() %>%
+    max(na.rm = T)
+
+
+  dfp <- df %>% pivot_wider(id_cols = pathway, values_from = NES, names_from = var)
+  dfp_padj <- df %>%
+    pivot_wider(id_cols = pathway, values_from = padj, names_from = var) %>%
+    dplyr::select(-pathway) %>%
+    dplyr::select(all_of(metadata$id))
+  logical_matrix <- dfp_padj < 0.25
+  star_matrix <- ifelse(logical_matrix, "*", "")
+
+  num_colors <- 11
+  my_colors <- colorRampPalette(c("#0000ff", "#8888ffbb", "#ddddff77", "#dddddd", "#ffdddd77", "#ff8888bb", "#ff0000"))(num_colors)
+  break_points <- seq(-maxval, maxval, length.out = num_colors)
+  col <- colorRamp2(breaks = break_points, colors = my_colors)
+
+
+  heatmap_legend_param <- list(
+    title = "NES",
+    direction = "horizontal",
+    just = "bottom",
+    legend_width = unit(8, "cm"),
+    at = break_points %>% round(1)
+  )
+
+  ht <- ComplexHeatmap::Heatmap(
+    dfp %>% dplyr::select(!pathway) %>% dplyr::select(all_of(metadata$id)),
+    col = col,
+    heatmap_legend_param = heatmap_legend_param,
+    column_split = cut_by,
+    row_labels = dfp$pathway,
+    row_names_gp = grid::gpar(fontsize = 8),
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      row <- i
+      col <- j
+      value <- star_matrix[row, col]
+      grid.text(value, x, y, gp = gpar(fontsize = 12))
+    }
+  )
+
+  ht <- ComplexHeatmap::draw(ht, heatmap_legend_side = "bottom", padding = unit(c(10, 2, 2, 2), "mm"))
+  return(ht)
+}
 
 
 edgeplot1 <- function(rankorder_edge, ...) {
