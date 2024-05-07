@@ -19,6 +19,10 @@ run_one <- function(rankobj, geneset) {
     pull(Freq) %>%
     max()
   assertthat::are_equal(.maxcounts, 1)
+
+
+  set.seed(789)
+
   fgseaRes <- fgsea(
     pathways = geneset, stats = rankobj, minSize = 15, maxSize = 500,
     # eps = 0.0
@@ -67,8 +71,8 @@ get_rankorder <- function(rankobj, geneset) {
   return(rankorder_edge)
 }
 
-simulate_preranked_data <- function(...) {
-  set.seed(4321)
+simulate_preranked_data <- function(seed = 4321, ...) {
+  set.seed(seed)
 
   # geneset <- msigdbr::msigdbr(
   #   species = "Homo sapiens",
@@ -93,11 +97,11 @@ simulate_preranked_data <- function(...) {
   bg_values <- rnorm(n = length(background_genes))
   ifn_values <- rnorm(n = length(ifn_genes), mean = 1)
   bg_data <- data.frame(
-    geneid = background_genes,
+    id = background_genes,
     value = bg_values
   )
   ifn_data <- data.frame(
-    geneid = ifn_genes,
+    id = ifn_genes,
     value = ifn_values
   )
 
