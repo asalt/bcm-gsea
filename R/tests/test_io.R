@@ -6,6 +6,7 @@ suppressPackageStartupMessages(library(purrr))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(tibble))
+suppressPackageStartupMessages(library(cmapR))
 
 source("../io.R")
 
@@ -38,7 +39,7 @@ test_that("ranks_dfs_to_lists returns correct list structure and naming", {
   expect_equal(result[[2]], c(gene4 = -0.5, gene5 = 1.2))
 })
 
-test_that("create_rnkfiles processes files correctly", {
+test_that("create_rnkfiles_from_volcano processes files correctly", {
   withr::with_tempdir({
     # Create a temporary directory and some sample files
     fs::dir_create("volcano_test")
@@ -46,7 +47,7 @@ test_that("create_rnkfiles processes files correctly", {
     write_lines("GeneID\tvalue\nGene3\t1.5\nGene4\t-0.3", "volcano_test/group_test2_data.tsv")
 
     # Test the function
-    result <- create_rnkfiles("volcano_test")
+    result <- create_rnkfiles_from_volcano("volcano_test")
     expect_true("test1" %in% names(result))
     expect_true("test2" %in% names(result))
     expect_equal(nrow(result[["test1"]]), 2)
@@ -54,7 +55,7 @@ test_that("create_rnkfiles processes files correctly", {
   })
 })
 
-test_that("create_rnkfiles processes files rename", {
+test_that("create_rnkfiles_from_volcano processes files rename", {
   withr::with_tempdir({
     # Create a temporary directory and some sample files
     fs::dir_create("volcano_test")
@@ -62,7 +63,7 @@ test_that("create_rnkfiles processes files rename", {
     write_lines("GeneID\tValue\nGene3\t1.5\nGene4\t-0.3", "volcano_test/group_test2_data.tsv")
 
     # Test the function
-    result <- create_rnkfiles("volcano_test", value_col = "Value")
+    result <- create_rnkfiles_from_volcano("volcano_test", value_col = "Value")
     expect_true("test1" %in% names(result))
     expect_true("test2" %in% names(result))
     expect_equal(nrow(result[["test1"]]), 2)
@@ -100,6 +101,95 @@ test_that("load_rnkfiles loads and processes files correctly", {
   })
 })
 
-test_that("create_rnkfiles handles missing directory correctly", {
+test_that("create_rnkfiles_from_volcano handles missing directory correctly", {
   expect_error(create_rnkfiles("non_existent_directory"))
+})
+
+
+
+test_that("make random gct works", {
+  result <- make_random_gct(50, 5)
+  # expect_true("mat" %in% names(result)) # names(result) is NULL gct object has no names
+  # expect_true("rids" %in% names(result))
+  # expect_true("cids" %in% names(result))
+  # expect_true("cdesc" %in% names(result))
+  expect_equal(nrow(result@mat), 50)
+  expect_equal(ncol(result@mat), 5)
+  expect_equal(length(result@rid), 50)
+  expect_equal(length(result@cid), 5)
+  expect_equal(nrow(result@cdesc), 5)
+  expect_equal(ncol(result@cdesc), 2)
+})
+
+# Test that the function creates an object of the correct type
+test_that("make_random_gct returns a GCT object", {
+  expect_s4_class(make_random_gct(), "GCT")
+})
+
+# Test that the function outputs have correct dimensions
+test_that("make_random_gct outputs have correct dimensions", {
+  gct <- make_random_gct(10, 4)
+  expect_equal(dim(gct@mat), c(10, 4))
+  expect_equal(length(gct@rid), 10)
+  expect_equal(length(gct@cid), 4)
+})
+
+# Test for consistent output given a set seed
+test_that("make_random_gct produces consistent output with set seed", {
+  gct1 <- make_random_gct(10, 4)
+  gct2 <- make_random_gct(10, 4)
+  expect_equal(gct1@mat, gct2@mat)
+  expect_equal(gct1@cdesc, gct2@cdesc)
+})
+
+# Test edge cases
+test_that("make_random_gct handles zero dimensions appropriately", {
+  gct_zero_rows <- make_random_gct(0, 4)
+  expect_equal(dim(gct_zero_rows@mat), c(1, 4)) # just make it 1 if entered as zero
+  # will probably encounter this in practice
+
+  gct_zero_cols <- make_random_gct(10, 0)
+  expect_equal(dim(gct_zero_cols@mat), c(10, 1))
+})
+
+# Optionally, test metadata consistency
+test_that("Metadata columns are correctly sampled", {
+  gct <- make_random_gct(10, 4)
+  expect_true(all(gct@cdesc$metavar1 %in% letters[1:5]))
+  expect_true(all(gct@cdesc$metavar2 %in% letters[1:5]))
+})
+
+
+
+test_that("create_rnkfiles_from_gct object", {
+  withr::with_tempdir({
+    temp_dir <- tempdir() # Retrieve the current temporary directory
+
+    # Construct the file path within the temporary directory
+
+    # Create a GCT object and attempt to write it to a GCTx format
+    gct_object <- make_random_gct(10, 4)
+    file_basename <- file.path(temp_dir, "test")
+    full_path <- paste0(file_basename, "_n4x10.gct")
+    write_gct(gct_object, file_basename)
+
+    # Check if the file was created successfully
+    expect_true(file.exists(full_path), info = "The GCTX file was not created.")
+
+    # Assuming create_rnkfiles_from_emat reads a GCTx file and returns a GCT object
+    list_of_ranks1 <- create_rnkfiles_from_emat(full_path, apply_z_score = FALSE)
+    list_of_ranks2 <- create_rnkfiles_from_emat(full_path, apply_z_score = TRUE)
+
+    means1 <- list_of_ranks1 %>% map(~ .x$value %>%
+      as.numeric() %>%
+      mean())
+    means2 <- list_of_ranks2 %>% map(~ .x$value %>%
+      as.numeric() %>%
+      mean())
+
+    expect_true(all(means1 > .1))
+    expect_true(all(means2 < .1), info = paste0("Means1: ", means1, " Means2: ", means2))
+
+    # Check if the resulting object is a GCT class
+  })
 })

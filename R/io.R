@@ -3,12 +3,65 @@ suppressPackageStartupMessages(library(purrr))
 suppressPackageStartupMessages(library(fs))
 suppressPackageStartupMessages(library(readr))
 suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(cmapR))
+suppressPackageStartupMessages(library(here))
 # suppressPackageStartupMessages(library(janitor))
 
+src_dir <- file.path(here("R"))
+source(file.path(src_dir, "utils.R"))
+
+make_random_gct <- function(nrow = 10, ncol = 4) {
+  set.seed(369)
+  nrow <- max(nrow, 1)
+  ncol <- max(ncol, 1)
+  .mat <- matrix(runif(nrow * ncol), nrow = nrow, ncol = ncol)
+  .rids <- seq(1, dim(.mat)[1]) %>% as.character()
+  .cids <- seq(1, dim(.mat)[2]) %>% as.character()
+  .cids <- paste0("X", .cids)
+  .cdesc <- data.frame(
+    metavar1 = sample(letters[1:5], ncol, replace = T),
+    metavar2 = sample(letters[1:5], ncol, replace = T)
+  )
+  .rdesc <- data.frame(
+    rdesc = paste0("gene", seq(1, nrow))
+  )
+  gct <- cmapR::GCT(mat = .mat, rid = .rids, cid = .cids, cdesc = .cdesc, rdesc = .rdesc)
+  gct
+}
+
+create_rnkfiles_from_emat <- function(emat, apply_z_score = FALSE, ...) {
+  gct <- cmapR::parse_gctx(emat)
+  if (apply_z_score) {
+    .new <- gct@mat %>%
+      apply(MARGIN = 1, FUN = .GlobalEnv$myzscore) %>%
+      t() %>%
+      as.matrix()
+    colnames(.new) <- colnames(mat(gct))
+    gct@mat <- .new
+  }
+  # gct@
+
+  # Initialize a list to hold each new matrix
+  list_of_matrices <- list()
+
+  # Loop through each column of the matrix
+  for (i in 1:ncol(gct@mat)) {
+    # Create a new matrix for each column with row names and the column of interest
+    new_mat <- cbind(id = rownames(gct@mat), value = gct@mat[, i])
+
+    # Convert the matrix to data frame for more intuitive row and column handling (optional)
+    new_df <- as.data.frame(new_mat)
+
+    # Store the matrix in the list
+    list_of_matrices[[colnames(gct@mat)[i]]] <- new_df
+  }
+
+  # Output or return the list of matrices
+  return(list_of_matrices)
+}
 
 
-
-create_rnkfiles <- function(volcanodir, value_col = "value") {
+create_rnkfiles_from_volcano <- function(volcanodir, value_col = "value") {
   if (is.null(volcanodir)) {
     stop("volcanodir not defined")
   }
