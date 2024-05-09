@@ -1,8 +1,64 @@
 # crud.py
 import collections
 
+from typing import Optional, Any, Type, TypeVar, Generic, List, Union, Dict
+from fastapi.encoders import jsonable_encoder
+
+from sqlmodel import Session
+from sqlalchemy import select
+
+
 from .db import get_session
 from .models import Base, Project, Ranks, Comparison, Edge
+
+# leave query alone please just leave it
+
+# crud.py
+class CRUDBase:
+    def __init__(self, model):
+        self.model = model
+
+    def get(self, db: Session, id:Any):
+        # stmt = select(self.model).where(self.model.id == id)
+        # db.execute(stmt) # this is also being depreciated??/
+        # db.exec does not exist. Session does not (yet) have exec method.
+        #
+        return db.query(self.model).filter(self.model.id == id).first()
+
+    def get_all(self,db: Session):
+        return db.query(self.model).all()
+
+    def create(self, db: Session, *,obj_in):
+        obj_in_data = jsonable_encoder(obj_in)
+        db_obj = self.model(**obj_in_data)
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def delete(self, db: Session, *, id: int):
+        db_obj = db.query(self.model).get(id)
+        db.delete(db_obj)
+        db.commit()
+        return db_obj
+
+    def update( self, db: Session, *, db_obj, obj_in):
+        db_obj_data = jsonable_encoder(db_obj)
+        if isinstance(obj_in, dict):
+            update_dict = obj_in
+        else:
+            update_dict = obj_in.dict(exclude_unset=True)
+
+        for field in db_obj_data:
+            if field in update_dict:
+                setattr(db_obj, field, update_dict[field])
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+
+
 
 def add_and_commit(session, obj):
     session.add(obj)
