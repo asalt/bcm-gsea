@@ -6,7 +6,12 @@ suppressPackageStartupMessages(library(here))
 suppressPackageStartupMessages(library(furrr))
 
 src_dir <- file.path(here("R"))
-source(file.path(src_dir, "./io.R"))
+
+io_tools <- new.env()
+source(file.path(src_dir, "./io.R"), local = io_tools)
+
+geneset_tools <- new.env()
+source(file.path(src_dir, "./geneset_utils.R"), local = geneset_tools)
 
 
 run_one <- function(rankobj, geneset) {
@@ -80,7 +85,7 @@ simulate_preranked_data <- function(seed = 4321, ...) {
   #   subcategory = ""
   # )
 
-  geneset <- .GlobalEnv$get_collection("H", "")
+  geneset <- geneset_tools$get_collection("H", "")
 
   ifn_genes <- geneset %>%
     filter(str_detect(gs_name, "INTERFERON")) %>%

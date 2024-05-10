@@ -1,8 +1,25 @@
 # test_fgsea.R
-source("../fgsea.R")
-source("../io.R")
-source("../geneset_utils.R")
+
+# source("../fgsea.R")
+# source("../io.R")
+# source("../geneset_utils.R")
+
+
+io_tools <- new.env()
+source("../io.R", local = io_tools)
+
+geneset_tools <- new.env()
+source("../geneset_utils.R", local = geneset_tools)
+
+fgsea_tools <- new.env()
+source("../fgsea.R", local = fgsea_tools)
+
+plot_tools <- new.env()
+source("../plot.R", local = plot_tools)
+
+
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(fgsea))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(ggplot2))
@@ -10,13 +27,13 @@ suppressPackageStartupMessages(library(ggplot2))
 
 
 test_fgsea_runone <- function() {
-  data <- .GlobalEnv$simulate_preranked_data()
-  geneset <- .GlobalEnv$get_collection("H", "")
-  geneset_list <- .GlobalEnv$genesets_df_to_list(geneset)
-  # named_data = list(data=data)
-  rankobjs <- .GlobalEnv$ranks_dfs_to_lists(list(data))
+  # data <- .GlobalEnv$simulate_preranked_data()
+  data <- fgsea_tools$simulate_preranked_data()
+  geneset <- geneset_tools$get_collection("H", "")
+  geneset_list <- geneset_tools$genesets_df_to_list(geneset)
+  rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
   rankobj <- rankobjs[[1]]
-  res <- rankobj %>% .GlobalEnv$run_one(geneset_list)
+  res <- rankobj %>% fgsea_tools$run_one(geneset_list)
 
 
   return("Success")
@@ -24,20 +41,20 @@ test_fgsea_runone <- function() {
 
 
 test_get_edge <- function() {
-  data <- .GlobalEnv$simulate_preranked_data()
-  geneset <- .GlobalEnv$get_collection("H", "")
-  geneset_list <- .GlobalEnv$genesets_df_to_list(geneset)
-  # named_data = list(data=data)
-  rankobjs <- .GlobalEnv$ranks_dfs_to_lists(list(data))
+  data <- fgsea_tools$simulate_preranked_data()
+  geneset <- geneset_tools$get_collection("H", "")
+  geneset_list <- geneset_tools$genesets_df_to_list(geneset)
+  rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
   rankobj <- rankobjs[[1]]
 
-  res <- rankobj %>% .GlobalEnv$run_one(geneset_list) # we aren't actually using this result
+
+  res <- rankobj %>% fgsea_tools$run_one(geneset_list) # we aren't actually using this result
   # all we need for this test is the rankobj and gene list
 
   geneset_name <- names(geneset_list)[1]
   geneset_collection_ids <- geneset_list[[geneset_name]]
 
-  rankorder_edge <- .GlobalEnv$get_rankorder(rankobj, geneset_collection_ids)
+  rankorder_edge <- fgsea_tools$get_rankorder(rankobj, geneset_collection_ids)
 
   rankorder_edge_specific <- rankorder_edge %>% filter(id %in% geneset_collection_ids)
 
@@ -54,7 +71,7 @@ test_get_edge <- function() {
 other <- function() {
   .name <- res[1, "pathway"]
 
-  enplot_data <- plotEnrichmentData(geneset_list[[.name]], rankobj)
+  enplot_data <- fgsea::plotEnrichmentData(geneset_list[[.name]], rankobj)
 
   rnkorder <- -rankobj %>% rank()
 

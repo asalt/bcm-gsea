@@ -289,10 +289,7 @@ plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limi
     df <- df %>% dplyr::filter(pathway %in% pathways_for_plot)
   }
 
-  maxval <- df %>%
-    pull(NES) %>%
-    abs() %>%
-    max(na.rm = T)
+
 
 
   dfp <- df %>% pivot_wider(id_cols = pathway, values_from = NES, names_from = var)
@@ -303,9 +300,16 @@ plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limi
   logical_matrix <- dfp_padj < 0.25
   star_matrix <- ifelse(logical_matrix, "*", "")
 
+
+  # maxval <- df %>%
+  #   pull(NES) %>%
+  #   abs() %>%
+  #   max(na.rm = T)
+  q1 <- quantile(abs(df$NES), 0.99, na.rm = TRUE)
+
   num_colors <- 11
   my_colors <- colorRampPalette(c("#0000ff", "#8888ffbb", "#ddddff77", "#dddddd", "#ffdddd77", "#ff8888bb", "#ff0000"))(num_colors)
-  break_points <- seq(-maxval, maxval, length.out = num_colors)
+  break_points <- seq(-q1, q1, length.out = num_colors)
   col <- colorRamp2(breaks = break_points, colors = my_colors)
 
 
