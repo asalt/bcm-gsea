@@ -5,6 +5,12 @@ suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(ComplexHeatmap))
 suppressPackageStartupMessages(library(circlize))
 
+suppressPackageStartupMessages(library(here))
+
+src_dir <- file.path(here("R"))
+
+util_tools <- new.env()
+source(file.path(src_dir, "./utils.R"), local = util_tools)
 
 
 
@@ -260,7 +266,6 @@ plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limi
   }
 
   if (!is.null(metadata) && !all(rownames(metadata) %in% df$var)) {
-    browser()
     stop("metadata not aligned with df")
   }
 
@@ -269,7 +274,8 @@ plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limi
   }
 
   if (!is.null(cut_by) && !cut_by %in% colnames(metadata)) {
-    stop("cut_by not found in metadata")
+    warning("cut_by not found in metadata")
+    cut_by <- NULL
   } else if (is.null(cut_by)) {
     cut_by <- NULL
   } else if (cut_by %in% colnames(metadata)) {
@@ -328,6 +334,8 @@ plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limi
     column_split = cut_by,
     row_labels = dfp$pathway,
     row_names_gp = grid::gpar(fontsize = 8),
+    clustering_distance_rows = util_tools$dist_no_na,
+    clustering_distance_columns = util_tools$dist_no_na,
     cell_fun = function(j, i, x, y, width, height, fill) {
       row <- i
       col <- j
