@@ -37,13 +37,29 @@ get_collection <- function(category, subcategory, species = "Homo sapiens", ...,
 
 
 
-get_collections <- function(list_of_collections, species = "Homo sapiens") {
-  res <- list_of_collections %>% purrr::map(
-    ~ {
-      list_name <- paste(.x$category, .x$subcategory, sep = "_")
+# get_collections <- function(list_of_collections, species = "Homo sapiens") {
+#   res <- list_of_collections %>% purrr::map(
+#     ~ {
+#       list_name <- paste(.x$category, .x$subcategory, sep = "_")
+#       collection <- get_collection(
+#         category = .x$category,
+#         subcategory = .x$subcategory,
+#         species = species,
+#       )
+#       setNames(list(collection), list_name)
+#     }
+#   )
+#   res_reduced <- purrr::reduce(res, c) # 1 level list names set appropriately
+#   return(res_reduced)
+# }
+
+get_collections <- function(dataframe_obj, species = "Homo sapiens") {
+  res <- dataframe_obj %>% purrr::pmap(
+    function(category, subcategory, ...) {
+      list_name <- paste(category, subcategory, sep = "_")
       collection <- get_collection(
-        category = .x$category,
-        subcategory = .x$subcategory,
+        category = category,
+        subcategory = subcategory,
         species = species,
       )
       setNames(list(collection), list_name)
