@@ -443,7 +443,7 @@ plot_results_one_collection <- function(
   cell_fun <- function(j, i, x, y, width, height, fill) {
     # Ensure value is not NA before comparison
     value <- star_matrix[i, j]
-    print(paste("Processing cell:", i, j, "Value:", value))
+    # print(paste("Processing cell:", i, j, "Value:", value))
 
     if (!is.na(value) && value == "*") {
       # Draw asterisk
@@ -478,6 +478,8 @@ plot_results_one_collection <- function(
     clustering_method_columns = "ward.D2",
     column_names_side = "top",
     column_title = title,
+    padding = unit(c(2, 10, 2, 2), "mm"), # top, right, bottom, left
+
     cell_fun = cell_fun # Use the updated cell_fun here
   )
 
@@ -490,7 +492,10 @@ plot_results_one_collection <- function(
   #   }
   # )
 
-  draw(ht, heatmap_legend_side = "bottom", padding = unit(c(10, 2, 2, 2), "mm"))
+  draw(ht,
+    heatmap_legend_side = "bottom",
+    padding = unit(c(2, 10, 2, 2), "mm"), # top, right, bottom, left
+  )
 }
 
 
