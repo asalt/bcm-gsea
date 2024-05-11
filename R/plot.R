@@ -21,7 +21,7 @@ make_heatmap <- function(.gct, row_note = "", scale = T) {
   #   factor(.gct@cdesc$treat , levels = c("untreated", "carboplatin", "IMT", "carboplatin_IMT"), ordered = T)
 
   ca <- ComplexHeatmap::columnAnnotation(
-    group = .gct@cdesc$group,
+    group = .gct@cdesc$group, # this needs to be dynamically created
     col = list(
       group = c(
         `168EC` = "blue",
@@ -46,10 +46,11 @@ make_heatmap <- function(.gct, row_note = "", scale = T) {
 
 
   ht <- ComplexHeatmap::Heatmap(
-    .gct@mat %>% apply(1, function(x) scale(x, center = T, scale = scale)) %>% t(),
+    .gct@mat %>% apply(1, function(x) scale(x, center = T, scale = scale)) %>% t() %>% as.matrix(),
+    # TODO use z_score_withna or other custom func for handling nas when scaling
     row_labels = .gct@rdesc$rdesc,
-    column_labels = .gct@cdesc$id,
-    column_split = .gct@cdesc$treat,
+    column_labels = .gct@cdesc$id, # id should always be here
+    column_split = .gct@cdesc$treat, # treat is not guaranteed to be here, this needs to be dynamically set
     top_annotation = ca,
     heatmap_legend_param = heatmap_legend_param,
     row_names_gp = grid::gpar(fontsize = 7),
@@ -75,11 +76,20 @@ custom_labeller <- function(value) {
 
 prepare_data_for_barplot <- function(df) {
   df_renamed <- df %>%
-    mutate(pathway = str_remove(pathway, "HALLMARK_")) %>%
-    mutate(pathway = str_remove(pathway, "KEGG_")) %>%
-    mutate(pathway = str_remove(pathway, "GOMF_")) %>%
-    mutate(pathway = str_remove(pathway, "REACTOME_"))
+    dplyr::mutate(pathway = str_remove(pathway, "HALLMARK_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "KEGG_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "GOMF_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "REACTOME_"))
   df <- df_renamed
+
+
+  # is across necessary?
+  #   df_renamed <- df %>%
+  #   mutate(across(starts_with("pathway"), ~str_remove(., "HALLMARK_"))) %>%
+  #   mutate(across(starts_with("pathway"), ~str_remove(., "KEGG_"))) %>%
+  #   mutate(across(starts_with("pathway"), ~str_remove(., "GOMF_"))) %>%
+  #   mutate(across(starts_with("pathway"), ~str_remove(., "REACTOME_")))
+  # df <- df_renamed
 
   sel <- df %>%
     arrange(-abs(NES)) %>%
@@ -87,9 +97,20 @@ prepare_data_for_barplot <- function(df) {
     mutate(pathway = str_replace_all(pathway, "_", " ") %>% str_wrap(width = 40)) %>%
     mutate(pathway = factor(pathway, levels = unique(pathway), ordered = T)) %>%
     arrange(pathway) # %>%
-  sel %<>% mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
-  sel %<>% mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size))
-  sel %<>% mutate(outline_val = if_else(padj < .05, "black", NA))
+
+  # Ensure leadingEdge is treated as a character vector
+  sel <- sel %>%
+    mutate(leadingEdge = as.character(leadingEdge)) %>%
+    mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
+
+  sel <- sel %>%
+    mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>%
+    mutate(outline_val = if_else(padj < .05, "black", NA))
+
+  # sel %<>% mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
+  # sel %<>% mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size))
+  # sel %<>% mutate(outline_val = if_else(padj < .05, "black", NA))
+
   sel
 }
 
@@ -256,7 +277,7 @@ plot_results_all_collections <- function(list_of_lists, ...) {
   return(res)
 }
 
-plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limit = 120) {
+xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limit = 120) {
   if (!"pathway" %in% colnames(df)) {
     stop("pathway column not found")
   }
@@ -328,11 +349,12 @@ plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limi
   )
 
   ht <- ComplexHeatmap::Heatmap(
-    dfp %>% dplyr::select(!pathway) %>% dplyr::select(all_of(metadata$id)),
+    dfp %>% dplyr::select(!pathway) %>% dplyr::select(all_of(metadata$id)) %>% as.matrix(),
     col = col,
     heatmap_legend_param = heatmap_legend_param,
     column_split = cut_by,
     row_labels = dfp$pathway,
+    show_row_names = T,
     row_names_gp = grid::gpar(fontsize = 8),
     clustering_distance_rows = util_tools$dist_no_na,
     clustering_distance_columns = util_tools$dist_no_na,
@@ -347,6 +369,119 @@ plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limi
   ht <- ComplexHeatmap::draw(ht, heatmap_legend_side = "bottom", padding = unit(c(10, 2, 2, 2), "mm"))
   return(ht)
 }
+
+
+
+plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limit = 120) {
+  # Ensure necessary columns are present
+  required_cols <- c("pathway", "NES")
+  if (!all(required_cols %in% colnames(df))) {
+    stop("Required columns not found in dataframe")
+  }
+
+  # Align metadata with dataframe
+  if (!is.null(metadata)) {
+    if (!all(rownames(metadata) %in% df$var)) {
+      stop("Metadata not aligned with df")
+    }
+  } else {
+    metadata <- data.frame(id = unique(df$var))
+  }
+
+  # Handling cut_by parameter
+  if (!is.null(cut_by) && cut_by %in% colnames(metadata)) {
+    cut_by <- metadata[[cut_by]]
+  } else {
+    warning("cut_by not found in metadata, using default")
+    cut_by <- NULL
+  }
+
+  # Limit the number of pathways if necessary
+  if (nrow(df) > limit) {
+    top_pathways <- df %>%
+      arrange(-abs(NES)) %>%
+      slice_head(n = limit) %>%
+      pull(pathway)
+    df <- df %>% filter(pathway %in% top_pathways)
+  }
+
+  # Prepare data for heatmap
+  dfp <- df %>% pivot_wider(id_cols = pathway, values_from = NES, names_from = var)
+  dfp_padj <- df %>%
+    pivot_wider(id_cols = pathway, values_from = padj, names_from = var) %>%
+    select(-pathway, all_of(metadata$id))
+  logical_matrix <- dfp_padj < 0.25
+  star_matrix <- ifelse(logical_matrix, "*", "")
+
+  # Set up color scale
+  q01 <- quantile(abs(df$NES), 0.99, na.rm = TRUE)
+  num_colors <- 11
+  my_colors <- colorRampPalette(c("#0000ff", "#8888ffbb", "#ddddff77", "#dddddd", "#ffdddd77", "#ff8888bb", "#ff0000"))(num_colors)
+  break_points <- seq(-q01, q01, length.out = num_colors)
+  col <- colorRamp2(breaks = break_points, colors = my_colors)
+
+  # Construct heatmap
+  heatmap_legend_param <- list(
+    title = "NES", direction = "horizontal", just = "bottom", legend_width = unit(8, "cm"), at = round(break_points, 1)
+  )
+
+  # cell_fun <- function(j, i, x, y, width, height, fill) {
+  #   # Retrieve the value that indicates whether to draw an asterisk
+  #   value <- star_matrix[i, j]
+  #   if (value == "*") {
+  #     # Draw asterisk
+  #     grid::grid.text(value, x, y, gp = grid::gpar(fontsize = 12, col = "black"))
+  #     # Draw border around the cell
+  #     grid::grid.rect(x, y,
+  #       width = width, height = height,
+  #       gp = grid::gpar(col = "black", fill = NA, lwd = 1)
+  #     )
+  #   }
+  # }
+
+  cell_fun <- function(j, i, x, y, width, height, fill) {
+    # Ensure value is not NA before comparison
+    value <- star_matrix[i, j]
+    print(paste("Processing cell:", i, j, "Value:", value))
+
+    if (!is.na(value) && value == "*") {
+      # Draw asterisk
+      grid::grid.text(value, x, y, gp = grid::gpar(fontsize = 12, col = "black"))
+      # Draw border around the cell
+      grid::grid.rect(x, y,
+        width = width, height = height,
+        gp = grid::gpar(col = "black", fill = NA, lwd = 1)
+      )
+    }
+  }
+
+
+  ht <- ComplexHeatmap::Heatmap(
+    dfp %>% dplyr::select(-pathway) %>% dplyr::select(all_of(metadata$id)),
+    col = col,
+    heatmap_legend_param = heatmap_legend_param,
+    column_split = cut_by,
+    row_labels = dfp$pathway,
+    row_names_gp = grid::gpar(fontsize = 8),
+    clustering_distance_rows = util_tools$dist_no_na,
+    clustering_distance_columns = util_tools$dist_no_na,
+    column_title = "?? < this should be pathway collection name > ",
+    cell_fun = cell_fun # Use the updated cell_fun here
+  )
+
+  # ht <- ComplexHeatmap::Heatmap(dfp %>% dplyr::select(!pathway, all_of(metadata$id)) %>% as.matrix(),
+  #   col = col, heatmap_legend_param = heatmap_legend_param,
+  #   column_split = cut_by, row_labels = dfp$pathway, row_names_gp = grid::gpar(fontsize = 8),
+  #   clustering_distance_rows = util_tools$dist_no_na, clustering_distance_columns = util_tools$dist_no_na,
+  #   cell_fun = function(j, i, x, y, width, height, fill) {
+  #     grid.text(star_matrix[i, j], x, y, gp = gpar(fontsize = 12))
+  #   }
+  # )
+
+  draw(ht, heatmap_legend_side = "bottom", padding = unit(c(10, 2, 2, 2), "mm"))
+}
+
+
 
 
 edgeplot1 <- function(rankorder_edge, ...) {

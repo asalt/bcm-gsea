@@ -70,14 +70,15 @@ run_all_rankobjs <- function(pathway, rankobjs, parallel = F, minSize = 15, maxS
   #   ~ run_one(., geneset = pathway)
   # )
 }
-run_all_pathways <- function(pathways_list, ranks, parallel = F, minSize = 15, maxSize = 500, genesets_additional_info = NULL) {
+xx_run_all_pathways <- function(pathways_list, ranks, parallel = F, minSize = 15, maxSize = 500, genesets_additional_info = NULL, collapse = FALSE) {
   pathways_list %>% purrr::imap(
     ~ {
       pathway_list <- .x
       pathway_name <- .y
-      collapse <- FALSE
 
-      if (!is.null(genesets_additional_info)) {
+      collapse <- collapse.
+
+      if (!is.null(genesets_additional_info & collapse. == FALSE)) {
         if (!"collection_name" %in% colnames(genesets_additional_info)) {
           cat("genesets_additional_info must have a 'collection_name' field")
         }
@@ -88,11 +89,46 @@ run_all_pathways <- function(pathways_list, ranks, parallel = F, minSize = 15, m
         collapse <- geneset_additional_info$collapse
       }
 
+
       pathway_list %>% run_all_rankobjs(., rankobjs = ranks, parallel = parallel, minSize = minSize, maxSize = maxSize, collapse = collapse)
     }
   )
 }
 # results_list <- run_all_pathways(pathways_list_of_lists, ranks_list)
+
+run_all_pathways <- function(pathways_list, ranks, parallel = FALSE, minSize = 15, maxSize = 500, genesets_additional_info = NULL, collapse = FALSE) {
+  pathways_list %>% purrr::imap(
+    ~ {
+      pathway_list <- .x
+      pathway_name <- .y
+
+      current_collapse <- collapse # Use local variable for clarity
+
+      # Check for non-null and appropriate usage of genesets_additional_info
+      if (!is.null(genesets_additional_info) && !collapse) {
+        # Check for necessary columns in genesets_additional_info
+        if (!all(c("collection_name", "collapse") %in% colnames(genesets_additional_info))) {
+          stop("genesets_additional_info must have 'collection_name' and 'collapse' fields", call. = FALSE)
+        }
+
+        # Extract additional info specific to the current pathway
+        geneset_additional_info <- genesets_additional_info[genesets_additional_info$collection_name == pathway_name, ]
+
+        # Check if specific geneset info was found and update collapse if so
+        if (nrow(geneset_additional_info) > 0) {
+          current_collapse <- geneset_additional_info$collapse
+        } else {
+          warning("No matching geneset info found for pathway: ", pathway_name)
+        }
+      }
+      # browser()
+
+      # Pass the potentially updated collapse value to the next function
+      pathway_list %>% run_all_rankobjs(., rankobjs = ranks, parallel = parallel, minSize = minSize, maxSize = maxSize, collapse = current_collapse)
+    }
+  )
+}
+
 
 
 get_rankorder <- function(rankobj, geneset) {
@@ -113,7 +149,7 @@ get_rankorder <- function(rankobj, geneset) {
   return(rankorder_edge)
 }
 
-simulate_preranked_data <- function(seed = 4321, geneset = NULL, ...) {
+simulate_preranked_data <- function(seed = 4321, geneset = NULL, spike_terms = c("INTERFERON"), ...) {
   set.seed(seed)
 
   # geneset <- msigdbr::msigdbr(
@@ -126,32 +162,37 @@ simulate_preranked_data <- function(seed = 4321, geneset = NULL, ...) {
     geneset <- geneset_tools$get_collection("H", "")
   }
 
-  ifn_genes <- geneset %>%
-    filter(str_detect(gs_name, "INTERFERON")) %>%
-    pull(entrez_gene) %>%
-    unique()
+
+  # Generate a list of gene sets for each spike term
+  spike_genes_list <- purrr::map(spike_terms, ~ geneset %>%
+    dplyr::filter(str_detect(gs_name, .x)) %>%
+    dplyr::pull(entrez_gene) %>%
+    unique())
 
   genes <- geneset %>%
-    pull(entrez_gene) %>%
+    dplyr::pull(entrez_gene) %>%
     unique()
 
-  background_genes <- setdiff(genes, ifn_genes)
+  spike_genes <- unique(unlist(spike_genes_list))
+  background_genes <- setdiff(genes, spike_genes)
 
 
   bg_values <- rnorm(n = length(background_genes))
-  ifn_values <- rnorm(n = length(ifn_genes), mean = 1)
   bg_data <- data.frame(
     id = background_genes,
     value = bg_values
   )
-  ifn_data <- data.frame(
-    id = ifn_genes,
-    value = ifn_values
-  )
+
+  # Spike gene values, assigning different means for each spike term
+  spike_data <- map2_df(spike_genes_list, seq_along(spike_genes_list), ~ data.frame(
+    id = .x,
+    value = rnorm(n = length(.x), mean = .y) # Incrementing mean for differentiation
+  ))
+
 
   data <- bind_rows(
     bg_data,
-    ifn_data
+    spike_data
   )
 
   return(data)

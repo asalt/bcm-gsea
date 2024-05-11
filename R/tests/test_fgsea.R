@@ -1,4 +1,11 @@
 # test_fgsea.R
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(fgsea))
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(testthat))
 
 # source("../fgsea.R")
 # source("../io.R")
@@ -18,12 +25,6 @@ plot_tools <- new.env()
 source("../plot.R", local = plot_tools)
 
 
-suppressPackageStartupMessages(library(dplyr))
-suppressPackageStartupMessages(library(fgsea))
-suppressPackageStartupMessages(library(magrittr))
-suppressPackageStartupMessages(library(tidyr))
-suppressPackageStartupMessages(library(ggplot2))
-suppressPackageStartupMessages(library(ggplot2))
 
 
 test_fgsea_runone <- function() {
@@ -67,6 +68,89 @@ test_get_edge <- function() {
 
   return("Success")
 }
+
+
+test_that("test fgsea runone", {
+  expect_equal(test_fgsea_runone(), "Success")
+})
+
+test_that("test get edge", {
+  expect_equal(test_get_edge(), "Success")
+})
+
+
+
+test_that("test run one collapse", {
+  geneset <- geneset_tools$get_collection("C5", "GO:BP")
+  spike_terms <- c("CYCLE", "CHECKPOINT")
+  data <- fgsea_tools$simulate_preranked_data(geneset = geneset)
+  data %<>% dplyr::sample_frac(size = .75)
+
+  geneset_list <- geneset_tools$genesets_df_to_list(geneset)
+  rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
+  rankobj <- rankobjs[[1]]
+
+  res <- rankobj %>% fgsea_tools$run_one(geneset_list, collapse = TRUE)
+  res_all <- rankobj %>% fgsea_tools$run_one(geneset_list, collapse = FALSE)
+
+  testthat::expect_true(
+    all(res$NES == res_all$NES)
+  )
+
+  testthat::expect_true(
+    res %>% dplyr::filter(mainpathway == TRUE) %>% nrow() <=
+      res_all %>%
+        dplyr::filter(mainpathway == TRUE) %>%
+        nrow()
+  )
+
+  testthat::expect_true(
+    res %>%
+      dplyr::filter(mainpathway == TRUE) %>%
+      nrow() > 1
+  )
+})
+
+test_that("test run all collapse.", { # this will take a while. testing if can set collapse. var
+  geneset <- geneset_tools$get_collection("C5", "GO:BP")
+  spike_terms <- c("CYCLE", "CHECKPOINT")
+  data <- fgsea_tools$simulate_preranked_data(geneset = geneset)
+  data %<>% dplyr::sample_frac(size = .25)
+
+  geneset_list <- geneset_tools$genesets_df_to_list(geneset)
+  rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
+  rankobj <- rankobjs[[1]]
+
+  res <- fgsea_tools$run_all_pathways(
+    list(geneset_list),
+    rankobjs,
+    collapse = TRUE
+  )
+
+  res_all <- fgsea_tools$run_all_pathways(
+    list(geneset_list),
+    rankobjs,
+    collapse = FALSE
+  )
+
+  testthat::expect_true(
+    all(res[[1]]$NES == res_all[[1]]$NES)
+  )
+
+  testthat::expect_true(
+    res[[1]] %>% dplyr::filter(mainpathway == TRUE) %>% nrow() <=
+      res_all[[1]] %>%
+        dplyr::filter(mainpathway == TRUE) %>%
+        nrow()
+  )
+
+  testthat::expect_true(
+    res[[1]] %>%
+      dplyr::filter(mainpathway == TRUE) %>%
+      nrow() > 1
+  )
+})
+
 
 other <- function() {
   .name <- res[1, "pathway"]
@@ -162,5 +246,5 @@ other <- function() {
 
 
 
-(test_fgsea_runone())
-(test_get_edge())
+# (test_fgsea_runone())
+# (test_get_edge())
