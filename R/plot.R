@@ -463,10 +463,13 @@ plot_results_one_collection <- function(
     col = col,
     heatmap_legend_param = heatmap_legend_param,
     column_split = cut_by,
-    row_labels = dfp$pathway %>% str_replace("_", " ") %>% str_wrap(width = 40),
-    row_names_gp = grid::gpar(fontsize = 8),
+    row_labels = dfp$pathway %>% str_replace("_", " ") %>% str_wrap(width = 20),
+    row_names_gp = grid::gpar(fontsize = 12),
     clustering_distance_rows = util_tools$dist_no_na,
     clustering_distance_columns = util_tools$dist_no_na,
+    clustering_method_rows = "ward.D2",
+    clustering_method_columns = "ward.D2",
+    column_names_side = "top",
     column_title = title,
     cell_fun = cell_fun # Use the updated cell_fun here
   )
