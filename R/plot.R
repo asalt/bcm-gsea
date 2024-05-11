@@ -12,7 +12,7 @@ src_dir <- file.path(here("R"))
 util_tools <- new.env()
 source(file.path(src_dir, "./utils.R"), local = util_tools)
 
-
+# DEBUG
 
 
 make_heatmap <- function(.gct, row_note = "", scale = T) {
@@ -372,7 +372,9 @@ xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, l
 
 
 
-plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limit = 120) {
+plot_results_one_collection <- function(
+    df, metadata = NULL, cut_by = NULL, limit = 120,
+    title = "", ...) {
   # Ensure necessary columns are present
   required_cols <- c("pathway", "NES")
   if (!all(required_cols %in% colnames(df))) {
@@ -461,11 +463,11 @@ plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limi
     col = col,
     heatmap_legend_param = heatmap_legend_param,
     column_split = cut_by,
-    row_labels = dfp$pathway,
+    row_labels = dfp$pathway %>% str_replace("_", " ") %>% str_wrap(width = 40),
     row_names_gp = grid::gpar(fontsize = 8),
     clustering_distance_rows = util_tools$dist_no_na,
     clustering_distance_columns = util_tools$dist_no_na,
-    column_title = "?? < this should be pathway collection name > ",
+    column_title = title,
     cell_fun = cell_fun # Use the updated cell_fun here
   )
 
