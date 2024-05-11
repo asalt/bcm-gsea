@@ -33,7 +33,9 @@ run_one <- function(rankobj, geneset, minSize = 15, maxSize = 500, collapse = FA
     # eps = 0.0
   ) # , nperm=1000)
 
-  if (collapse) {
+  fgseaRes$mainpathway <- TRUE
+  if (!is.null(collapse) && (collapse == TRUE || collapse == "TRUE")) {
+    cat("finding main pathways")
     collapse_results <- fgseaRes %>%
       fgsea::collapsePathways(
         pathways = geneset,
@@ -57,11 +59,11 @@ run_all_rankobjs <- function(pathway, rankobjs, parallel = F, minSize = 15, maxS
   if (parallel) {
     future::plan(future::multisession, workers = future::availableCores() - 1)
     rankobjs %>% furrr::future_map(
-      ~ run_one(., geneset = pathway)
+      ~ run_one(., geneset = pathway, minSize = minSize, maxSize = maxSize, collapse = collapse)
     )
   } else {
     rankobjs %>% purrr::map(
-      ~ run_one(., geneset = pathway)
+      ~ run_one(., geneset = pathway, minSize = minSize, maxSize = maxSize, collapse = collapse)
     )
   }
   # rankobjs %>% purrr::map(
@@ -77,12 +79,12 @@ run_all_pathways <- function(pathways_list, ranks, parallel = F, minSize = 15, m
 
       if (!is.null(genesets_additional_info)) {
         if (!"collection_name" %in% colnames(genesets_additional_info)) {
-          break("genesets_additional_info must have a 'collection_name' field")
+          cat("genesets_additional_info must have a 'collection_name' field")
         }
         if (!"collapse" %in% colnames(genesets_additional_info)) {
-          break("collapse column not found in genesets_additional_info")
+          cat("collapse column not found in genesets_additional_info")
         }
-        geneset_additional_info <- genesets_additional_info[[pathway_name]]
+        geneset_additional_info <- genesets_additional_info[genesets_additional_info$collection_name == pathway_name, ]
         collapse <- geneset_additional_info$collapse
       }
 
