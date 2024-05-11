@@ -82,7 +82,6 @@ prepare_data_for_barplot <- function(df) {
     dplyr::mutate(pathway = str_remove(pathway, "REACTOME_"))
   df <- df_renamed
 
-
   # is across necessary?
   #   df_renamed <- df %>%
   #   mutate(across(starts_with("pathway"), ~str_remove(., "HALLMARK_"))) %>%
@@ -457,14 +456,22 @@ plot_results_one_collection <- function(
     }
   }
 
+  .df_renamed <- dfp %>%
+    dplyr::mutate(pathway = str_remove(pathway, "HALLMARK_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "KEGG_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "GOMF_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "REACTOME_"))
+  dfp <- .df_renamed
+
 
   ht <- ComplexHeatmap::Heatmap(
     dfp %>% dplyr::select(-pathway) %>% dplyr::select(all_of(metadata$id)),
     col = col,
     heatmap_legend_param = heatmap_legend_param,
     column_split = cut_by,
-    row_labels = dfp$pathway %>% str_replace("_", " ") %>% str_wrap(width = 20),
+    row_labels = dfp$pathway %>% str_replace_all("_", " ") %>% str_wrap(width = 20),
     row_names_gp = grid::gpar(fontsize = 12),
+    column_title_gp = grid::gpar(fontsize = 14),
     clustering_distance_rows = util_tools$dist_no_na,
     clustering_distance_columns = util_tools$dist_no_na,
     clustering_method_rows = "ward.D2",
