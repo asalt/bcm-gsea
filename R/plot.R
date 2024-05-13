@@ -262,19 +262,6 @@ concat_results_all_collections <- function(list_of_lists) {
     return(res)
 }
 
-plot_results_all_collections <- function(list_of_lists, ...) {
-  args <- list(...)
-
-  # res <- list_of_lists %>%
-  #   purrr::map(
-  #     ~ plot_results_one_collection(.x, ...)
-  #   )
-
-  res <- purrr::map(list_of_lists, function(item) {
-    do.call("plot_results_one_collection", c(list(df = item), args))
-  })
-  return(res)
-}
 
 xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limit = 120) {
   if (!"pathway" %in% colnames(df)) {
@@ -316,6 +303,19 @@ xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, l
   }
 
 
+  plot_results_all_collections <- function(list_of_lists, ...) {
+    args <- list(...)
+
+    # res <- list_of_lists %>%
+    #   purrr::map(
+    #     ~ plot_results_one_collection(.x, ...)
+    #   )
+
+    res <- purrr::map(list_of_lists, function(item) {
+      do.call("plot_results_one_collection", c(list(df = item), args))
+    })
+    return(res)
+  }
 
 
   dfp <- df %>% pivot_wider(id_cols = pathway, values_from = NES, names_from = var)
@@ -478,8 +478,6 @@ plot_results_one_collection <- function(
     clustering_method_columns = "ward.D2",
     column_names_side = "top",
     column_title = title,
-    padding = unit(c(2, 10, 2, 2), "mm"), # top, right, bottom, left
-
     cell_fun = cell_fun # Use the updated cell_fun here
   )
 
