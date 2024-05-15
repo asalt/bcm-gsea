@@ -12,7 +12,7 @@ src_dir <- file.path(here("R"))
 util_tools <- new.env()
 source(file.path(src_dir, "./utils.R"), local = util_tools)
 
-
+# DEBUG
 
 
 make_heatmap <- function(.gct, row_note = "", scale = T) {
@@ -47,9 +47,10 @@ make_heatmap <- function(.gct, row_note = "", scale = T) {
 
   ht <- ComplexHeatmap::Heatmap(
     .gct@mat %>% apply(1, function(x) scale(x, center = T, scale = scale)) %>% t() %>% as.matrix(),
+    # TODO use z_score_withna or other custom func for handling nas when scaling
     row_labels = .gct@rdesc$rdesc,
     column_labels = .gct@cdesc$id, # id should always be here
-    column_split = .gct@cdesc$treat, # not guaranteed to be here, needs to be dynamically set
+    column_split = .gct@cdesc$treat, # treat is not guaranteed to be here, this needs to be dynamically set
     top_annotation = ca,
     heatmap_legend_param = heatmap_legend_param,
     row_names_gp = grid::gpar(fontsize = 7),
@@ -81,6 +82,15 @@ prepare_data_for_barplot <- function(df) {
     dplyr::mutate(pathway = str_remove(pathway, "REACTOME_"))
   df <- df_renamed
 
+  # is across necessary?
+  #   df_renamed <- df %>%
+  #   mutate(across(starts_with("pathway"), ~str_remove(., "HALLMARK_"))) %>%
+  #   mutate(across(starts_with("pathway"), ~str_remove(., "KEGG_"))) %>%
+  #   mutate(across(starts_with("pathway"), ~str_remove(., "GOMF_"))) %>%
+  #   mutate(across(starts_with("pathway"), ~str_remove(., "REACTOME_")))
+  # df <- df_renamed
+
+
   sel <- df %>%
     arrange(-abs(NES)) %>%
     arrange(-NES) %>%
@@ -88,8 +98,22 @@ prepare_data_for_barplot <- function(df) {
     mutate(pathway = factor(pathway, levels = unique(pathway), ordered = T)) %>%
     arrange(pathway) # %>%
   sel <- sel %>% mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1) %>%
-      dplyr::mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size))
-      dplyr::mutate(outline_val = if_else(padj < .05, "black", NA))
+      dplyr::mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>% 
+      dplyr::mutate(outline_val = dplyr::if_else(padj < .05, "black", NA))
+
+  # Ensure leadingEdge is treated as a character vector
+  sel <- sel %>%
+    mutate(leadingEdge = as.character(leadingEdge)) %>%
+    mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
+
+  sel <- sel %>%
+    mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>%
+    mutate(outline_val = dplyr::if_else(padj < .05, "black", NA))
+
+  # sel %<>% mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
+  # sel %<>% mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size))
+  # sel %<>% mutate(outline_val = if_else(padj < .05, "black", NA))
+
   sel
 }
 
@@ -242,9 +266,9 @@ concat_results_all_collections <- function(list_of_lists) {
     return(res)
 }
 
+
 plot_results_all_collections <- function(list_of_lists, ...) {
   args <- list(...)
-
   # res <- list_of_lists %>%
   #   purrr::map(
   #     ~ plot_results_one_collection(.x, ...)
@@ -295,12 +319,10 @@ xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, l
     df <- df %>% dplyr::filter(pathway %in% pathways_for_plot)
   }
 
-
   dfp <- df %>% pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>% as.data.frame
   rownames(dfp) <- dfp$pathway
   dfp['pathway'] <- NULL
   dfp <- dfp[ , metadata$id ]
-
 
   dfp_padj <- df %>%
     pivot_wider(id_cols = pathway, values_from = padj, names_from = var) %>%
@@ -338,6 +360,7 @@ xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, l
     heatmap_legend_param = heatmap_legend_param,
     column_split = cut_by,
     row_labels = dfp$pathway,
+    show_row_names = T,
     row_names_gp = grid::gpar(fontsize = 8),
     clustering_distance_rows = util_tools$dist_no_na,
     clustering_distance_columns = util_tools$dist_no_na,
@@ -389,7 +412,6 @@ plot_results_one_collection <- function(
     df <- df %>% filter(pathway %in% top_pathways)
   }
 
-
   # Prepare data for heatmap
   dfp <- df %>% pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>% as.data.frame
 
@@ -417,7 +439,7 @@ plot_results_one_collection <- function(
   # Set up color scale
   q01 <- quantile(abs(df$NES), 0.99, na.rm = TRUE)
   num_colors <- 11
-  my_colors <- colorRampPalette(c("#0000ff", "#8888ffbb", "#ddddff77", "#dddddd",     "#ffdddd77", "#ff8888bb", "#ff0000"))(num_colors)
+  my_colors <- colorRampPalette(c("#0000ff", "#8888ffbb", "#ddddff77", "#dddddd", "#ffdddd77", "#ff8888bb", "#ff0000"))(num_colors)
   break_points <- seq(-q01, q01, length.out = num_colors)
   col <- colorRamp2(breaks = break_points, colors = my_colors)
 
@@ -431,13 +453,26 @@ plot_results_one_collection <- function(
     at = break_points %>% round(1)
   )
 
+  # cell_fun <- function(j, i, x, y, width, height, fill) {
+  #   # Retrieve the value that indicates whether to draw an asterisk
+  #   value <- star_matrix[i, j]
+  #   if (value == "*") {
+  #     # Draw asterisk
+  #     grid::grid.text(value, x, y, gp = grid::gpar(fontsize = 12, col = "black"))
+  #     # Draw border around the cell
+  #     grid::grid.rect(x, y,
+  #       width = width, height = height,
+  #       gp = grid::gpar(col = "black", fill = NA, lwd = 1)
+  #     )
+  #   }
+  # }
+
   cell_fun <- function(j, i, x, y, width, height, fill) {
     # Ensure value is not NA before comparison
     value <- star_matrix[i, j]
     # print(paste("Processing cell:", i, j, "Value:", value))
-     cat(sprintf("NES Cell [%d, %d] with value '%s'\n", i, j, dfp[i, j]))
-     cat(sprintf("star_matrix Cell [%d, %d] with value '%s'\n", i, j, star_matrix    [i, j]))
-
+     # cat(sprintf("NES Cell [%d, %d] with value '%s'\n", i, j, dfp[i, j]))
+     # cat(sprintf("star_matrix Cell [%d, %d] with value '%s'\n", i, j, star_matrix    [i, j]))
 
     if (!is.na(value) && value == "*") {
       # Draw asterisk
@@ -457,7 +492,7 @@ plot_results_one_collection <- function(
     cluster_columns=F,
     heatmap_legend_param = heatmap_legend_param,
     column_split = cut_by,
-    row_labels = rownames(dfp) %>% str_replace_all("_", " ") %>% str_wrap(width =     28),
+    row_labels = rownames(dfp) %>% str_replace_all("_", " ") %>% str_wrap(width = 28),
     row_names_gp = grid::gpar(fontsize = 12),
     column_title_gp = grid::gpar(fontsize = 14),
     clustering_distance_rows = util_tools$dist_no_na,

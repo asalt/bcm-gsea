@@ -2,11 +2,17 @@
 title: "run.Rmd"
 author: "BCM MSPC"
 date: '`r Sys.Date()`'
-output: html_document
+output:
+  html_document:
+    code_folding: hide
+    highlight: zenburn # pygments, kate, monochrome, zenburn
+    toc: yes
+    toc_float: true
 params:
   volcanodir: none
   rankfiledir: none
   gct_path: none
+  cut_by: none
   ranks_from: "volcano"  # choices are volcano and gct
   species: "Homo sapiens"
   genesets_json: >
@@ -253,24 +259,29 @@ plts <- results_list %>%
 
 ## heatmaps of results
 
-```{r, fig.width=10, fig.height=12}
-all_res <- plot_tools$concat_results_all_collections(results_list)
+
+```{r}
+gct_path <- params$gct_path
+gct <- cmapR::parse_gctx(gct_path)
+all_gsea_results <- plot_tools$concat_results_all_collections(results_list)
 .metadata <- gct@cdesc
-plt <- all_res$H_ %>% plot_tools$plot_results_one_collection(., metadata = .metadata, cut_by = 'group')
+.name <- "C5_GO:BP"
+
+
+.pathways_withmeta <- all_gsea_results[[.name]] %>%
+  left_join(gct@cdesc, by = c("var" = "id"))
+.pathways_withmeta %<>% group_by(Model) %>%
+  mutate(n_main = sum(mainpathway==T)) %>%
+  mutate(ratio_main = n_main / n() ) %>%
+  ungroup
+  #group_by(pathway) %>% summarize(n=sum(mainpathway==T)) %>% filter(n/.ntotal > .1) %>% distinct(pathway, .keep_all = T)
+
+.ntotal <- all_res[[.name]]$var %>% unique %>% length()
+.pathways_filtered <- all_res[[.name]] %>% group_by(pathway) %>% summarize(n=sum(mainpathway==T)) %>% filter(n/.ntotal > .1) %>% distinct(pathway, .keep_all = T)
+plt <- all_gsea_results[[.name]] %>% dplyr::filter( pathway %in% .pathways_filtered$pathway ) %>% plot_tools$plot_results_one_collection(., metadata = .metadata, cut_by = 'Model', title=.name)
+
+
 ```
-
-
-```{r, fig.width=10, fig.height=12}
-.metadata <- gct@cdesc
-all_res$`C5_GO:BP` %>% plot_tools$plot_results_one_collection(., metadata = .metadata, cut_by = 'group')
-```
-
-
-```{r, fig.width=10, fig.height=12}
-.metadata <- gct@cdesc
-heatmaps <- all_res %>% plot_tools$plot_results_all_collections(metadata=.metadata, cut_by='group')
-```
-
 
 
 ## curve exploration
