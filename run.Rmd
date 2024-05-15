@@ -14,9 +14,9 @@ params:
       {"category": "H", "subcategory": ""},
       {"category": "C2", "subcategory": "CP:KEGG"},
       {"category": "C2", "subcategory": "CP:REACTOME"},
-      {"category": "C5", "subcategory": "GO:MF"},
-      {"category": "C5", "subcategory": "GO:BP"},
-      {"category": "C5", "subcategory": "GO:CC"}
+      {"category": "C5", "subcategory": "GO:MF", "collapse" : "TRUE"},
+      {"category": "C5", "subcategory": "GO:BP", "collapse" : "TRUE"},
+      {"category": "C5", "subcategory": "GO:CC", "collapse" : "TRUE"}
       /* {"category": "C2", "subcategory": "CP:KEGG"}
       */
     ]
@@ -60,7 +60,7 @@ source("./R/plot.R", local = plot_tools)
 # explanations
 
 ```{r, label=test, eval=F, include=T}
-data <- simulate_preranked_data()
+data <- fgsea_tools$simulate_preranked_data()
 geneset <- geneset_tools$get_collection("H", "")
 geneset_list <- geneset_tools$genesets_df_to_list(geneset)
 #named_data = list(data=data)
@@ -94,8 +94,15 @@ msigdbr::msigdbr_collections()
 
 ```{r, label='load params'}
 
-genesets_of_interest <- jsonlite::parse_json(params$genesets_json)
+# genesets_of_interest <- jsonlite::parse_json(params$genesets_json)
+genesets_of_interest <- jsonlite::fromJSON(params$genesets_json)
+
+genesets_of_interest <- genesets_of_interest %>% dplyr::mutate(
+      collection_name = stringr::str_c(category, subcategory, sep = "_")
+)
+
 species <- params$species
+
 
 #SPECIES <- "Homo sapiens" # or "Mus musculus" or Saccharomyces cerevisiae, and others
 # genesets_of_interest %>% purrr::map(~{print(.x$category); print(.x$subcategory)})
@@ -159,7 +166,11 @@ ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
 # run fgsea
 ```{r, label='run fgsea'}
 
-results_list <- fgsea_tools$run_all_pathways(pathways_list_of_lists, ranks_list, parallel=T) # parallel if you c
+results_list <- fgsea_tools$run_all_pathways(pathways_list_of_lists,
+                                             ranks_list,
+                                             parallel=F,
+                                             genesets_additional_info = genesets_of_interest
+                                             ) # parallel if you c
 # results_list2 <- .GlobalEnv$run_all_pathways(geneset_lists, ranks_list, parallel=T) # parallel if you c
 
 ```
