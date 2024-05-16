@@ -54,6 +54,11 @@ get_collection <- function(category, subcategory, species = "Homo sapiens", ...,
 # }
 
 get_collections <- function(dataframe_obj, species = "Homo sapiens") {
+  if (!"collection_name" %in% colnames(dataframe_obj)) {
+    dataframe_obj <- dplyr::mutate(dataframe_obj,
+      collection_name = stringr::str_c(category, subcategory, sep = "_")
+    )
+  }
   res <- dataframe_obj %>% purrr::pmap(
     function(category, subcategory, ...) {
       list_name <- paste(category, subcategory, sep = "_")

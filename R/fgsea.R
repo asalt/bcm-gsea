@@ -194,6 +194,8 @@ simulate_preranked_data <- function(seed = 4321, geneset = NULL, spike_terms = c
     bg_data,
     spike_data
   )
+  data %<>% distinct(id, .keep_all = TRUE)
+  data %<>% dplyr::mutate(id = as.character(id))
 
   return(data)
 }
