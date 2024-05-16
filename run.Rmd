@@ -54,6 +54,9 @@ future::plan(future::multisession, workers=min(n_cores, 8) )
 io_tools <- new.env()
 source("./R/io.R", local = io_tools)
 
+util_tools <- new.env()
+source("./R/utils.R", local = util_tools)
+
 geneset_tools <- new.env()
 source("./R/geneset_utils.R", local = geneset_tools)
 
@@ -66,19 +69,114 @@ source("./R/plot.R", local = plot_tools)
 # explanations
 
 ```{r, label=test, eval=F, include=T}
-data <- fgsea_tools$simulate_preranked_data()
+
+# gct <- util_tools$make_random_gct()
+
 geneset <- geneset_tools$get_collection("H", "")
 geneset_list <- geneset_tools$genesets_df_to_list(geneset)
-#named_data = list(data=data)
-rankobj <- io_tools$ranks_dfs_to_lists(list(data))
+datas1 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data(seed=4321))
+datas1 %<>% purrr::map(~.x %>% mutate(value=value+rnorm(nrow(.), sd=.1)) )
+datas2 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data( seed=1234))
+datas2 %<>% purrr::map(~.x %>% mutate(value=value+rnorm(nrow(.), sd=.1)) )
+datas3 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data( seed=9999))
+datas3 %<>% purrr::map(~.x %>% mutate(value=value+rnorm(nrow(.), sd=.1)) )
+datas <-
+  c(datas1,
+    datas2,
+    datas3
+    )
+names(datas) <- paste0("test", 1:length(datas))
+rankobj <- io_tools$ranks_dfs_to_lists(list(test=datas[[1]]))
 
-.res <- rankobj[[1]] %>% run_one(geneset_list)
+.res <- rankobj[[1]] %>% fgsea_tools$run_one(geneset_list)
 .name <- .res[1, 'pathway'][[1]]
 
-enplot_data <- fgsea::plotEnrichmentData(geneset_list[[.name]], rankobj[[1]])
+# enplot_data <- fgsea::plotEnrichmentData(geneset_list[[.name]], rankobj[[1]])
+# .rnkorder <- -rankobj[[1]] %>% (rank)
+# rankobj[[1]]['rank'] <- .rnkorder
 
-.rnkorder <- -rankobj[[1]] %>% (rank)
-rankobj[[1]]['rank'] <- .rnkorder
+
+
+# larger test data
+
+genesets_info <- tibble::tribble(
+  ~category, ~subcategory, ~collapse, 
+  "H", "", FALSE,
+  "C5", "GO:MF", TRUE
+) %>% mutate(collection_name = stringr::str_c(category, subcategory, sep = "_")) # todo put this somewhere else
+  
+genesets <-  geneset_tools$get_collections( genesets_info )
+genesets_lists <- genesets %>% purrr::map( geneset_tools$genesets_df_to_list )
+
+rankobjs <- io_tools$ranks_dfs_to_lists(datas)
+
+.results_list <- fgsea_tools$run_all_pathways(
+  pathways_list = genesets_lists,
+  ranks=rankobjs,
+  genesets_additional_info = genesets_info, # dataframe with collapse indicator
+  parallel = T
+)
+results_list <- .results_list
+#named_data = list(data=data)
+
+
+
+
+.gcts <- datas %>% purrr::imap(
+  ~{
+    .mat <- as.data.frame(.x)
+    rownames(.mat) <- .mat$id
+    .mat$id <- NULL
+    colnames(.mat) <- .y
+    gct <- new( "GCT",
+      mat = .mat %>% as.matrix,
+      rdesc = data.frame(row.names=rownames(.mat), id=rownames(.mat), other=seq(length(rownames(.mat))) ),
+      cdesc = data.frame(row.names=colnames(.mat), id=colnames(.mat), other=seq(length(colnames(.mat))) ),
+      cid = colnames(.mat),
+      rid = rownames(.mat)
+  )
+    #gct@version <- "# 1.3"
+    return(gct)
+  }
+)
+
+g1 <- .gcts[[1]]
+g <- g1
+g1 %>% melt_gct %>% head()
+
+g2 <- .gcts[[2]]
+g12 <- cmapR::merge_gct(g1, g2, dim = "col", matrix_only=F)# %>% merge_gct(.gcts[[3]], dim='col')
+g12@mat %>% head
+
+( g12@cdesc %>% head )
+( g12@rdesc %>% head )
+( g12@mat %>% head )
+
+
+gct <- base::Reduce(accumulate=F,
+                    f=function(...) cmapR::merge_gct(..., dim = "col"),
+                    x=.gcts
+)
+
+.datas <- datas %>% purrr::imap( ~ { .x %>% dplyr::rename(!!.y := value) } )
+# .datas[[1]] %>% head()
+.mat <- base::Reduce(accumulate=F,
+                    f=function(...) full_join(..., by='id'),
+                    x=.datas
+) %>% as.data.frame
+
+
+rownames(.mat)<-.mat$id
+.mat$id <- NULL
+.meta <- data.frame(
+  id = colnames(.mat),
+  group = c(rep("A", 3), rep("B", 3), rep("C", 3))
+)
+rownames(.meta) <- .meta$id
+gct <- new("GCT",
+           mat=.mat %>% as.matrix,
+           cdesc=.meta
+           )
 
 ```
 
@@ -258,6 +356,175 @@ plts <- results_list %>%
 ```
 
 ## heatmaps of results
+
+### new
+
+```{r}
+
+all_gsea_results <- plot_tools$concat_results_all_collections(results_list)
+
+
+```
+
+```{r, fig.height=7}
+ht <- all_gsea_results$H_ %>% plot_tools$plot_results_one_collection()
+
+#  draw(ht,
+#    heatmap_legend_side = "bottom",
+#    padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
+#  )
+```
+
+```{r, fig.height=12}
+
+hts <- all_gsea_results %>% plot_tools$plot_results_all_collections()
+
+```
+
+
+## pca and clustering
+
+
+### pca
+
+```{r}
+library(PCAtools)
+
+.df <- all_gsea_results$`C5_GO:MF` %>%
+  pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
+  as.data.frame
+rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
+.df$pathway <- NULL
+.metadata <- data.frame(
+  row.names = colnames(.df),
+  id = colnames(.df),
+  group = c(rep("A",3), rep("B", 3), rep("C", 3))
+)
+
+
+.pca_res <- PCAtools::pca(.df, metadata = .metadata)
+
+```
+
+```{r}
+
+
+
+(.pcs <- .pca_res$rotated %>% colnames %>%  combn(2) %>% as.data.frame %>% as.list )
+# could be alot, too many
+.vec  <- c("PC1", "PC2", "PC3")# "PC4")
+.pcs <- combn(.vec, 2) %>% as.data.frame %>% as.list
+#
+.pcs %>% 
+  purrr::map(
+  ~{
+    COLBY <- "group"
+    # stopifnot(~COLBY%in%colnames(.metadata))
+    .x1 <- .x[[1]]
+    .x2 <- .x[[2]]
+    
+    plt <- PCAtools::biplot(
+    .pca_res,
+    x = .x1,
+    y = .x2,
+    showLoadings = T,
+    labSize = 2,
+    pointSize = 3,
+    sizeLoadingsNames = 2,
+    colby = COLBY,
+    #shape="source",
+    legendPosition = "right",
+    encircle = T,
+    ) #+      coord_equal()
+    
+    print(plt)
+    
+    # name <- paste(.x1, .x2, sep='_', "withnas")
+    # outp <- file.path("./figures", "pca", "biplots_withloadings")
+    # if (!fs::dir_exists(outp)) fs::dir_create(outp)
+    # outf <- file.path(outp, paste0(name, '.pdf'))
+    # pdf(outf, width=9, height=9)
+    # print(plt)
+    # dev.off()
+    
+    
+  }
+)
+
+
+```
+
+
+
+```{r}
+library("FactoMineR")
+
+library(factoextra)
+
+.df <- all_gsea_results$`C5_GO:MF` %>%
+  pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
+  as.data.frame
+rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
+.df$pathway <- NULL
+
+res.hk <- .df %>% hkmeans(k=5)
+fviz_cluster(res.hk, frame.type = "norm", frame.level = 0.68,
+             #geom = "point",
+             labelsize = 7,
+             
+             )
+#fviz_cluster(res.hk)
+```
+
+```{r}
+.pca_res <- .df %>% FactoMineR::PCA()
+```
+
+
+
+
+
+```{r}
+#.pca_res %>% plot( choix = "var")
+.pca_res %>% factoextra::fviz_pca_ind(
+  labelsize = 3.0,
+  #col.ind="cos2",
+  #col.ind.lab="cos2",
+  select.ind = list(contrib = 10),
+  habillage = colnames(.df),
+  #ggp = grid::gpar(labelsize=8)
+)# + ggplot2::theme(label.size=8)
+
+```
+
+### bluster 
+
+```{r}
+
+# Example using PCA data
+pca_result <- prcomp(.df, scale. = TRUE)
+pca_data <- as.data.frame(pca_result$x)
+
+# Applying K-means clustering using bluster
+cluster_results <- clusterRows(pca_data[, 1:2], NNGraphParam(k = 10))
+pca_data$cluster <- factor(cluster_results)
+
+ggplot(pca_data, aes(x = PC1, y = PC2, color = cluster)) +
+    geom_point() +
+    theme_minimal() +
+    labs(title = "PCA with Clustering", x = "PC1", y = "PC2")
+```
+### bluster
+```{r}
+
+library(bluster)
+library(scater)
+
+hclust.out <- clusterRows(.df, HclustParam())
+plotUMAP(sce, colour_by=I(hclust.out))
+```
+
+# xx
 
 
 ```{r}
