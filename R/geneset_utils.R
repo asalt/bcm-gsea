@@ -2,40 +2,37 @@
 suppressPackageStartupMessages(library(here))
 suppressPackageStartupMessages(library(fs))
 suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(memoise))
 
-get_collection <- function(category, subcategory, species = "Homo sapiens", ..., cache = T) {
-  collection_id <- paste(category, subcategory, make.names(species), sep = "_") # only used if cache = T
-  if (cache == TRUE) {
-    cache_dir <- here("cache")
-    if (!fs::dir_exists(cache_dir)) {
-      fs::dir_create(cache_dir)
-    }
-    collection_id_path <- file.path(cache_dir, collection_id)
-    if (fs::file_exists(collection_id_path)) {
-      cat(paste0("reading ", collection_id, "from ", cache_dir, "\n"))
-      df <- readr::read_tsv(collection_id_path, show_col_types = F)
-      return(df)
-    }
+
+get_collection_raw <- function(category, subcategory, species = "Homo sapiens", cache = TRUE) {
+  #
+  collection_id <- paste(category, subcategory, make.names(species), sep = "_")
+
+  cache_dir <- here("cache")
+  collection_id_path <- file.path(cache_dir, collection_id)
+
+  if (cache && fs::file_exists(collection_id_path)) {
+    cat(paste0("reading ", collection_id, " from ", cache_dir, "\n"))
+    return(readr::read_tsv(collection_id_path, show_col_types = FALSE))
   }
+
+  # Data fetching
   df <- msigdbr::msigdbr(species = species, category = category, subcategory = subcategory)
 
   if (cache == TRUE) {
-    cache_dir <- here("cache")
-    collection_id_path <- file.path(cache_dir, collection_id)
+    if (!fs::dir_exists(cache_dir)) fs::dir_create(cache_dir)
     if (!fs::file_exists(collection_id_path)) {
-      df %>% readr::write_tsv(collection_id_path)
-      cat(paste0("writing ", collection_id, "to ", cache_dir))
-      return(df)
+      readr::write_tsv(df, collection_id_path)
+      cat(paste0("writing ", collection_id, " to ", cache_dir, "\n"))
     }
+    # genesets_env[[collection_id]] <- df
   }
-
-
 
   return(df)
 }
 
-
-
+get_collection <- memoise::memoise(get_collection_raw) # this is convienent for interactive sessions
 
 # get_collections <- function(list_of_collections, species = "Homo sapiens") {
 #   res <- list_of_collections %>% purrr::map(
