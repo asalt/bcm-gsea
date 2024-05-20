@@ -45,7 +45,7 @@ library(tidyr)
 library(tictoc)
 library(ggrepel)
 #knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.path = 'bcm_gsea_figures')
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 library(future)
 n_cores <- future::availableCores() - 1
@@ -100,11 +100,11 @@ rankobj <- io_tools$ranks_dfs_to_lists(list(test=datas[[1]]))
 # larger test data
 
 genesets_info <- tibble::tribble(
-  ~category, ~subcategory, ~collapse, 
+  ~category, ~subcategory, ~collapse,
   "H", "", FALSE,
   "C5", "GO:MF", TRUE
 ) %>% mutate(collection_name = stringr::str_c(category, subcategory, sep = "_")) # todo put this somewhere else
-  
+
 genesets <-  geneset_tools$get_collections( genesets_info )
 genesets_lists <- genesets %>% purrr::map( geneset_tools$genesets_df_to_list )
 
@@ -142,20 +142,20 @@ all_gsea_results <- plot_tools$concat_results_all_collections(results_list)
 #     return(gct)
 #   }
 # )
-# 
+#
 # g1 <- .gcts[[1]]
 # g <- g1
 # g1 %>% melt_gct %>% head()
-# 
+#
 # g2 <- .gcts[[2]]
 # g12 <- cmapR::merge_gct(g1, g2, dim = "col", matrix_only=F)# %>% merge_gct(.gcts[[3]], dim='col')
 # g12@mat %>% head
-# 
+#
 # ( g12@cdesc %>% head )
 # ( g12@rdesc %>% head )
 # ( g12@mat %>% head )
-# 
-# 
+#
+#
 # gct <- base::Reduce(accumulate=F,
 #                     f=function(...) cmapR::merge_gct(..., dim = "col"),
 #                     x=.gcts
@@ -390,7 +390,8 @@ hts <- all_gsea_results %>% plot_tools$plot_results_all_collections()
 
 ### pca
 
-```{r}
+run pca
+```{r, eval=F, label='pca run'} # not ready yet
 library(PCAtools)
 
 .df <- all_gsea_results$`C5_GO:MF` %>%
@@ -403,8 +404,9 @@ rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
 
 ```
 
-```{r}
+explore pca
 
+```{r, eval=F, label='pca explore'} # not ready yet
 
 
 (.pcs <- .pca_res$rotated %>% colnames %>%  combn(2) %>% as.data.frame %>% as.list )
@@ -412,14 +414,14 @@ rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
 .vec  <- c("PC1", "PC2", "PC3")# "PC4")
 .pcs <- combn(.vec, 2) %>% as.data.frame %>% as.list
 #
-.pcs %>% 
+.pcs %>%
   purrr::map(
   ~{
     COLBY <- "group"
     # stopifnot(~COLBY%in%colnames(.metadata))
     .x1 <- .x[[1]]
     .x2 <- .x[[2]]
-    
+
     plt <- PCAtools::biplot(
     .pca_res,
     x = .x1,
@@ -433,9 +435,9 @@ rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
     legendPosition = "right",
     encircle = T,
     ) #+      coord_equal()
-    
+
     print(plt)
-    
+
     # name <- paste(.x1, .x2, sep='_', "withnas")
     # outp <- file.path("./figures", "pca", "biplots_withloadings")
     # if (!fs::dir_exists(outp)) fs::dir_create(outp)
@@ -443,88 +445,15 @@ rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
     # pdf(outf, width=9, height=9)
     # print(plt)
     # dev.off()
-    
-    
+
+
   }
 )
 
 
 ```
 
-
-
-```{r}
-library("FactoMineR")
-
-library(factoextra)
-
-.df <- all_gsea_results$`C5_GO:MF` %>%
-  pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
-  as.data.frame
-rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
-.df$pathway <- NULL
-
-res.hk <- .df %>% hkmeans(k=5)
-fviz_cluster(res.hk, frame.type = "norm", frame.level = 0.68,
-             #geom = "point",
-             labelsize = 7,
-             
-             )
-#fviz_cluster(res.hk)
-```
-
-```{r}
-.pca_res <- .df %>% FactoMineR::PCA()
-```
-
-
-
-
-
-```{r}
-#.pca_res %>% plot( choix = "var")
-.pca_res %>% factoextra::fviz_pca_ind(
-  labelsize = 3.0,
-  #col.ind="cos2",
-  #col.ind.lab="cos2",
-  select.ind = list(contrib = 10),
-  habillage = colnames(.df),
-  #ggp = grid::gpar(labelsize=8)
-)# + ggplot2::theme(label.size=8)
-
-```
-
-### bluster 
-
-```{r}
-
-# Example using PCA data
-pca_result <- prcomp(.df, scale. = TRUE)
-pca_data <- as.data.frame(pca_result$x)
-
-# Applying K-means clustering using bluster
-cluster_results <- clusterRows(pca_data[, 1:2], NNGraphParam(k = 10))
-pca_data$cluster <- factor(cluster_results)
-
-ggplot(pca_data, aes(x = PC1, y = PC2, color = cluster)) +
-    geom_point() +
-    theme_minimal() +
-    labs(title = "PCA with Clustering", x = "PC1", y = "PC2")
-```
-### bluster
-```{r}
-
-library(bluster)
-library(scater)
-
-hclust.out <- clusterRows(.df, HclustParam())
-plotUMAP(sce, colour_by=I(hclust.out))
-```
-
-# xx
-
-
-```{r}
+```{r, eval=F}
 gct_path <- params$gct_path
 gct <- cmapR::parse_gctx(gct_path)
 all_gsea_results <- plot_tools$concat_results_all_collections(results_list)
@@ -580,7 +509,7 @@ ggplot(.res2, aes(y = abs(NES), x = pval)) +
 ## plot large tabular plots
 
 this function may be moved out
-```{r, fig.width=10, fig.height=12}
+```{r, fig.width=10, fig.height=12, eval=F}
 
 tic()
 
@@ -640,7 +569,7 @@ toc()
 ```
 
 
-```{r, fig.width=10, fig.height=12}
+```{r, fig.width=10, fig.height=12, eval=F}
 
 tic()
 
@@ -728,7 +657,7 @@ rankorder <- rankorder2
 
 ```
 
-```{r, fig.width=10, fig.height=8}
+```{r, fig.width=10, fig.height=8, eval=F}
 
 
 es_min <- rankorder %>% pull(ES) %>% min(na.rm=T)
@@ -744,7 +673,7 @@ make_selection <- function(x){
 }
 ```
 
-```{r, fig.width=10, fig.height=8}
+```{r, fig.width=10, fig.height=8, eval=F}  # not ready yet
 
 rankorder %<>% arrange(stat_tick)
 rankorder %>%
@@ -754,7 +683,7 @@ rankorder %>%
 
 
 
-```{r, fig.width=12, fig.height=10}
+```{r, fig.width=12, fig.height=10, eval=F}
 
 
 #rankorder_all <- .GlobalEnv$get_rankorder(ranks_list[[1]], pathways_list_of_lists$H_$HALLMARK_ADIPOGENESIS  )

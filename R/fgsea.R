@@ -96,37 +96,70 @@ xx_run_all_pathways <- function(pathways_list, ranks, parallel = F, minSize = 15
 }
 # results_list <- run_all_pathways(pathways_list_of_lists, ranks_list)
 
-run_all_pathways <- function(pathways_list, ranks, parallel = FALSE, minSize = 15, maxSize = 500, genesets_additional_info = NULL, collapse = FALSE) {
-  pathways_list %>% purrr::imap(
+run_all_pathways <- function(geneset_lists, ranks, parallel = FALSE, minSize = 15, maxSize = 500, genesets_additional_info = NULL, collapse = FALSE) {
+  if (any(is.null(names(geneset_lists)))) {
+    stop(
+      cat(
+        "each geneset must be named",
+        "e.g. geneset_lists <- list('H_' = geneset1, 'C5_GO:BP' = geneset2)"
+      ),
+      call. = FALSE
+    )
+  }
+
+  if (any(is.null(names(ranks)))) {
+    stop(
+      cat(
+        "each rank must be named",
+        "e.g. rank <- list(comparison1 = rank1, comparison2 = rank2)"
+      ),
+      call. = FALSE
+    )
+  }
+
+
+
+  out <- geneset_lists %>% purrr::imap(
     ~ {
-      pathway_list <- .x
-      pathway_name <- .y
+      geneset_list <- .x
+      geneset_name <- .y
 
       current_collapse <- collapse # Use local variable for clarity
 
-      # Check for non-null and appropriate usage of genesets_additional_info
+      # Check for non-null and appropriate columns of genesets_additional_info
+      # this is messy but works
       if (!is.null(genesets_additional_info) && !collapse) {
         # Check for necessary columns in genesets_additional_info
-        if (!all(c("collection_name", "collapse") %in% colnames(genesets_additional_info))) {
-          stop("genesets_additional_info must have 'collection_name' and 'collapse' fields", call. = FALSE)
+
+
+        if (!"collection_name" %in% colnames(genesets_additional_info)) {
+          genesets_additional_info <- genesets_additional_info %>%
+            dplyr::mutate(collection_name = stringr::str_c(category, subcategory, sep = "_"))
         }
 
+        if (!"collapse" %in% colnames(genesets_additional_info)) {
+          genesets_additional_info <- genesets_additional_info %>%
+            dplyr::mutate(collapse = F)
+        }
+
+
         # Extract additional info specific to the current pathway
-        geneset_additional_info <- genesets_additional_info[genesets_additional_info$collection_name == pathway_name, ]
+        geneset_additional_info <- genesets_additional_info[genesets_additional_info$collection_name == geneset_name, ]
 
         # Check if specific geneset info was found and update collapse if so
         if (nrow(geneset_additional_info) > 0) {
           current_collapse <- geneset_additional_info$collapse
         } else {
-          warning("No matching geneset info found for pathway: ", pathway_name)
+          warning("No matching geneset info found for pathway: ", geneset_name)
         }
       }
       # browser()
 
       # Pass the potentially updated collapse value to the next function
-      pathway_list %>% run_all_rankobjs(., rankobjs = ranks, parallel = parallel, minSize = minSize, maxSize = maxSize, collapse = current_collapse)
+      geneset_list %>% run_all_rankobjs(., rankobjs = ranks, parallel = parallel, minSize = minSize, maxSize = maxSize, collapse = current_collapse)
     }
   )
+  return(out)
 }
 
 
