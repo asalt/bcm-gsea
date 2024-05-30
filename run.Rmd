@@ -22,7 +22,8 @@ params:
       {"category": "C2", "subcategory": "CP:REACTOME", "collapse": "TRUE"},
       {"category": "C5", "subcategory": "GO:MF", "collapse" : "TRUE"},
       {"category": "C5", "subcategory": "GO:BP", "collapse" : "TRUE"},
-      {"category": "C5", "subcategory": "GO:CC", "collapse" : "TRUE"} 
+      {"category": "C5", "subcategory": "GO:CC", "collapse" : "TRUE"} ,
+      {"category": "C5", "subcategory": "All", "collapse" : "TRUE"} 
     ]
 
 ---
@@ -206,7 +207,6 @@ genesets_of_interest <- jsonlite::fromJSON(params$genesets_json)
 genesets_of_interest <- genesets_of_interest %>% dplyr::mutate(
       collection_name = stringr::str_c(category, subcategory, sep = "_")
 )
-genesets_of_interest %<>% head(2)
 
 species <- params$species
 
@@ -275,7 +275,7 @@ ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
 
 results_list <- fgsea_tools$run_all_pathways(pathways_list_of_lists,
                                              ranks_list,
-                                             parallel=F,
+                                             parallel=T,
                                              genesets_additional_info = genesets_of_interest
                                              ) # parallel if you c
 # results_list2 <- .GlobalEnv$run_all_pathways(geneset_lists, ranks_list, parallel=T) # parallel if you c
@@ -405,7 +405,7 @@ draw(ht,
 )
 ```
 
-```{r, fig.height=12}
+```{r, fig.height=22}
 
 hts <- all_gsea_results %>% plot_tools$plot_results_all_collections()
 
@@ -451,32 +451,22 @@ names(results_list) %>%
           for (i in 1:nrow(forplot)){
             row <- forplot[i, ]
             .id <- row$pathway
-<<<<<<< Updated upstream
-            print(.id)
-            .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', '', x)))
-            print(.leading_edge)
-=======
             .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', '', x)))
             .row_title <- row$pval
             
             print(.id)
-            print(paste0('pval: ', row$pvalue))
+            print(paste0('pval: ', row$pval))
             print(paste0('padj: ', row$padj))
             print(paste0('NES: ', row$NES))
             
-            print(.leading_edge)
+            # print(.leading_edge)
             
->>>>>>> Stashed changes
             tryCatch({
                 subgct <- cmapR::subset_gct(gct, rid = .leading_edge)
                 ht <- plot_tools$make_heatmap(subgct)
                 print(ht)
               },
-<<<<<<< Updated upstream
-            error = function(x) return(NA)
-=======
             error = function(e) print(e$message)
->>>>>>> Stashed changes
           )
           }
   })

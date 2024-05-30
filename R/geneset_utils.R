@@ -3,6 +3,7 @@ suppressPackageStartupMessages(library(here))
 suppressPackageStartupMessages(library(fs))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(memoise))
+suppressPackageStartupMessages(library(dplyr))
 
 
 get_collection_raw <- function(category, subcategory, species = "Homo sapiens", cache = TRUE) {
@@ -59,11 +60,23 @@ get_collections <- function(dataframe_obj, species = "Homo sapiens") {
   res <- dataframe_obj %>% purrr::pmap(
     function(category, subcategory, ...) {
       list_name <- paste(category, subcategory, sep = "_")
-      collection <- get_collection(
-        category = category,
-        subcategory = subcategory,
-        species = species,
-      )
+      if (category == "C5" & subcategory == "All") {
+        .collections <- c("GO:BP", "GO:CC", "GO:MF") %>%
+          purrr::map(~ {
+            get_collection(
+              category = category,
+              subcategory = .x,
+              species = species
+            )
+          })
+        collection <- dplyr::bind_rows(.collections)
+      } else {
+        collection <- get_collection(
+          category = category,
+          subcategory = subcategory,
+          species = species,
+        )
+      }
       setNames(list(collection), list_name)
     }
   )
