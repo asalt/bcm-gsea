@@ -51,7 +51,6 @@ make_heatmap <- function(.gct, row_note = "", scale = T) {
     row_labels = .gct@rdesc$rdesc,
     column_labels = .gct@cdesc$id, # id should always be here
     column_split = .gct@cdesc$group, # treat is not guaranteed to be here, this needs to be dynamically set
-    row_labels = .gct@rdesc$rdesc, # TODO: more robust check
     top_annotation = ca,
     heatmap_legend_param = heatmap_legend_param,
     row_names_gp = grid::gpar(fontsize = 7),

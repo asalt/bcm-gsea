@@ -451,15 +451,32 @@ names(results_list) %>%
           for (i in 1:nrow(forplot)){
             row <- forplot[i, ]
             .id <- row$pathway
+<<<<<<< Updated upstream
             print(.id)
             .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', '', x)))
             print(.leading_edge)
+=======
+            .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', '', x)))
+            .row_title <- row$pval
+            
+            print(.id)
+            print(paste0('pval: ', row$pvalue))
+            print(paste0('padj: ', row$padj))
+            print(paste0('NES: ', row$NES))
+            
+            print(.leading_edge)
+            
+>>>>>>> Stashed changes
             tryCatch({
                 subgct <- cmapR::subset_gct(gct, rid = .leading_edge)
                 ht <- plot_tools$make_heatmap(subgct)
                 print(ht)
               },
+<<<<<<< Updated upstream
             error = function(x) return(NA)
+=======
+            error = function(e) print(e$message)
+>>>>>>> Stashed changes
           )
           }
   })
