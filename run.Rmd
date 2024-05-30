@@ -9,22 +9,20 @@ output:
     toc: yes
     toc_float: true
 params:
-  volcanodir: none
+  volcanodir: "../results/MSPC001128/volcano/"
   rankfiledir: none
-  gct_path: none
+  gct_path: "../results/MSPC001128/export/MSPC001128_data_gct_all_1.0more_nonzero_normtype_median_n6x2995.gct"
   cut_by: none
   ranks_from: "volcano"  # choices are volcano and gct
   species: "Homo sapiens"
   genesets_json: >
     [
-      {"category": "H", "subcategory": ""},
-      {"category": "C2", "subcategory": "CP:KEGG"},
-      {"category": "C2", "subcategory": "CP:REACTOME"},
+      {"category": "H", "subcategory": "", "collapse" : "FALSE"},
+      {"category": "C2", "subcategory": "CP:KEGG", "collapse": "TRUE"},
+      {"category": "C2", "subcategory": "CP:REACTOME", "collapse": "TRUE"},
       {"category": "C5", "subcategory": "GO:MF", "collapse" : "TRUE"},
       {"category": "C5", "subcategory": "GO:BP", "collapse" : "TRUE"},
-      {"category": "C5", "subcategory": "GO:CC", "collapse" : "TRUE"}
-      /* {"category": "C2", "subcategory": "CP:KEGG"}
-      */
+      {"category": "C5", "subcategory": "GO:CC", "collapse" : "TRUE"} 
     ]
 
 ---
@@ -44,6 +42,7 @@ library(readr)
 library(tidyr)
 library(tictoc)
 library(ggrepel)
+library(reactable)
 #knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
@@ -207,6 +206,7 @@ genesets_of_interest <- jsonlite::fromJSON(params$genesets_json)
 genesets_of_interest <- genesets_of_interest %>% dplyr::mutate(
       collection_name = stringr::str_c(category, subcategory, sep = "_")
 )
+genesets_of_interest %<>% head(2)
 
 species <- params$species
 
@@ -271,7 +271,7 @@ ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
 
 
 # run fgsea
-```{r, label='run fgsea'}
+```{r, label='run fgsea', cache=T}
 
 results_list <- fgsea_tools$run_all_pathways(pathways_list_of_lists,
                                              ranks_list,
@@ -303,6 +303,28 @@ head(results_list[[1]] [[1]] )
 ```
 
 
+
+```{r, label=save}
+
+
+names(results_list) %>%
+  purrr::map(
+    ~{
+      collection_name <- .x
+      names(results_list[[collection_name]]) %>%
+        purrr::map(
+                ~{ 
+          comparison_name <- .x
+          result <- results_list[[collection_name]][[comparison_name]]
+          print(collection_name)
+          print(comparison_name)
+          outf <- paste0( make.names( collection_name ), "_", make.names(comparison_name), '.tsv')
+          if (!fs::file_exists(outf)) result %>% readr::write_tsv( outf )
+  })
+})
+
+
+```
 
 ## making plots
 
@@ -355,6 +377,10 @@ prewritten function to merge gsea results across comparisons and make faceted ba
 plts <- results_list %>%
   plot_tools$process_results_across_rnks()
 
+for (plt in plts){
+  print(plt)
+}
+
 
 ```
 
@@ -369,21 +395,99 @@ all_gsea_results <- plot_tools$concat_results_all_collections(results_list)
 
 ```
 
+
 ```{r, fig.height=7}
 ht <- all_gsea_results$H_ %>% plot_tools$plot_results_one_collection()
 
-#  draw(ht,
-#    heatmap_legend_side = "bottom",
-#    padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
-#  )
+draw(ht,
+  heatmap_legend_side = "bottom",
+  padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
+)
 ```
 
 ```{r, fig.height=12}
 
 hts <- all_gsea_results %>% plot_tools$plot_results_all_collections()
 
+for (ht in hts){
+  draw(ht,
+    heatmap_legend_side = "bottom",
+    padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
+  )
+}
+
+
 ```
 
+
+```{r, fig.height=12}
+gct_path <- params$gct_path
+gct <- cmapR::parse_gctx(gct_path)
+# library(org.Hs.eg.db)
+# gene_symbols <- AnnotationDbi::select(org.Hs.eg.db, 
+#                                       keys = gct@rid
+#                                       columns = c("SYMBOL"),
+#                                       keytype = "ENTREZID")
+# merged_data <- merge(gct@rdesc, gene_symbols, by.x = "id", by.y = "ENTREZID", all.x = TRUE)
+# gct@rdesc <- merged_data
+
+
+head(mat(gct))
+
+(head(gct@rdesc))
+
+names(results_list) %>%
+  purrr::map(
+    ~{
+      collection_name <- .x
+      names(results_list[[collection_name]]) %>%
+        purrr::map(
+                ~{ 
+          comparison_name <- .x
+          result <- results_list[[collection_name]][[comparison_name]]
+          print(collection_name)
+          print(comparison_name)
+          forplot <- result %>% arrange(pval) %>% head(10) %>% mutate(leadingedgelist = stringr::str_split(leadingEdge, ","))
+          for (i in 1:nrow(forplot)){
+            row <- forplot[i, ]
+            .id <- row$pathway
+            print(.id)
+            .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', '', x)))
+            print(.leading_edge)
+            tryCatch({
+                subgct <- cmapR::subset_gct(gct, rid = .leading_edge)
+                ht <- plot_tools$make_heatmap(subgct)
+                print(ht)
+              },
+            error = function(x) return(NA)
+          )
+          }
+  })
+})
+
+# results_list %>% 
+#   purrr::imap(
+#     ~{
+#    collection_name <- .x
+#    comparisons <- .y
+#    # print(collection_name)
+#    comparisons %>% 
+#        purrr::imap(
+#             ~{
+#                 gsea_res <- .x
+#                 comparison_name <- .y
+#                 print(comparison_name)
+#                 print(gsea_res)
+#                 # .row <- gsea_res %>% arrange(pval) %>% head(1)
+#                 # .leading_edge <- stringr::str_split(.row$leadingEdge)
+#                 # subgct <- cmapR::subset_gct( rids = .leading_edge )
+#                 # print(head(mat(subgct)))
+#         
+#              })
+#   })
+
+
+```
 
 ## pca and clustering
 
@@ -391,7 +495,7 @@ hts <- all_gsea_results %>% plot_tools$plot_results_all_collections()
 ### pca
 
 run pca
-```{r, eval=F, label='pca run'} # not ready yet
+```{r, eval=F, include=F, label='pca run'} # not ready yet
 library(PCAtools)
 
 .df <- all_gsea_results$`C5_GO:MF` %>%
@@ -406,7 +510,8 @@ rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
 
 explore pca
 
-```{r, eval=F, label='pca explore'} # not ready yet
+```{r, eval=F, label='pca explore', include=F}
+ # not ready yet
 
 
 (.pcs <- .pca_res$rotated %>% colnames %>%  combn(2) %>% as.data.frame %>% as.list )
