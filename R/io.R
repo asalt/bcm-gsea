@@ -25,7 +25,13 @@ make_random_gct <- function(nrow = 10, ncol = 4) {
   .rdesc <- data.frame(
     rdesc = paste0("gene", seq(1, nrow))
   )
-  gct <- cmapR::GCT(mat = .mat, rid = .rids, cid = .cids, cdesc = .cdesc, rdesc = .rdesc)
+  gct <- cmapR::GCT(
+    mat = .mat,
+    rid = .rids,
+    cid = .cids,
+    cdesc = .cdesc,
+    rdesc = .rdesc
+  )
   gct
 }
 
@@ -61,7 +67,10 @@ create_rnkfiles_from_emat <- function(emat, apply_z_score = FALSE, ...) {
 }
 
 
-create_rnkfiles_from_volcano <- function(volcanodir, id_col = "GeneID", value_col = "value") {
+create_rnkfiles_from_volcano <- function(
+    volcanodir,
+    id_col = "GeneID",
+    value_col = "value") {
   if (is.null(volcanodir)) {
     stop("volcanodir not defined")
   }
@@ -72,7 +81,8 @@ create_rnkfiles_from_volcano <- function(volcanodir, id_col = "GeneID", value_co
 
   (volcanofiles <- fs::dir_ls(path = volcanodir, regexp = ".*tsv"))
   lst <- volcanofiles %>%
-    purrr::set_names(nm = ~ basename(.) %>% fs::path_ext_remove()) %>% # set names first
+    purrr::set_names(nm = ~ basename(.) %>%
+      fs::path_ext_remove()) %>% # set names first
     purrr::map(~ {
       .table <- read_tsv(.x, show_col_types = F)
       if (value_col %in% colnames(.table)) {
@@ -85,7 +95,8 @@ create_rnkfiles_from_volcano <- function(volcanodir, id_col = "GeneID", value_co
     })
 
 
-  shorternames <- names(lst) %>% stringr::str_extract(., pattern = "(?<=group_)(.*)(?=_di*)")
+  shorternames <- names(lst) %>%
+    stringr::str_extract(., pattern = "(?<=group_)(.*)(?=_di*)")
   names(lst) <- shorternames
   lst
 }
@@ -93,7 +104,7 @@ create_rnkfiles_from_volcano <- function(volcanodir, id_col = "GeneID", value_co
 
 write_rnkfiles <- function(lst, dir = "rnkfiles") {
   if (!fs::dir_exists(dir)) fs::dir_create(dir)
-  ._ <- lst %>% purrr::imap( # .x is the value, .y is the name
+  lst %>% purrr::iwalk( # .x is the value, .y is the name
     ~ {
       .outname <- fs::path_join(
         c(dir, paste0(.y, ".rnk"))

@@ -1,6 +1,7 @@
 suppressPackageStartupMessages(library(fgsea))
 suppressPackageStartupMessages(library(msigdbr))
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(purrr))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(here))
 suppressPackageStartupMessages(library(furrr))
@@ -54,49 +55,48 @@ run_one <- function(rankobj, geneset, minSize = 15, maxSize = 500, collapse = FA
   return(fgseaRes)
 }
 
-run_all_rankobjs <- function(pathway, rankobjs, parallel = F, minSize = 15, maxSize = 500, collapse = FALSE) {
+run_all_rankobjs <- function(
+    pathway,
+    rankobjs,
+    parallel = F,
+    minSize = 15,
+    maxSize = 500,
+    collapse = FALSE) {
   # rankobjs %>% furrr::future_map( # maybe later
   if (parallel) {
     future::plan(future::multisession, workers = future::availableCores() - 1)
     rankobjs %>% furrr::future_map(
-      ~ run_one(., geneset = pathway, minSize = minSize, maxSize = maxSize, collapse = collapse)
+      ~ run_one(.,
+        geneset = pathway,
+        minSize = minSize,
+        maxSize = maxSize,
+        collapse = collapse
+      )
     )
   } else {
     rankobjs %>% purrr::map(
-      ~ run_one(., geneset = pathway, minSize = minSize, maxSize = maxSize, collapse = collapse)
+      ~ run_one(.,
+        geneset = pathway,
+        minSize = minSize,
+        maxSize = maxSize,
+        collapse = collapse
+      )
     )
   }
   # rankobjs %>% purrr::map(
   #   ~ run_one(., geneset = pathway)
   # )
 }
-xx_run_all_pathways <- function(pathways_list, ranks, parallel = F, minSize = 15, maxSize = 500, genesets_additional_info = NULL, collapse = FALSE) {
-  pathways_list %>% purrr::imap(
-    ~ {
-      pathway_list <- .x
-      pathway_name <- .y
-
-      collapse <- collapse.
-
-      if (!is.null(genesets_additional_info & collapse. == FALSE)) {
-        if (!"collection_name" %in% colnames(genesets_additional_info)) {
-          cat("genesets_additional_info must have a 'collection_name' field")
-        }
-        if (!"collapse" %in% colnames(genesets_additional_info)) {
-          cat("collapse column not found in genesets_additional_info")
-        }
-        geneset_additional_info <- genesets_additional_info[genesets_additional_info$collection_name == pathway_name, ]
-        collapse <- geneset_additional_info$collapse
-      }
-
-
-      pathway_list %>% run_all_rankobjs(., rankobjs = ranks, parallel = parallel, minSize = minSize, maxSize = maxSize, collapse = collapse)
-    }
-  )
-}
 # results_list <- run_all_pathways(pathways_list_of_lists, ranks_list)
 
-run_all_pathways <- function(geneset_lists, ranks, parallel = FALSE, minSize = 15, maxSize = 500, genesets_additional_info = NULL, collapse = FALSE) {
+run_all_pathways <- function(
+    geneset_lists,
+    ranks,
+    parallel = FALSE,
+    minSize = 15,
+    maxSize = 500,
+    genesets_additional_info = NULL,
+    collapse = FALSE) {
   if (any(is.null(names(geneset_lists)))) {
     stop(
       cat(
@@ -131,7 +131,6 @@ run_all_pathways <- function(geneset_lists, ranks, parallel = FALSE, minSize = 1
       if (!is.null(genesets_additional_info) && !collapse) {
         # Check for necessary columns in genesets_additional_info
 
-
         if (!"collection_name" %in% colnames(genesets_additional_info)) {
           genesets_additional_info <- genesets_additional_info %>%
             dplyr::mutate(collection_name = stringr::str_c(category, subcategory, sep = "_"))
@@ -141,7 +140,6 @@ run_all_pathways <- function(geneset_lists, ranks, parallel = FALSE, minSize = 1
           genesets_additional_info <- genesets_additional_info %>%
             dplyr::mutate(collapse = F)
         }
-
 
         # Extract additional info specific to the current pathway
         geneset_additional_info <- genesets_additional_info[genesets_additional_info$collection_name == geneset_name, ]
@@ -156,7 +154,13 @@ run_all_pathways <- function(geneset_lists, ranks, parallel = FALSE, minSize = 1
       # browser()
 
       # Pass the potentially updated collapse value to the next function
-      geneset_list %>% run_all_rankobjs(., rankobjs = ranks, parallel = parallel, minSize = minSize, maxSize = maxSize, collapse = current_collapse)
+      geneset_list %>% run_all_rankobjs(.,
+        rankobjs = ranks,
+        parallel = parallel,
+        minSize = minSize,
+        maxSize = maxSize,
+        collapse = current_collapse
+      )
     }
   )
   return(out)
@@ -217,7 +221,7 @@ simulate_preranked_data <- function(seed = 4321, geneset = NULL, spike_terms = c
   )
 
   # Spike gene values, assigning different means for each spike term
-  spike_data <- map2_df(spike_genes_list, seq_along(spike_genes_list), ~ data.frame(
+  spike_data <- purrr::map2_df(spike_genes_list, seq_along(spike_genes_list), ~ data.frame(
     id = .x,
     value = rnorm(n = length(.x), mean = .y) # Incrementing mean for differentiation
   ))

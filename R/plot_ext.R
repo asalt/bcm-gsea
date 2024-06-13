@@ -2,8 +2,6 @@ suppressPackageStartupMessages(library(grid))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(tidyr))
-suppressPackageStartupMessages(library(stringr))
-suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(ComplexHeatmap))
 suppressPackageStartupMessages(library(circlize))
 
@@ -23,7 +21,7 @@ make_heatmap <- function(.gct, row_note = "", scale = T) {
   #   factor(.gct@cdesc$treat , levels = c("untreated", "carboplatin", "IMT", "carboplatin_IMT"), ordered = T)
 
   ca <- ComplexHeatmap::columnAnnotation(
-    group = .gct@cdesc$group, # this needs to be dynamically set
+    group = .gct@cdesc$group, # this needs to be dynamically created
     col = list(
       group = c(
         `168EC` = "blue",
@@ -48,12 +46,7 @@ make_heatmap <- function(.gct, row_note = "", scale = T) {
 
 
   ht <- ComplexHeatmap::Heatmap(
-    .gct@mat %>% apply(
-      1,
-      function(x) scale(x, center = T, scale = scale)
-    ) %>%
-      t() %>%
-      as.matrix(),
+    .gct@mat %>% apply(1, function(x) scale(x, center = T, scale = scale)) %>% t() %>% as.matrix(),
     # TODO use z_score_withna or other custom func for handling nas when scaling
     row_labels = .gct@rdesc$rdesc,
     column_labels = .gct@cdesc$id, # id should always be here
@@ -83,10 +76,10 @@ custom_labeller <- function(value) {
 
 prepare_data_for_barplot <- function(df) {
   df_renamed <- df %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "HALLMARK_")) %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "KEGG_")) %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "GOMF_")) %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "REACTOME_"))
+    dplyr::mutate(pathway = str_remove(pathway, "HALLMARK_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "KEGG_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "GOMF_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "REACTOME_"))
   df <- df_renamed
 
   # is across necessary?
@@ -97,17 +90,12 @@ prepare_data_for_barplot <- function(df) {
   #   mutate(across(starts_with("pathway"), ~str_remove(., "REACTOME_")))
   # df <- df_renamed
 
-
   sel <- df %>%
     arrange(-abs(NES)) %>%
     arrange(-NES) %>%
     mutate(pathway = str_replace_all(pathway, "_", " ") %>% str_wrap(width = 40)) %>%
     mutate(pathway = factor(pathway, levels = unique(pathway), ordered = T)) %>%
     arrange(pathway) # %>%
-  sel <- sel %>%
-    mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1) %>%
-    dplyr::mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>%
-    dplyr::mutate(outline_val = dplyr::if_else(padj < .05, "black", NA))
 
   # Ensure leadingEdge is treated as a character vector
   sel <- sel %>%
@@ -116,7 +104,7 @@ prepare_data_for_barplot <- function(df) {
 
   sel <- sel %>%
     mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>%
-    mutate(outline_val = dplyr::if_else(padj < .05, "black", NA))
+    mutate(outline_val = if_else(padj < .05, "black", NA))
 
   # sel %<>% mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
   # sel %<>% mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size))
@@ -274,9 +262,9 @@ concat_results_all_collections <- function(list_of_lists) {
     return(res)
 }
 
-
 plot_results_all_collections <- function(list_of_lists, ...) {
   args <- list(...)
+
   # res <- list_of_lists %>%
   #   purrr::map(
   #     ~ plot_results_one_collection(.x, ...)
@@ -327,13 +315,13 @@ xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, l
     df <- df %>% dplyr::filter(pathway %in% pathways_for_plot)
   }
 
+
   dfp <- df %>%
     pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
     as.data.frame()
   rownames(dfp) <- dfp$pathway
   dfp["pathway"] <- NULL
   dfp <- dfp[, metadata$id]
-
   dfp_padj <- df %>%
     pivot_wider(id_cols = pathway, values_from = padj, names_from = var) %>%
     dplyr::select(-pathway) %>%
@@ -365,7 +353,6 @@ xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, l
 
   ht <- ComplexHeatmap::Heatmap(
     dfp %>% dplyr::select(!pathway) %>% dplyr::select(all_of(metadata$id)) %>% as.matrix(),
-    show_row_names = T,
     col = col,
     heatmap_legend_param = heatmap_legend_param,
     column_split = cut_by,
@@ -382,12 +369,11 @@ xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, l
     }
   )
 
-  ht <- ComplexHeatmap::draw(ht,
-    heatmap_legend_side = "bottom",
-    padding = unit(c(10, 2, 2, 2), "mm")
-  )
+  ht <- ComplexHeatmap::draw(ht, heatmap_legend_side = "bottom", padding = unit(c(10, 2, 2, 2), "mm"))
+
   return(ht)
 }
+
 
 
 plot_results_one_collection <- function(
@@ -425,6 +411,7 @@ plot_results_one_collection <- function(
     df <- df %>% filter(pathway %in% top_pathways)
   }
 
+
   # Prepare data for heatmap
   dfp <- df %>%
     pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
@@ -439,31 +426,22 @@ plot_results_one_collection <- function(
   rownames(dfp) <- dfp$pathway
   dfp <- dfp[, metadata$id]
   dfp["pathway"] <- NULL
-
+  # ====================
   dfp_padj <- df %>%
     pivot_wider(id_cols = pathway, values_from = padj, names_from = var) %>%
     as.data.frame()
   rownames(dfp_padj) <- dfp_padj$pathway
   dfp_padj["pathway"] <- NULL
-  dfp_padj <- dfp_padj[, metadata$id]
   # %>% select(-pathway, all_of(metadata$id))
   logical_matrix <- dfp_padj < 0.05
   star_matrix <- ifelse(logical_matrix, "*", "")
-  star_matrix <- star_matrix[, metadata$id] # shouldn't be necessary as comes from dfp_padj
+  star_matrix <- star_matrix[, metadata$id]
   star_matrix[is.na(star_matrix)] <- ""
 
   # Set up color scale
   q01 <- quantile(abs(df$NES), 0.99, na.rm = TRUE)
   num_colors <- 11
-  my_colors <- colorRampPalette(c(
-    "#0000ff",
-    "#8888ffbb",
-    "#ddddff77",
-    "#dddddd",
-    "#ffdddd77",
-    "#ff8888bb",
-    "#ff0000"
-  ))(num_colors)
+  my_colors <- colorRampPalette(c("#0000ff", "#8888ffbb", "#ddddff77", "#dddddd", "#ffdddd77", "#ff8888bb", "#ff0000"))(num_colors)
   break_points <- seq(-q01, q01, length.out = num_colors)
   col <- colorRamp2(breaks = break_points, colors = my_colors)
 
@@ -477,33 +455,17 @@ plot_results_one_collection <- function(
     at = break_points %>% round(1)
   )
 
-  # cell_fun <- function(j, i, x, y, width, height, fill) {
-  #   # Retrieve the value that indicates whether to draw an asterisk
-  #   value <- star_matrix[i, j]
-  #   if (value == "*") {
-  #     # Draw asterisk
-  #     grid::grid.text(value, x, y, gp = grid::gpar(fontsize = 12, col = "black"))
-  #     # Draw border around the cell
-  #     grid::grid.rect(x, y,
-  #       width = width, height = height,
-  #       gp = grid::gpar(col = "black", fill = NA, lwd = 1)
-  #     )
-  #   }
-  # }
-
   cell_fun <- function(j, i, x, y, width, height, fill) {
     # Ensure value is not NA before comparison
     value <- star_matrix[i, j]
     # print(paste("Processing cell:", i, j, "Value:", value))
-    # cat(sprintf("NES Cell [%d, %d] with value '%s'\n", i, j, dfp[i, j]))
-    # cat(sprintf("star_matrix Cell [%d, %d] with value '%s'\n", i, j, star_matrix    [i, j]))
+    cat(sprintf("NES Cell [%d, %d] with value '%s'\n", i, j, dfp[i, j]))
+    cat(sprintf("star_matrix Cell [%d, %d] with value '%s'\n", i, j, star_matrix[i, j]))
+
 
     if (!is.na(value) && value == "*") {
       # Draw asterisk
-      grid::grid.text(value,
-        x, y,
-        gp = grid::gpar(fontsize = 12, col = "black")
-      )
+      grid::grid.text(value, x, y, gp = grid::gpar(fontsize = 12, col = "black"))
       # Draw border around the cell
       grid::grid.rect(x, y,
         width = width, height = height,
@@ -512,6 +474,7 @@ plot_results_one_collection <- function(
     }
   }
 
+
   ht <- ComplexHeatmap::Heatmap(
     dfp %>% as.matrix(),
     col = col,
@@ -519,9 +482,7 @@ plot_results_one_collection <- function(
     cluster_columns = F,
     heatmap_legend_param = heatmap_legend_param,
     column_split = cut_by,
-    row_labels = rownames(dfp) %>%
-      str_replace_all("_", " ") %>%
-      str_wrap(width = 28),
+    row_labels = rownames(dfp) %>% str_replace_all("_", " ") %>% str_wrap(width = 28),
     row_names_gp = grid::gpar(fontsize = 12),
     column_title_gp = grid::gpar(fontsize = 14),
     clustering_distance_rows = util_tools$dist_no_na,
@@ -533,12 +494,19 @@ plot_results_one_collection <- function(
     cell_fun = cell_fun # Use the updated cell_fun here
   )
 
+  # ht <- ComplexHeatmap::Heatmap(dfp %>% dplyr::select(!pathway, all_of(metadata$id)) %>% as.matrix(),
+  #   col = col, heatmap_legend_param = heatmap_legend_param,
+  #   column_split = cut_by, row_labels = dfp$pathway, row_names_gp = grid::gpar(fontsize = 8),
+  #   clustering_distance_rows = util_tools$dist_no_na, clustering_distance_columns = util_tools$dist_no_na,
+  #   cell_fun = function(j, i, x, y, width, height, fill) {
+  #     grid.text(star_matrix[i, j], x, y, gp = gpar(fontsize = 12))
+  #   }
+  # )
+
   draw(ht,
     heatmap_legend_side = "bottom",
     padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
   )
-
-  return(ht)
 }
 
 
@@ -623,65 +591,5 @@ plot_table <- function(fgsea_res,
       fgsea_res,
       gseaParam = gsea_param
       # gseaParam=1.0
-    )
-}
-
-
-
-plot_pcs <- function(...) {
-  # this is non functional at the moment
-  library(PCAtools)
-
-  .df <- all_gsea_results$`C5_GO:MF` %>%
-    pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
-    as.data.frame()
-  rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
-  .df$pathway <- NULL
-  .metadata <- data.frame(
-    row.names = colnames(.df),
-    id = colnames(.df),
-    group = c(rep("A", 3), rep("B", 3), rep("C", 3))
-  )
-  .pca_res <- PCAtools::pca(.df, metadata = .metadata)
-
-  (.pcs <- .pca_res$rotated %>% colnames() %>% combn(2) %>% as.data.frame() %>% as.list())
-  # could be alot, too many
-  .vec <- c("PC1", "PC2", "PC3") # "PC4")
-  .pcs <- combn(.vec, 2) %>%
-    as.data.frame() %>%
-    as.list()
-  #
-  .pcs %>%
-    purrr::map(
-      ~ {
-        COLBY <- "group"
-        # stopifnot(~COLBY%in%colnames(.metadata))
-        .x1 <- .x[[1]]
-        .x2 <- .x[[2]]
-
-        plt <- PCAtools::biplot(
-          .pca_res,
-          x = .x1,
-          y = .x2,
-          showLoadings = T,
-          labSize = 2,
-          pointSize = 3,
-          sizeLoadingsNames = 2,
-          colby = COLBY,
-          # shape="source",
-          legendPosition = "right",
-          encircle = T,
-        ) #+      coord_equal()
-
-        print(plt)
-
-        # name <- paste(.x1, .x2, sep='_', "withnas")
-        # outp <- file.path("./figures", "pca", "biplots_withloadings")
-        # if (!fs::dir_exists(outp)) fs::dir_create(outp)
-        # outf <- file.path(outp, paste0(name, '.pdf'))
-        # pdf(outf, width=9, height=9)
-        # print(plt)
-        # dev.off()
-      }
     )
 }

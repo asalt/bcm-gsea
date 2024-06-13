@@ -5,7 +5,11 @@ suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(memoise))
 
 
-get_collection_raw <- function(category, subcategory, species = "Homo sapiens", cache = TRUE) {
+get_collection_raw <- function(
+    category,
+    subcategory,
+    species = "Homo sapiens",
+    cache = TRUE) {
   #
   collection_id <- paste(category, subcategory, make.names(species), sep = "_")
 
@@ -18,7 +22,11 @@ get_collection_raw <- function(category, subcategory, species = "Homo sapiens", 
   }
 
   # Data fetching
-  df <- msigdbr::msigdbr(species = species, category = category, subcategory = subcategory)
+  df <- msigdbr::msigdbr(
+    species = species,
+    category = category,
+    subcategory = subcategory
+  )
 
   if (cache == TRUE) {
     if (!fs::dir_exists(cache_dir)) fs::dir_create(cache_dir)
@@ -26,7 +34,6 @@ get_collection_raw <- function(category, subcategory, species = "Homo sapiens", 
       readr::write_tsv(df, collection_id_path)
       cat(paste0("writing ", collection_id, " to ", cache_dir, "\n"))
     }
-    # genesets_env[[collection_id]] <- df
   }
 
   return(df)
