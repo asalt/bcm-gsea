@@ -1,5 +1,7 @@
-import sys, os
+import sys
+import os
 
+# "hack" to be able to import
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import pytest
@@ -84,6 +86,7 @@ def test_add_many_and_commit_iterable(session):
     assert project2.name == "test_project2"
     assert project2.description == "test_description2"
 
+
 def test_add_many_and_commit_invalid(session):
     with pytest.raises(TypeError):
         add_many_and_commit("invalid", session)
@@ -94,9 +97,9 @@ def test_add_many_and_commit_more(session):
     project2 = Project(name="test_project2", description="test_description2")
 
     rankobjs = [
-         Ranks(
+        Ranks(
             project_id=project1.id,
-            #comparison_id=1,
+            # comparison_id=1,
             name="test_rank1",
             description="test_description1",
             feature_id="feature1",
@@ -104,15 +107,15 @@ def test_add_many_and_commit_more(session):
         ),
         Ranks(
             project_id=project1.id,
-            #comparison_id=1,
+            # comparison_id=1,
             name="test_rank2",
             description="test_description2",
             feature_id="feature2",
             feature_value=2.0,
         ),
         Ranks(
-            project = project1,
-            #comparison_id=1,
+            project=project1,
+            # comparison_id=1,
             name="test_rank1",
             description="test_description3",
             feature_id="feature3",
@@ -126,36 +129,36 @@ def test_add_many_and_commit_more(session):
     add_many_and_commit(rankobjs, session)
 
 
-
 def test_add_many_and_commit_more_dict(session):
     project1 = Project(name="test_project1", description="test_description1")
     project2 = Project(name="test_project2", description="test_description2")
 
-    rankobjs = {"rnkobjects":
-        { "r1": Ranks(
-            project=project1,
-            #comparison_id=1,
-            name="test_rank1",
-            description="test_description1",
-            feature_id="feature1",
-            feature_value=1.0,
-        ),
-        "r2": Ranks(
-            project_id=project1.id,
-            #comparison_id=1,
-            name="test_rank2",
-            description="test_description2",
-            feature_id="feature2",
-            feature_value=2.0,
-        ),
-        "r3": Ranks(
-            project = project1,
-            #comparison_id=1,
-            name="test_rank1",
-            description="test_description3",
-            feature_id="feature3",
-            feature_value=1.0,
-        ),
+    rankobjs = {
+        "rnkobjects": {
+            "r1": Ranks(
+                project=project1,
+                # comparison_id=1,
+                name="test_rank1",
+                description="test_description1",
+                feature_id="feature1",
+                feature_value=1.0,
+            ),
+            "r2": Ranks(
+                project_id=project1.id,
+                # comparison_id=1,
+                name="test_rank2",
+                description="test_description2",
+                feature_id="feature2",
+                feature_value=2.0,
+            ),
+            "r3": Ranks(
+                project=project1,
+                # comparison_id=1,
+                name="test_rank1",
+                description="test_description3",
+                feature_id="feature3",
+                feature_value=1.0,
+            ),
         }
     }
 
@@ -165,38 +168,41 @@ def test_add_many_and_commit_more_dict(session):
     add_many_and_commit_dicts(rankobjs, session)
 
     assert get_project(session, project1.id) == project1
-    assert get_project(session, project2.id) == None  # none because no rank objects were made with project2
+    assert (
+        get_project(session, project2.id) == None
+    )  # none because no rank objects were made with project2
 
 
 def test_add_many_and_commit_more_dict(session):
     project1 = Project(name="test_project1", description="test_description1")
     project2 = Project(name="test_project2", description="test_description2")
 
-    rankobjs = {"rnkobjects":
-        { "r1": Ranks(
-            project=project1,
-            #comparison_id=1,
-            name="test_rank1",
-            description="test_description1",
-            feature_id="feature1",
-            feature_value=1.0,
-        ),
-        "r2": Ranks(
-            project=project1,
-            #comparison_id=1,
-            name="test_rank2",
-            description="test_description2",
-            feature_id="feature2",
-            feature_value=2.0,
-        ),
-        "r3": Ranks(
-            project = project2,
-            #comparison_id=1,
-            name="test_rank1",
-            description="test_description3",
-            feature_id="feature3",
-            feature_value=1.0,
-        ),
+    rankobjs = {
+        "rnkobjects": {
+            "r1": Ranks(
+                project=project1,
+                # comparison_id=1,
+                name="test_rank1",
+                description="test_description1",
+                feature_id="feature1",
+                feature_value=1.0,
+            ),
+            "r2": Ranks(
+                project=project1,
+                # comparison_id=1,
+                name="test_rank2",
+                description="test_description2",
+                feature_id="feature2",
+                feature_value=2.0,
+            ),
+            "r3": Ranks(
+                project=project2,
+                # comparison_id=1,
+                name="test_rank1",
+                description="test_description3",
+                feature_id="feature3",
+                feature_value=1.0,
+            ),
         }
     }
 
@@ -207,12 +213,15 @@ def test_add_many_and_commit_more_dict(session):
     assert get_project(session, project2.id) == project2
 
 
-
 def test_proj_rank_misc(session):
     # there is some model testing logic that could be moved out
     project = Project(name="test_project", description="test_description")
-    comparison1 = Comparison(name="test_comparison1", description="test_description1", project=project)
-    comparison2 = Comparison(name="test_comparison2", description="test_description2", project=project)
+    comparison1 = Comparison(
+        name="test_comparison1", description="test_description1", project=project
+    )
+    comparison2 = Comparison(
+        name="test_comparison2", description="test_description2", project=project
+    )
     rankobjs = [
         Ranks(
             project=project,
@@ -234,10 +243,7 @@ def test_proj_rank_misc(session):
     assert len(comparison2.ranks) == 0
     assert len(project.ranks) > 0
 
-
     delete_comparison(session, comparison1.id)
 
     assert len(project.comparisons) == 1
     assert len(project.ranks) == 0
-
-

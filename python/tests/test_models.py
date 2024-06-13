@@ -1,4 +1,5 @@
-import sys, os
+import sys
+import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
@@ -8,7 +9,6 @@ from sqlalchemy.orm import sessionmaker
 import numpy as np
 
 from python.models import Base, Project, Ranks, Comparison, Edge
-
 
 
 @pytest.fixture(scope="function")
@@ -117,6 +117,7 @@ def test_comparison_ranks(session):
     assert comparison.ranks[0].comparison_id == ranks.comparison_id
     assert len(comparison.ranks) == 1
 
+
 # def test_proj_ranks_delete_comparison(session):
 #     # there is some model testing logic that could be moved out
 #     project = Project(name="test_project", description="test_description")
@@ -179,7 +180,6 @@ def test_comparison_edges(session):
     assert comparison.edges[0].comparison_id == edge.comparison_id
 
 
-
 def test_comparison_deletion_cascade_query(session):
     """
     this approach is nice because it checks for explicit deletion via query
@@ -205,7 +205,6 @@ def test_comparison_deletion_cascade_query(session):
     session.commit()
     # session.expire_all() # this shouldn't be necessary, I think
 
-
     # Check if rank has been deleted or updated
     refreshed_rank = session.query(Ranks).filter_by(id=rank.id).one_or_none()
     assert (
@@ -215,7 +214,6 @@ def test_comparison_deletion_cascade_query(session):
     assert project in session
     refreshed_project = session.query(Project).filter_by(id=project.id).one_or_none()
     assert refreshed_project is not None
-
 
 
 def test_comparison_deletion_cascade_pyobjects(session):
@@ -303,7 +301,6 @@ def test_complex_project_relationships(session):
     refreshed_project = session.query(Project).filter_by(id=project.id).one_or_none()
     assert len(refreshed_project.comparisons) == 0
     assert refreshed_project is not None
-
 
 
 if __name__ == "__main__":
