@@ -14,6 +14,9 @@ src_dir <- file.path(here("R"))
 util_tools <- new.env()
 source(file.path(src_dir, "./utils.R"), local = util_tools)
 
+fgsea_tools <- new.env()
+source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
+
 # DEBUG
 
 
@@ -268,132 +271,48 @@ concat_results_one_collection <- function(list_of_dfs) {
 
 concat_results_all_collections <- function(list_of_lists) {
   res <- list_of_lists %>%
-    purrr::map(
-      ~ concat_results_one_collection(.x)
-    ) %>%
-    # purrr::reduce(rbind)
-    return(res)
-}
-
-
-plot_results_all_collections <- function(list_of_lists, ...) {
-  args <- list(...)
-  # res <- list_of_lists %>%
-  #   purrr::map(
-  #     ~ plot_results_one_collection(.x, ...)
-  #   )
-
-  res <- purrr::map(list_of_lists, function(item) {
-    do.call("plot_results_one_collection", c(list(df = item), args))
-  })
+    purrr::imap(
+      ~ {
+        concat_results_one_collection(.x)
+      }
+    ) # %>%
+  # purrr::reduce(rbind)
   return(res)
 }
 
-xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, limit = 120) {
-  if (!"pathway" %in% colnames(df)) {
-    stop("pathway column not found")
-  }
 
-  if (!"NES" %in% colnames(df)) {
-    stop("NES column not found")
-  }
-
-  if (!is.null(metadata) && !all(rownames(metadata) %in% df$var)) {
-    stop("metadata not aligned with df")
-  }
-
-  if (is.null(metadata)) {
-    metadata <- data.frame(id = unique(df$var))
-  }
-
-  if (!is.null(cut_by) && !cut_by %in% colnames(metadata)) {
-    warning("cut_by not found in metadata")
-    cut_by <- NULL
-  } else if (is.null(cut_by)) {
-    cut_by <- NULL
-  } else if (cut_by %in% colnames(metadata)) {
-    cut_by <- metadata[[cut_by]]
-  }
-
-
-
-
-  if (dim(df)[1] > limit) {
-    pathways_for_plot <- df %>%
-      arrange(-abs(NES)) %>%
-      distinct(pathway, .keep_all = T) %>%
-      head(limit) %>%
-      pull(pathway)
-
-    df <- df %>% dplyr::filter(pathway %in% pathways_for_plot)
-  }
-
-  dfp <- df %>%
-    pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
-    as.data.frame()
-  rownames(dfp) <- dfp$pathway
-  dfp["pathway"] <- NULL
-  dfp <- dfp[, metadata$id]
-
-  dfp_padj <- df %>%
-    pivot_wider(id_cols = pathway, values_from = padj, names_from = var) %>%
-    dplyr::select(-pathway) %>%
-    dplyr::select(all_of(metadata$id))
-  logical_matrix <- dfp_padj < 0.05
-  star_matrix <- ifelse(logical_matrix, "*", "")
-  star_matrix <- star_matrix[, metadata$id]
-
-
-  # maxval <- df %>%
-  #   pull(NES) %>%
-  #   abs() %>%
-  #   max(na.rm = T)
-  q1 <- quantile(abs(df$NES), 0.99, na.rm = TRUE)
-
-  num_colors <- 11
-  my_colors <- colorRampPalette(c("#0000ff", "#8888ffbb", "#ddddff77", "#dddddd", "#ffdddd77", "#ff8888bb", "#ff0000"))(num_colors)
-  break_points <- seq(-q1, q1, length.out = num_colors)
-  col <- colorRamp2(breaks = break_points, colors = my_colors)
-
-
-  heatmap_legend_param <- list(
-    title = "NES",
-    direction = "horizontal",
-    just = "bottom",
-    legend_width = unit(8, "cm"),
-    at = break_points %>% round(1)
-  )
-
-  ht <- ComplexHeatmap::Heatmap(
-    dfp %>% dplyr::select(!pathway) %>% dplyr::select(all_of(metadata$id)) %>% as.matrix(),
-    show_row_names = T,
-    col = col,
-    heatmap_legend_param = heatmap_legend_param,
-    column_split = cut_by,
-    row_labels = dfp$pathway,
-    show_row_names = T,
-    row_names_gp = grid::gpar(fontsize = 8),
-    clustering_distance_rows = util_tools$dist_no_na,
-    clustering_distance_columns = util_tools$dist_no_na,
-    cell_fun = function(j, i, x, y, width, height, fill) {
-      row <- i
-      col <- j
-      value <- star_matrix[row, col]
-      grid.text(value, x, y, gp = gpar(fontsize = 12))
+plot_results_all_collections <- function(
+    list_of_lists,
+    metadata = NULL,
+    cut_by = NULL,
+    limit = 120,
+    main_pathway_ratio = 0.1,
+    ...) {
+  res <- list_of_lists %>% purrr::imap(
+    ~ {
+      plot_results_one_collection(.x,
+        title = .y,
+        metadata = metadata,
+        cut_by = cut_by,
+        limit = limit,
+        main_pathway_ratio = main_pathway_ratio
+      )
     }
   )
-
-  ht <- ComplexHeatmap::draw(ht,
-    heatmap_legend_side = "bottom",
-    padding = unit(c(10, 2, 2, 2), "mm")
-  )
-  return(ht)
+  # res <- purrr::map(list_of_lists, function(item) {
+  #   do.call("plot_results_one_collection", c(list(df = item), args))
+  # })
+  return(res)
 }
 
-
 plot_results_one_collection <- function(
-    df, metadata = NULL, cut_by = NULL, limit = 120,
-    title = "", ...) {
+    df,
+    metadata = NULL,
+    cut_by = NULL,
+    limit = 120,
+    title = "",
+    main_pathway_ratio = 0.1,
+    ...) {
   # Ensure necessary columns are present
   required_cols <- c("pathway", "NES")
   if (!all(required_cols %in% colnames(df))) {
@@ -417,6 +336,7 @@ plot_results_one_collection <- function(
     cut_by <- NULL
   }
 
+  df <- fgsea_tools$filter_on_mainpathway(df, main_pathway_ratio = main_pathway_ratio)
   # Limit the number of pathways if necessary
   if (nrow(df) > limit) {
     top_pathways <- df %>%
@@ -542,19 +462,31 @@ plot_results_one_collection <- function(
   return(ht)
 }
 
+make_selection <- function(x) {
+  .first <- which(x$ES == es_min)
+  .second <- which(x$ES == es_max)
+  .top <- x %>%
+    arrange(rank) %>%
+    head(.first)
+  .bot <- x %>%
+    arrange(rank) %>%
+    tail(dim(x)[1] - .second)
+  return(bind_rows(.top, .bot))
+}
 
 
-
-edgeplot1 <- function(rankorder_edge, ...) {
-  rankorder_edge %>%
-    filter(!is.na(stat_stat)) %>%
-    dim()
+edgeplot1 <- function(rankorder_object, ...) {
+  posES <- rankorder_object$posES
+  negES <- rankorder_object$negES
+  rankorder_edge <- rankorder_object$edge
+  # rankorder_edge %>%
+  #   filter(!is.na(stat)) %>%
+  #   dim()
   # ggplot(aes(x = rank, y = ES)) +
   #   geom_point()
 
-  posES <- enplot_data$posES
-  negES <- enplot_data$negES
   p <- rankorder_edge %>%
+    # filter(!is.na(stat_tick)) %>%
     ggplot(aes(x = stat_tick, y = ES, col = rank)) +
     geom_point() +
     scale_color_continuous(type = "viridis", option = "H") +
@@ -579,7 +511,7 @@ other2 <- function() {
 }
 
 
-other3 <- function() {
+other3 <- function(enplot_data, ticksSize = 4) {
   with(enplot_data, ggplot(data = stats) +
     geom_line(aes(x = rank, y = stat),
       color = "green"
@@ -600,6 +532,44 @@ other3 <- function() {
     labs(x = "rank", y = "enrichment score"))
 }
 
+
+plotES <- function(enplot_data, ticksSize = 4) {
+  # this is directly from the example in fgsea plotEnrichmentData
+  maxAbsStat <- enplot_data$maxAbsStat
+  spreadES <- enplot_data$spreadES
+  posES <- enplot_data$posES
+  negES <- enplot_data$negES
+
+  with(
+    enplot_data,
+    ggplot(data = curve) +
+      geom_line(aes(x = rank, y = ES), color = "green") +
+      geom_ribbon(
+        data = stats,
+        mapping = aes(
+          x = rank, ymin = 0,
+          ymax = stat / maxAbsStat * (spreadES / 4)
+        ),
+        fill = "grey"
+      ) +
+      geom_segment(
+        data = ticks,
+        mapping = aes(
+          x = rank, y = -spreadES / 16,
+          xend = rank, yend = spreadES / 16
+        ),
+        size = 0.2
+      ) +
+      geom_hline(yintercept = posES, colour = "red", linetype = "dashed") +
+      geom_hline(yintercept = negES, colour = "red", linetype = "dashed") +
+      geom_hline(yintercept = 0, colour = "black") +
+      theme(
+        panel.background = element_blank(),
+        panel.grid.major = element_line(color = "grey92")
+      ) +
+      labs(x = "rank", y = "enrichment score")
+  )
+}
 
 plot_table <- function(fgsea_res,
                        ranks,
@@ -628,61 +598,94 @@ plot_table <- function(fgsea_res,
 }
 
 
+plot_tables <- function(results_list, ranks_list, pathways_list) {
+  # Ensure names are aligned and iterate over them
+  pathway_names <- names(results_list)
 
-plot_pcs <- function(...) {
-  # this is non functional at the moment
-  library(PCAtools)
+  map(pathway_names, ~ {
+    geneset_name <- .x
+    fgsea_res_list <- results_list[[geneset_name]]
+    genesets <- pathways_list[[geneset_name]]
 
-  .df <- all_gsea_results$`C5_GO:MF` %>%
-    pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
-    as.data.frame()
-  rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
-  .df$pathway <- NULL
-  .metadata <- data.frame(
-    row.names = colnames(.df),
-    id = colnames(.df),
-    group = c(rep("A", 3), rep("B", 3), rep("C", 3))
-  )
-  .pca_res <- PCAtools::pca(.df, metadata = .metadata)
+    # Now, iterate over each rank file within this pathway category
+    map(names(ranks_list), function(rank_name) {
+      rankobj <- ranks_list[[rank_name]]
+      # Generate a unique identifier for this plot/table, e.g., combining pathway name and rank file name
+      rank_name_nice <- rank_name %>%
+        fs::path_file() %>%
+        fs::path_ext_remove()
+      plot_id <- paste(geneset_name, rank_name_nice, sep = "_")
 
-  (.pcs <- .pca_res$rotated %>% colnames() %>% combn(2) %>% as.data.frame() %>% as.list())
-  # could be alot, too many
-  .vec <- c("PC1", "PC2", "PC3") # "PC4")
-  .pcs <- combn(.vec, 2) %>%
-    as.data.frame() %>%
-    as.list()
-  #
-  .pcs %>%
-    purrr::map(
-      ~ {
-        COLBY <- "group"
-        # stopifnot(~COLBY%in%colnames(.metadata))
-        .x1 <- .x[[1]]
-        .x2 <- .x[[2]]
 
-        plt <- PCAtools::biplot(
-          .pca_res,
-          x = .x1,
-          y = .x2,
-          showLoadings = T,
-          labSize = 2,
-          pointSize = 3,
-          sizeLoadingsNames = 2,
-          colby = COLBY,
-          # shape="source",
-          legendPosition = "right",
-          encircle = T,
-        ) #+      coord_equal()
+      .fgsea_res <- fgsea_res_list[[rank_name]]
+      p <- plot_table(
+        fgsea_res = .fgsea_res,
+        ranks = rankobj,
+        pathways = genesets,
+        gsea_param = 0.5,
+      )
 
-        print(plt)
+      # outpath <- file.path(ENPLOT_BASEDIR, make.names(geneset_name), make.names(rank_name_nice))
+      # if (!fs::dir_exists(outpath)) fs::dir_create(outpath)
 
-        # name <- paste(.x1, .x2, sep='_', "withnas")
-        # outp <- file.path("./figures", "pca", "biplots_withloadings")
-        # if (!fs::dir_exists(outp)) fs::dir_create(outp)
-        # outf <- file.path(outp, paste0(name, '.pdf'))
-        # pdf(outf, width=9, height=9)
-        # print(plt)
-        # dev.off()
-      }
-    )
+      # print(p)
+      return(p)
+
+      # c(".png", ".pdf") %>% purrr::walk(
+      # ~ggsave(filename = paste0(make.names(geneset_name), "_toptable", "_gseaparam.5", .x),
+      #        path = outpath,
+      #        dpi = 300,
+      #        width = 19,
+      #        height=12,
+      #        )
+      # )
+    })
+  })
+}
+
+plot_tables_faster <- function(results_list, ranks_list, pathways_list) {
+  # Ensure names are aligned and iterate over them
+  pathway_names <- names(results_list)
+
+  # furrr::future_map(pathway_names, ~{
+  purrr::map(pathway_names, ~ {
+    geneset_name <- .x
+    fgsea_res_list <- results_list[[geneset_name]]
+    genesets <- pathways_list[[geneset_name]]
+
+    # Now, iterate over each rank file within this pathway category
+    # map(names(ranks_list), function(rank_name) {
+    # furrr::future_map(names(ranks_list), function(rank_name) {
+    furrr::future_imap(ranks_list, function(rankobj, rank_name) {
+      # rankobj <- ranks_list[[rank_name]]
+      # Generate a unique identifier for this plot/table, e.g., combining pathway name and rank file name
+      rank_name_nice <- rank_name %>%
+        fs::path_file() %>%
+        fs::path_ext_remove()
+      plot_id <- paste(geneset_name, rank_name_nice, sep = "_")
+
+
+      .fgsea_res <- fgsea_res_list[[rank_name]]
+      p <- plot_tools$plot_table(
+        fgsea_res = .fgsea_res,
+        ranks = rankobj,
+        pathways = genesets,
+        gsea_param = 0.5,
+      )
+
+      outpath <- file.path(ENPLOT_BASEDIR, make.names(geneset_name), make.names(rank_name_nice))
+      if (!fs::dir_exists(outpath)) fs::dir_create(outpath)
+
+      # print(p)
+      return(p)
+      # c(".png", ".pdf") %>% purrr::walk(
+      # ~ggsave(filename = paste0(make.names(geneset_name), "_toptable", "_gseaparam.5", .x),
+      #        path = outpath,
+      #        dpi = 300,
+      #        width = 19,
+      #        height=12,
+      #        )
+      # )
+    })
+  })
 }

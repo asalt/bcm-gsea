@@ -15,6 +15,29 @@ geneset_tools <- new.env()
 source(file.path(src_dir, "./geneset_utils.R"), local = geneset_tools)
 
 
+filter_on_mainpathway <- function(pathway_object, main_pathway_ratio = .1) {
+  if (!"var" %in% colnames(pathway_object)) {
+    stop("var column not found in the input data")
+  }
+
+  if (!"mainpathway" %in% colnames(pathway_object)) {
+    pathway_object$mainpathway <- TRUE # will simply keep all
+  }
+
+
+  pathway_object <- pathway_object %>%
+    group_by(var) %>%
+    mutate(n_main = sum(mainpathway == T)) %>%
+    mutate(ratio_main = n_main / n()) %>%
+    ungroup()
+
+  filtered_pathway_object <- pathway_object %>%
+    dplyr::mutate(main_pathway_ratio = rowSums(!is.na(.))) %>%
+    dplyr::filter(main_pathway_ratio >= main_pathway_ratio)
+
+  return(filtered_pathway_object)
+}
+
 run_one <- function(rankobj, geneset, minSize = 15, maxSize = 500, collapse = FALSE) {
   # to look for duplicate gene names
   # rankobj %>% names %>% table %>% as.data.frame %>% pull(Freq) %>% max
@@ -168,7 +191,15 @@ run_all_pathways <- function(
 
 
 
-get_rankorder <- function(rankobj, geneset) {
+get_rankorder <- function(geneset, rankobj, geneset_df = NULL) {
+  # geneset_df has addl info
+  if (!class(geneset) == "character") {
+    stop("geneset must be a character")
+  }
+  if (!class(rankobj) == "numeric") {
+    stop("rankobj must be a named numeric vector")
+  }
+
   enplot_data <- plotEnrichmentData(geneset, rankobj)
   rnkorder <- -rankobj %>% rank()
   rankorder_df <- data.frame(
@@ -182,9 +213,28 @@ get_rankorder <- function(rankobj, geneset) {
   rankorder_edge %<>% left_join(rename(enplot_data$stats, stat_stat = stat))
   rankorder_edge$stat == rankorder_edge$stat_tick
 
+  if (!is.null(geneset_df)) {
+    rankorder_edge %<>% left_join(geneset_df %>% mutate(entrez_gene = as.character(entrez_gene)) %>% distinct(entrez_gene, .keep_all = TRUE),
+      by = c("id" = "entrez_gene")
+    )
+  }
 
-  return(rankorder_edge)
+  return(
+    list(
+      edge = rankorder_edge,
+      curve = enplot_data$curve,
+      ticks = enplot_data$ticks,
+      stats = enplot_data$stats,
+      posES = enplot_data$posES,
+      negES = enplot_data$negES,
+      spreadES = enplot_data$spreadES,
+      maxAbsStat = enplot_data$maxAbsStat
+    )
+  )
 }
+
+
+
 
 simulate_preranked_data <- function(seed = 4321, geneset = NULL, spike_terms = c("INTERFERON"), ...) {
   set.seed(seed)
