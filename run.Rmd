@@ -15,6 +15,7 @@ params:
   cut_by: none
   ranks_from: "volcano"  # choices are volcano and gct
   species: "Homo sapiens"
+  savedir: "./plots/"
   genesets_json: >
     [
       {"category": "H", "subcategory": "", "collapse" : "FALSE"},
@@ -23,7 +24,7 @@ params:
       {"category": "C5", "subcategory": "GO:MF", "collapse" : "TRUE"},
       {"category": "C5", "subcategory": "GO:BP", "collapse" : "TRUE"},
       {"category": "C5", "subcategory": "GO:CC", "collapse" : "TRUE"} ,
-      {"category": "C5", "subcategory": "All", "collapse" : "TRUE"} 
+      {"category": "C5", "subcategory": "All", "collapse" : "TRUE"}
     ]
 
 ---
@@ -31,25 +32,26 @@ params:
 # setup
 
 ```{r setup, include=TRUE}
-library(purrr) # for map()
-library(magrittr)
-library(ggplot2)
-library(fs) # for dir_ls()
-library(fgsea)
-library(dplyr)
-library(msigdbr)
-library(stringr)
-library(readr)
-library(tidyr)
-library(tictoc)
-library(ggrepel)
-library(reactable)
-#knitr::opts_chunk$set(echo = TRUE)
+suppressPackageStartupMessages(library(purrr)) # for map()
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(fs)) # for dir_ls()
+suppressPackageStartupMessages(library(fgsea))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(msigdbr))
+suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(readr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(tictoc))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(reactable))
+suppressPackageStartupMessages(library(ggalt))
+# knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 library(future)
 n_cores <- future::availableCores() - 1
-future::plan(future::multisession, workers=min(n_cores, 8) )
+future::plan(future::multisession, workers = min(n_cores, 8))
 
 io_tools <- new.env()
 source("./R/io.R", local = io_tools)
@@ -65,61 +67,73 @@ source("./R/fgsea.R", fgsea_tools)
 
 plot_tools <- new.env()
 source("./R/plot.R", local = plot_tools)
+
+pca_tools <- new.env()
+source("./R/pca.R", local = pca_tools)
+
+savedir <- params$savedir
+if (is.null(savedir)) {
+  savedir <- "./plots"
+}
+save_func <- plot_tools$make_partial(
+  plot_tools$plot_and_save,
+  path = savedir
+)
 ```
 # explanations
 
 ```{r, label=test, eval=F, include=T}
-
 # gct <- util_tools$make_random_gct()
 
 geneset <- geneset_tools$get_collection("H", "")
 geneset_list <- geneset_tools$genesets_df_to_list(geneset)
-datas1 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data(seed=4321))
-datas1 %<>% purrr::map(~.x %>% mutate(value=value+rnorm(nrow(.), sd=.1)) )
-datas2 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data( seed=1234))
-datas2 %<>% purrr::map(~.x %>% mutate(value=value+rnorm(nrow(.), sd=.1)) )
-datas3 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data( seed=9999))
-datas3 %<>% purrr::map(~.x %>% mutate(value=value+rnorm(nrow(.), sd=.1)) )
+datas1 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data(seed = 4321))
+datas1 %<>% purrr::map(~ .x %>% mutate(value = value + rnorm(nrow(.), sd = .1)))
+datas2 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data(seed = 1234))
+datas2 %<>% purrr::map(~ .x %>% mutate(value = value + rnorm(nrow(.), sd = .1)))
+datas3 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data(seed = 9999))
+datas3 %<>% purrr::map(~ .x %>% mutate(value = value + rnorm(nrow(.), sd = .1)))
 datas <-
-  c(datas1,
+  c(
+    datas1,
     datas2,
     datas3
-    )
+  )
 names(datas) <- paste0("test", 1:length(datas))
-rankobj <- io_tools$ranks_dfs_to_lists(list(test=datas[[1]]))
+rankobj <- io_tools$ranks_dfs_to_lists(list(test = datas[[1]]))
 
 .res <- rankobj[[1]] %>% fgsea_tools$run_one(geneset_list)
-.name <- .res[1, 'pathway'][[1]]
+.name <- .res[1, "pathway"][[1]]
 
 # enplot_data <- fgsea::plotEnrichmentData(geneset_list[[.name]], rankobj[[1]])
 # .rnkorder <- -rankobj[[1]] %>% (rank)
 # rankobj[[1]]['rank'] <- .rnkorder
 
-
-
 # larger test data
 
-genesets_info <- tibble::tribble(
+genesets_of_interest <- tibble::tribble(
   ~category, ~subcategory, ~collapse,
   "H", "", FALSE,
   "C5", "GO:MF", TRUE
 ) %>% mutate(collection_name = stringr::str_c(category, subcategory, sep = "_")) # todo put this somewhere else
 
-genesets <-  geneset_tools$get_collections( genesets_info )
-genesets_lists <- genesets %>% purrr::map( geneset_tools$genesets_df_to_list )
+list_of_geneset_dfs <- genesets
 
+
+genesets_list_of_lists <- list_of_geneset_dfs %>% purrr::map(geneset_tools$genesets_df_to_list)
 rankobjs <- io_tools$ranks_dfs_to_lists(datas)
 
+
 .results_list <- fgsea_tools$run_all_pathways(
-  pathways_list = genesets_lists,
-  ranks=rankobjs,
-  genesets_additional_info = genesets_info, # dataframe with collapse indicator
+  geneset_lists = genesets_list_of_lists,
+  ranks = rankobjs,
+  genesets_additional_info = genesets_of_interest, # dataframe with collapse indicator
   parallel = T
 )
 results_list <- .results_list
 
 all_gsea_results <- plot_tools$concat_results_all_collections(results_list)
-#named_data = list(data=data)
+# named_data = list(data=data)
 
 
 
@@ -161,15 +175,18 @@ all_gsea_results <- plot_tools$concat_results_all_collections(results_list)
 #                     x=.gcts
 # )
 
-.datas <- datas %>% purrr::imap( ~ { .x %>% dplyr::rename(!!.y := value) } )
+.datas <- datas %>% purrr::imap(~ {
+  .x %>% dplyr::rename(!!.y := value)
+})
 # .datas[[1]] %>% head()
-.mat <- base::Reduce(accumulate=F,
-                    f=function(...) full_join(..., by='id'),
-                    x=.datas
-) %>% as.data.frame
+.mat <- base::Reduce(
+  accumulate = F,
+  f = function(...) full_join(..., by = "id"),
+  x = .datas
+) %>% as.data.frame()
 
 
-rownames(.mat)<-.mat$id
+rownames(.mat) <- .mat$id
 .mat$id <- NULL
 .meta <- data.frame(
   id = colnames(.mat),
@@ -177,10 +194,11 @@ rownames(.mat)<-.mat$id
 )
 rownames(.meta) <- .meta$id
 gct <- new("GCT",
-           mat=.mat %>% as.matrix,
-           cdesc=.meta
-           )
+  mat = .mat %>% as.matrix(),
+  cdesc = .meta
+)
 
+TESTING <- TRUE
 ```
 
 ## run these to examine what genesets are availabel from msigdbr
@@ -191,7 +209,6 @@ msigdbr::msigdbr_species()
 ```
 
 ```{r, eval=F, include=T}
-
 msigdbr::msigdbr_collections()
 ```
 
@@ -200,71 +217,71 @@ msigdbr::msigdbr_collections()
 ## load gene sets
 
 ```{r, label='load params'}
-
 # genesets_of_interest <- jsonlite::parse_json(params$genesets_json)
-genesets_of_interest <- jsonlite::fromJSON(params$genesets_json)
-
-genesets_of_interest <- genesets_of_interest %>% dplyr::mutate(
-      collection_name = stringr::str_c(category, subcategory, sep = "_")
-)
+if (!exists("genesets_of_interest")) {
+  genesets_of_interest <- jsonlite::fromJSON(params$genesets_json)
+  genesets_of_interest <- genesets_of_interest %>% dplyr::mutate(
+    collection_name = stringr::str_c(category, subcategory, sep = "_")
+  )
+}
 
 species <- params$species
 
 
-#SPECIES <- "Homo sapiens" # or "Mus musculus" or Saccharomyces cerevisiae, and others
+# SPECIES <- "Homo sapiens" # or "Mus musculus" or Saccharomyces cerevisiae, and others
 # genesets_of_interest %>% purrr::map(~{print(.x$category); print(.x$subcategory)})
-
 ```
 
 
 ```{r, label='get genesets'}
-list_of_geneset_dfs <- genesets_of_interest %>% geneset_tools$get_collections()
-#geneset_lists <- list_of_geneset_dfs %>% purrr::imap( ~geneset_tools$genesets_df_to_list(.x) )
-pathways_list_of_lists <- list_of_geneset_dfs %>% purrr::map(geneset_tools$genesets_df_to_list)
+# geneset_lists <- list_of_geneset_dfs %>% purrr::imap( ~geneset_tools$genesets_df_to_list(.x) )
+if (!exists("genesets_list_of_lists")) {
+  genesets_list_of_lists <- genesets_of_interest %>% purrr::map(geneset_tools$genesets_df_to_list)
+}
 ```
 
 ## prepare ranks
 
 ```{r, label='load ranks'}
-
-if ( (!file.exists(params$volcanodir)) &
-    (!file.exists(params$gct_path)) &
-     (!file.exists(params$rankfiledir))
-){
+if ((!file.exists(params$volcanodir)) &
+  (!file.exists(params$gct_path)) &
+  (!file.exists(params$rankfiledir)) &
+  (!TESTING == TRUE)) {
   print("no files present")
   knitr::knit_exit()
 }
-
-
 ```
 
 
 
 ```{r, label='prepare ranks'}
-
 rankfiledir <- params$rankfiledir
 volcanodir <- params$volcanodir
 gct_path <- params$gct_path
 ranks_from <- params$ranks_from
 
-if ( length(fs::dir_ls(rankfiledir, fail=F))==0 ){
-  #print('yes')
-  if ( ranks_from == "volcano" ){
+if ((file.exists(gct_path)) && (!exists("gct"))) gct <- cmapR::parse_gctx(gct_path)
+
+if (length(fs::dir_ls(rankfiledir, fail = F)) == 0) {
+  # print('yes')
+  if (ranks_from == "volcano") {
     rnkdfs <- io_tools$create_rnkfiles_from_volcano(volcanodir, value_col = "signedlogP")
-    }
-  if ( ranks_from == "gct" ){
+  }
+  if (ranks_from == "gct") {
     rnkdfs <- io_tools$create_rnkfiles_from_emat(gct_path, apply_z_score = T)
-    }
+  }
   rnkdfs %>% io_tools$write_rnkfiles(dir = rankfiledir)
-} #else{
+} # else{
 
 # always reload rank files from new location to ensure proper format
 # any format / name issues are fixed in the create_rnkfiles func
-rnkfiles <- dir_ls(rankfiledir, pattern = ".rnk$", fail=F)
+rnkfiles <- dir_ls(rankfiledir, pattern = ".rnk$", fail = F)
 rnkdfs <- rnkfiles %>% io_tools$load_rnkfiles()
-  #print('no')
-#}
-names(rnkdfs) <- names(rnkdfs) %>% fs::path_file() %>% fs::path_ext_remove()
+# print('no')
+# }
+names(rnkdfs) <- names(rnkdfs) %>%
+  fs::path_file() %>%
+  fs::path_ext_remove()
 
 ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
 ```
@@ -272,14 +289,14 @@ ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
 
 # run fgsea
 ```{r, label='run fgsea', cache=T}
-
-results_list <- fgsea_tools$run_all_pathways(pathways_list_of_lists,
-                                             ranks_list,
-                                             parallel=T,
-                                             genesets_additional_info = genesets_of_interest
-                                             ) # parallel if you c
+if (!TESTING == FALSE) {
+  results_list <- fgsea_tools$run_all_pathways(genesets_list_of_lists,
+    ranks_list,
+    parallel = T,
+    genesets_additional_info = genesets_of_interest
+  ) # parallel if you c
+}
 # results_list2 <- .GlobalEnv$run_all_pathways(geneset_lists, ranks_list, parallel=T) # parallel if you c
-
 ```
 
 
@@ -299,38 +316,36 @@ names(results_list[[1]])
 ```
 
 ```{r}
-head(results_list[[1]] [[1]] )
+head(results_list[[1]][[1]])
 ```
 
 
 
 ```{r, label=save}
-
-
 names(results_list) %>%
   purrr::map(
-    ~{
+    ~ {
       collection_name <- .x
       names(results_list[[collection_name]]) %>%
         purrr::map(
-                ~{ 
-          comparison_name <- .x
-          result <- results_list[[collection_name]][[comparison_name]]
-          print(collection_name)
-          print(comparison_name)
-          outf <- paste0( make.names( collection_name ), "_", make.names(comparison_name), '.tsv')
-          if (!fs::file_exists(outf)) result %>% readr::write_tsv( outf )
-  })
-})
-
-
+          ~ {
+            comparison_name <- .x
+            result <- results_list[[collection_name]][[comparison_name]]
+            print(collection_name)
+            print(comparison_name)
+            outf <- paste0(make.names(collection_name), "_", make.names(comparison_name), ".tsv")
+            if (!fs::file_exists(outf)) result %>% readr::write_tsv(outf)
+          }
+        )
+    }
+  )
 ```
 
 ## making plots
 
 
 ```{r}
-results_list[[1]] [[1]] %>%
+results_list[[1]][[1]] %>%
   arrange(pval) %>%
   head(20) %>%
   plot_tools$barplot_with_numbers()
@@ -339,60 +354,45 @@ results_list[[1]] [[1]] %>%
 ```{r}
 results_list[[1]] %>% imap(
   ~ {
-    sel <- .x %>% arrange(pval) %>% head(20)
-    .title <- .y %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
-    plot_tools$barplot_with_numbers(sel, title=.title, use_custom_labeller=T)
+    sel <- .x %>%
+      arrange(pval) %>%
+      head(20)
+    .title <- .y %>%
+      fs::path_file() %>%
+      fs::path_ext_remove() # %>% gsub(pattern="_", replacement=" ", x=.)
+    plot_tools$barplot_with_numbers(sel, title = .title, use_custom_labeller = T)
   }
 )
 ```
 
 ## plotting all barplots for each comparison across all genesets
 ```{r, fig.width=10, fig.height=8}
-
-results_list %>% imap(
-  ~{
-    pathway <- .y
-    list_of_comparisons <- .x
-    list_of_comparisons %>% imap(
-      ~ {
-          dataframe <- .x
-          comparison_name <- .y
-          sel <- dataframe %>% arrange(pval) %>% head(20)
-          .title <- comparison_name #%>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
-          p <- plot_tools$barplot_with_numbers(sel, title=.title, use_custom_labeller=T)
-          return(p)
-      }
-    )
-  }
-)
-
+plts <- results_list %>% plot_tools$all_barplots_with_numbers(save_func = save_func)
+# if youw ant to print the plots:
+# for (plt in plts){
+#   print(plt)
+# }
 ```
 
 ## plot facetted barplot across genesets
 
 prewritten function to merge gsea results across comparisons and make faceted barplot
 ```{r, fig.width=12, fig.height=12}
-
-
 plts <- results_list %>%
-  plot_tools$process_results_across_rnks()
+  plot_tools$process_results_across_rnks(
+    save_func = save_func
+  )
 
-for (plt in plts){
+for (plt in plts) {
   print(plt)
 }
-
-
 ```
 
 ## heatmaps of results
 
-### new
 
 ```{r}
-
 all_gsea_results <- plot_tools$concat_results_all_collections(results_list)
-
-
 ```
 
 
@@ -405,26 +405,21 @@ draw(ht,
 )
 ```
 
-```{r, fig.height=22}
-
+```{r, fig.height=9}
 hts <- all_gsea_results %>% plot_tools$plot_results_all_collections()
 
-for (ht in hts){
-  draw(ht,
-    heatmap_legend_side = "bottom",
-    padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
-  )
-}
-
-
+# for (ht in hts){
+#   draw(ht,
+#     heatmap_legend_side = "bottom",
+#     padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
+#   )
+# }
 ```
 
 
 ```{r, fig.height=12}
-gct_path <- params$gct_path
-gct <- cmapR::parse_gctx(gct_path)
 # library(org.Hs.eg.db)
-# gene_symbols <- AnnotationDbi::select(org.Hs.eg.db, 
+# gene_symbols <- AnnotationDbi::select(org.Hs.eg.db,
 #                                       keys = gct@rid
 #                                       columns = c("SYMBOL"),
 #                                       keytype = "ENTREZID")
@@ -438,47 +433,53 @@ head(mat(gct))
 
 names(results_list) %>%
   purrr::map(
-    ~{
+    ~ {
       collection_name <- .x
       names(results_list[[collection_name]]) %>%
         purrr::map(
-                ~{ 
-          comparison_name <- .x
-          result <- results_list[[collection_name]][[comparison_name]]
-          print(collection_name)
-          print(comparison_name)
-          forplot <- result %>% arrange(pval) %>% head(10) %>% mutate(leadingedgelist = stringr::str_split(leadingEdge, ","))
-          for (i in 1:nrow(forplot)){
-            row <- forplot[i, ]
-            .id <- row$pathway
-            .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', '', x)))
-            .row_title <- row$pval
-            
-            print(.id)
-            print(paste0('pval: ', row$pval))
-            print(paste0('padj: ', row$padj))
-            print(paste0('NES: ', row$NES))
-            
-            # print(.leading_edge)
-            
-            tryCatch({
-                subgct <- cmapR::subset_gct(gct, rid = .leading_edge)
-                ht <- plot_tools$make_heatmap(subgct)
-                print(ht)
-              },
-            error = function(e) print(e$message)
-          )
-          }
-  })
-})
+          ~ {
+            comparison_name <- .x
+            result <- results_list[[collection_name]][[comparison_name]]
+            print(collection_name)
+            print(comparison_name)
+            forplot <- result %>%
+              arrange(pval) %>%
+              head(10) %>%
+              mutate(leadingedgelist = stringr::str_split(leadingEdge, ","))
+            for (i in 1:nrow(forplot)) {
+              row <- forplot[i, ]
+              .id <- row$pathway
+              .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', "", x)))
+              .row_title <- row$pval
 
-# results_list %>% 
+              print(.id)
+              print(paste0("pval: ", row$pval))
+              print(paste0("padj: ", row$padj))
+              print(paste0("NES: ", row$NES))
+
+              # print(.leading_edge)
+
+              tryCatch(
+                {
+                  subgct <- cmapR::subset_gct(gct, rid = .leading_edge)
+                  ht <- plot_tools$make_heatmap(subgct)
+                  print(ht)
+                },
+                error = function(e) print(e$message)
+              )
+            }
+          }
+        )
+    }
+  )
+
+# results_list %>%
 #   purrr::imap(
 #     ~{
 #    collection_name <- .x
 #    comparisons <- .y
 #    # print(collection_name)
-#    comparisons %>% 
+#    comparisons %>%
 #        purrr::imap(
 #             ~{
 #                 gsea_res <- .x
@@ -489,11 +490,9 @@ names(results_list) %>%
 #                 # .leading_edge <- stringr::str_split(.row$leadingEdge)
 #                 # subgct <- cmapR::subset_gct( rids = .leading_edge )
 #                 # print(head(mat(subgct)))
-#         
+#
 #              })
 #   })
-
-
 ```
 
 ## pca and clustering
@@ -502,68 +501,23 @@ names(results_list) %>%
 ### pca
 
 run pca
-```{r, eval=F, include=F, label='pca run'} # not ready yet
-library(PCAtools)
-
-.df <- all_gsea_results$`C5_GO:MF` %>%
-  pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
-  as.data.frame
-rownames(.df) <- .df$pathway %>% str_remove("GOMF_")
-.df$pathway <- NULL
-
-.pca_res <- PCAtools::pca(.df, metadata = gct@cdesc)
-
+```{r}
+pca_objects <- all_gsea_results %>% pca_tools$do_all()
 ```
 
-explore pca
 
-```{r, eval=F, label='pca explore', include=F}
- # not ready yet
-
-
-(.pcs <- .pca_res$rotated %>% colnames %>%  combn(2) %>% as.data.frame %>% as.list )
-# could be alot, too many
-.vec  <- c("PC1", "PC2", "PC3")# "PC4")
-.pcs <- combn(.vec, 2) %>% as.data.frame %>% as.list
-#
-.pcs %>%
-  purrr::map(
-  ~{
-    COLBY <- "group"
-    # stopifnot(~COLBY%in%colnames(.metadata))
-    .x1 <- .x[[1]]
-    .x2 <- .x[[2]]
-
-    plt <- PCAtools::biplot(
-    .pca_res,
-    x = .x1,
-    y = .x2,
-    showLoadings = T,
-    labSize = 2,
-    pointSize = 3,
-    sizeLoadingsNames = 2,
-    colby = COLBY,
-    #shape="source",
-    legendPosition = "right",
-    encircle = T,
-    ) #+      coord_equal()
-
-    print(plt)
-
-    # name <- paste(.x1, .x2, sep='_', "withnas")
-    # outp <- file.path("./figures", "pca", "biplots_withloadings")
-    # if (!fs::dir_exists(outp)) fs::dir_create(outp)
-    # outf <- file.path(outp, paste0(name, '.pdf'))
-    # pdf(outf, width=9, height=9)
-    # print(plt)
-    # dev.off()
-
-
-  }
-)
-
-
+```{r}
+save_func <- purrr::partial(plot_tools$plot_and_save)
+pca_objects[[1]] %>% pca_tools$plot_biplot(title = "first pca object", save_func = save_func)
 ```
+
+
+```{r}
+save_func <- purrr::partial(plot_tools$plot_and_save)
+pca_objects %>% pca_tools$plot_all_biplots(save_func = save_func)
+```
+
+
 
 ```{r, eval=F}
 gct_path <- params$gct_path
@@ -576,16 +530,22 @@ all_gsea_results <- plot_tools$concat_results_all_collections(results_list)
 .pathways_withmeta <- all_gsea_results[[.name]] %>%
   left_join(gct@cdesc, by = c("var" = "id"))
 .pathways_withmeta %<>% group_by(Model) %>%
-  mutate(n_main = sum(mainpathway==T)) %>%
-  mutate(ratio_main = n_main / n() ) %>%
-  ungroup
-  #group_by(pathway) %>% summarize(n=sum(mainpathway==T)) %>% filter(n/.ntotal > .1) %>% distinct(pathway, .keep_all = T)
+  mutate(n_main = sum(mainpathway == T)) %>%
+  mutate(ratio_main = n_main / n()) %>%
+  ungroup()
+# group_by(pathway) %>% summarize(n=sum(mainpathway==T)) %>% filter(n/.ntotal > .1) %>% distinct(pathway, .keep_all = T)
 
-.ntotal <- all_res[[.name]]$var %>% unique %>% length()
-.pathways_filtered <- all_res[[.name]] %>% group_by(pathway) %>% summarize(n=sum(mainpathway==T)) %>% filter(n/.ntotal > .1) %>% distinct(pathway, .keep_all = T)
-plt <- all_gsea_results[[.name]] %>% dplyr::filter( pathway %in% .pathways_filtered$pathway ) %>% plot_tools$plot_results_one_collection(., metadata = .metadata, cut_by = 'Model', title=.name)
-
-
+.ntotal <- all_res[[.name]]$var %>%
+  unique() %>%
+  length()
+.pathways_filtered <- all_res[[.name]] %>%
+  group_by(pathway) %>%
+  summarize(n = sum(mainpathway == T)) %>%
+  filter(n / .ntotal > .1) %>%
+  distinct(pathway, .keep_all = T)
+plt <- all_gsea_results[[.name]] %>%
+  dplyr::filter(pathway %in% .pathways_filtered$pathway) %>%
+  plot_tools$plot_results_one_collection(., metadata = .metadata, cut_by = "Model", title = .name)
 ```
 
 
@@ -596,235 +556,217 @@ plt <- all_gsea_results[[.name]] %>% dplyr::filter( pathway %in% .pathways_filte
 # Adjusting the formula with guessed parameters for a clearer sigmoid fit
 # Example: a simple sigmoid with steepness and midpoint adjustments
 # Ensure that you replace `.res2` and `pval` according to your actual data frame and variable names if they differ
-sig_approx <- function(x) (-1 / (1 + exp(-4.1 * (x - 1.0))) + 1 )
+sig_approx <- function(x) (-1 / (1 + exp(-4.1 * (x - 1.0))) + 1)
 
 ggplot(.res2, aes(x = abs(NES), y = pval)) +
   geom_point() +
-  stat_function(fun = sig_approx,   # Adjust -0.1 (steepness) and 5 (midpoint) as needed
-                color = "blue") +
+  stat_function(
+    fun = sig_approx, # Adjust -0.1 (steepness) and 5 (midpoint) as needed
+    color = "blue"
+  ) +
   ggtitle("Fitting a Sigmoid Function")
 ```
 ```{r, eval=F}
-
-sig_approx <- function(x) (-1 / (1 + exp(-4.1 * (x - 1.0))) + 1 )
+sig_approx <- function(x) (-1 / (1 + exp(-4.1 * (x - 1.0))) + 1)
 sig_approx2 <- function(x) 1 / sig_approx
-sig_approx2 <- function(x) (1 + exp(-1.1 * (x - 1.0)  ) -1 )
+sig_approx2 <- function(x) (1 + exp(-1.1 * (x - 1.0)) - 1)
 
 ggplot(.res2, aes(y = abs(NES), x = pval)) +
   geom_point() +
-  stat_function(fun = sig_approx2,   # Adjust -0.1 (steepness) and 5 (midpoint) as needed
-                color = "blue") +
+  stat_function(
+    fun = sig_approx2, # Adjust -0.1 (steepness) and 5 (midpoint) as needed
+    color = "blue"
+  ) +
   ggtitle("Fitting a Sigmoid Function")
 ```
 
 
 ## plot large tabular plots
 
-this function may be moved out
+this is slow
 ```{r, fig.width=10, fig.height=12, eval=F}
-
-tic()
-
-process_results_for_each_rank <- function(results_list, ranks_list, pathways_list) {
-  # Ensure names are aligned and iterate over them
-  pathway_names <- names(results_list)
-
-  map(pathway_names, ~{
-    geneset_name <- .x
-    fgsea_res_list <- results_list[[geneset_name]]
-    genesets <- pathways_list[[geneset_name]]
-
-    # Now, iterate over each rank file within this pathway category
-    map(names(ranks_list), function(rank_name) {
-      rankobj <- ranks_list[[rank_name]]
-      # Generate a unique identifier for this plot/table, e.g., combining pathway name and rank file name
-      rank_name_nice <- rank_name %>% fs::path_file() %>% fs::path_ext_remove()
-      plot_id <- paste(geneset_name, rank_name_nice, sep = "_")
-
-
-      .fgsea_res <- fgsea_res_list[[rank_name]]
-      p <- plot_tools$plot_table(fgsea_res = .fgsea_res,
-                 ranks = rankobj,
-                 pathways = genesets,
-                 gsea_param=0.5,
-        )
-
-      # outpath <- file.path(ENPLOT_BASEDIR, make.names(geneset_name), make.names(rank_name_nice))
-      #if (!fs::dir_exists(outpath)) fs::dir_create(outpath)
-
-      # print(p)
-      return(p)
-
-      # c(".png", ".pdf") %>% purrr::walk(
-      # ~ggsave(filename = paste0(make.names(geneset_name), "_toptable", "_gseaparam.5", .x),
-      #        path = outpath,
-      #        dpi = 300,
-      #        width = 19,
-      #        height=12,
-      #        )
-      # )
-
-
-    })
-
-  })
-}
-
-res <- process_results_for_each_rank(
+res <- plot_tools$plot_tables(
   results_list = results_list,
   ranks_list = ranks_list,
   pathways_list = pathways_list_of_lists
 )
-
-toc()
-
-```
-
-
-```{r, fig.width=10, fig.height=12, eval=F}
-
-tic()
-
-process_results_for_each_rank <- function(results_list, ranks_list, pathways_list) {
-  # Ensure names are aligned and iterate over them
-  pathway_names <- names(results_list)
-
-  # furrr::future_map(pathway_names, ~{
-  purrr::map(pathway_names, ~{
-    geneset_name <- .x
-    fgsea_res_list <- results_list[[geneset_name]]
-    genesets <- pathways_list[[geneset_name]]
-
-    # Now, iterate over each rank file within this pathway category
-    #map(names(ranks_list), function(rank_name) {
-    # furrr::future_map(names(ranks_list), function(rank_name) {
-    furrr::future_imap(ranks_list, function(rankobj, rank_name) {
-      # rankobj <- ranks_list[[rank_name]]
-      # Generate a unique identifier for this plot/table, e.g., combining pathway name and rank file name
-      rank_name_nice <- rank_name %>% fs::path_file() %>% fs::path_ext_remove()
-      plot_id <- paste(geneset_name, rank_name_nice, sep = "_")
-
-
-      .fgsea_res <- fgsea_res_list[[rank_name]]
-      p <- plot_tools$plot_table(fgsea_res = .fgsea_res,
-                 ranks = rankobj,
-                 pathways = genesets,
-                 gsea_param=0.5,
-        )
-
-      outpath <- file.path(ENPLOT_BASEDIR, make.names(geneset_name), make.names(rank_name_nice))
-      if (!fs::dir_exists(outpath)) fs::dir_create(outpath)
-
-      # print(p)
-      return(p)
-      # c(".png", ".pdf") %>% purrr::walk(
-      # ~ggsave(filename = paste0(make.names(geneset_name), "_toptable", "_gseaparam.5", .x),
-      #        path = outpath,
-      #        dpi = 300,
-      #        width = 19,
-      #        height=12,
-      #        )
-      # )
-
-
-    })
-
-  })
-}
-
-res <- process_results_for_each_rank(
-  results_list = results_list,
-  ranks_list = ranks_list,
-  pathways_list = pathways_list_pathways_list_of_lists
-)
-
-toc()
-
-#76.388
 ```
 
 ## examine rankorder
 
 
 ```{r}
-ranks_list %>% names
-list_of_geneset_dfs %>% names
-
-#rankorder <- .GlobalEnv$get_rankorder(ranks_list[[1]], geneset_lists[[1]][[1]]  )
+# rankorder <- .GlobalEnv$get_rankorder(ranks_list[[1]], geneset_lists[[1]][[1]]  )
 
 
-rankorder <- fgsea_tools$get_rankorder(ranks_list[[1]], pathways_list_of_lists$H_$HALLMARK_ADIPOGENESIS  ) %>% filter(!is.na(stat_tick))
-rankorder %>% dim
+genesets_of_interest <- genesets_list_of_lists[[1]]
+rankobject <- rankobjs[[1]]
+# enplot_data <- plotEnrichmentData(genesets_of_interest[[1]], rankobject)
+collection_name <- names(genesets_list_of_lists)[[1]]
+geneset_of_interest_name <- names(genesets_of_interest)[[1]]
 
+# enplot_raw <- plotEnrichment(genesets_of_interest[[1]], rankobject)
+# enplot_data <- plotEnrichmentData(genesets_of_interest[[1]], rankobject)
 
-rankorder2 <- rankorder %>%
-  left_join(
-    list_of_geneset_dfs$H_ %>% filter(gs_name == "HALLMARK_ADIPOGENESIS") %>% distinct(entrez_gene, .keep_all = T) %>%  mutate(entrez_gene = as.character(entrez_gene)), by = c('id' = 'entrez_gene')
+rankorder_object <- fgsea_tools$get_rankorder(
+  genesets_of_interest[[1]], rankobject,
+  list_of_geneset_dfs[[collection_name]]
 )
 
-( dim(rankorder)[1] == dim(rankorder2)[1] )
+rankorder_object %>% plot_tools$plotES() +
+  labs(title = geneset_of_interest_name)
+```
+```{r}
+make_selection <- function(x) {
+  x <- x %>% arrange(rank)
+  es_min <- x %>%
+    pull(ES) %>%
+    min(na.rm = T)
+  es_max <- x %>%
+    pull(ES) %>%
+    max(na.rm = T)
+  .first <- which(x$ES == es_min)
+  .second <- which(x$ES == es_max)
+  .bot <- x %>% tail(dim(x)[1] - .first)
+  .top <- x %>% head(.second)
+  browser()
+  return(bind_rows(.top, .bot))
+}
 
-rankorder <- rankorder2
+with(
+  rankorder_object,
+  ggplot(data = curve) +
+    geom_line(aes(x = rank, y = ES), color = "green") +
+    # geom_ribbon(
+    #   data = stats,
+    #   mapping = aes(
+    #     x = rank, ymin = 0,
+    #     ymax = stat / maxAbsStat * (spreadES / 4)
+    #   ),
+    #   fill = "grey"
+    # ) +
+    geom_segment(
+      data = ticks,
+      mapping = aes(
+        x = rank, y = -spreadES / 16,
+        xend = rank, yend = spreadES / 16
+      ),
+      size = 0.2
+    ) +
+    geom_hline(yintercept = posES, colour = "red", linetype = "dashed") +
+    geom_hline(yintercept = negES, colour = "red", linetype = "dashed") +
+    geom_hline(yintercept = 0, colour = "black") +
+    theme(
+      panel.background = element_blank(),
+      panel.grid.major = element_line(color = "grey92")
+    ) +
+    labs(x = "rank", y = "enrichment score") +
+    geom_text_repel(
+      mapping = aes(x = rank, y = ES, label = gene_symbol), data = edge %>% filter(rank %in% ticks$rank) %>% make_selection(),
+      max.overlaps = Inf, max.time = 4
+    )
+  # geom_text_repel( mapping = aes(x = rank, y = ES, label = gene_symbol), data = edge %>% filter(rank %in% ticks$rank) )
+)
+```
 
 
+
+```{r}
+rankorder_object <- fgsea_tools$get_rankorder(genesets_of_interest[[1]], rankobject)
+
+enplot_data <- plotEnrichmentData(genesets_of_interest[[1]], rankobject)
+
+.for_merge <- list_of_geneset_dfs[[collection_name]] %>%
+  filter(gs_name == geneset_of_interest_name) %>%
+  mutate(entrez_gene = as.character(entrez_gene)) %>%
+  distinct(entrez_gene, .keep_all = T) # sometimes there's a duplicate annotate (maybe because multiple ensembl gids)
+
+
+.rankorder <- rankorder_object$edge %>% left_join(
+  .for_merge,
+  by = c("id" = "entrez_gene")
+)
+rankorder_object$edge <- .rankorder # %>% filter(!is.na(stat_tick))
+rankorder_object$stats <- .rankorder # %>% filter(!is.na(stat_tick))
+
+rankorder_object$edge %>%
+  make_selection() %>%
+  dim()
+
+plot_tools$edgeplot1(rankorder_object = rankorder_object) +
+  geom_text_repel(data = . %>% filter(!is.na(stat_tick)) %>% make_selection(), aes(label = gene_symbol), max.overlaps = Inf)
+```
+
+```{r}
+plot_tools$edgeplot1(rankorder_object = rankorder_object) +
+  geom_text_repel(data = . %>% filter(!is.na(stat_tick)) %>% make_selection(), aes(label = gene_symbol), max.overlaps = Inf)
 ```
 
 ```{r, fig.width=10, fig.height=8, eval=F}
-
-
-es_min <- rankorder %>% pull(ES) %>% min(na.rm=T)
-es_max <- rankorder %>% pull(ES) %>% max(na.rm=T)
-
-
-make_selection <- function(x){
+make_selection <- function(x) {
+  es_min <- x %>%
+    pull(ES) %>%
+    min(na.rm = T)
+  es_max <- x %>%
+    pull(ES) %>%
+    max(na.rm = T)
   .first <- which(x$ES == es_min)
   .second <- which(x$ES == es_max)
-  .top <- x %>% arrange(rank) %>% head(.first)
-  .bot <- x %>% arrange(rank) %>% tail(dim(x)[1] - .second)
+  .top <- x %>%
+    arrange(rank) %>%
+    head(.first)
+  .bot <- x %>%
+    arrange(rank) %>%
+    tail(dim(x)[1] - .second)
   return(bind_rows(.top, .bot))
 }
 ```
 
-```{r, fig.width=10, fig.height=8, eval=F}  # not ready yet
-
+```{r, fig.width=10, fig.height=8, eval=F}  
 rankorder %<>% arrange(stat_tick)
 rankorder %>%
   plot_tools$edgeplot1() +
-  geom_text_repel(data = . %>% make_selection , aes(label = gene_symbol ), max.overlaps = Inf  )
+  geom_text_repel(data = . %>% make_selection(), aes(label = gene_symbol), max.overlaps = Inf)
 ```
 
 
 
 ```{r, fig.width=12, fig.height=10, eval=F}
+# rankorder_all <- .GlobalEnv$get_rankorder(ranks_list[[1]], pathways_list_of_lists$H_$HALLMARK_ADIPOGENESIS  )
 
-
-#rankorder_all <- .GlobalEnv$get_rankorder(ranks_list[[1]], pathways_list_of_lists$H_$HALLMARK_ADIPOGENESIS  )
-
-rankorder_all <- fgsea_tools$get_rankorder(ranks_list[[1]], pathways_list_of_lists$H_$HALLMARK_ADIPOGENESIS  )
+rankorder_all <- fgsea_tools$get_rankorder(ranks_list[[1]], pathways_list_of_lists$H_$HALLMARK_ADIPOGENESIS)
 
 rankorder_all2 <- rankorder_all %>%
-  left_join( list_of_geneset_dfs$H_ %>%
-               mutate(entrez_gene = as.character(entrez_gene)) %>%
-               distinct(entrez_gene, .keep_all=T),
-             by = c("id" = "entrez_gene"))
+  left_join(
+    list_of_geneset_dfs$H_ %>%
+      mutate(entrez_gene = as.character(entrez_gene)) %>%
+      distinct(entrez_gene, .keep_all = T),
+    by = c("id" = "entrez_gene")
+  )
 
 
 
 pdata <- p$data
 pdata_more <- left_join(
-  pdata ,
+  pdata,
   rankorder_all2
 ) %>% arrange(rank)
 
 
-make_selection2 <- function(x){
-  .top <- x %>% arrange(rank) %>% filter(!is.na(ES) & !is.na(gene_symbol)) %>% head(10)
-  .bot <- x %>% arrange(rank) %>% filter(!is.na(ES) & !is.na(gene_symbol)) %>% tail(10)
+make_selection2 <- function(x) {
+  .top <- x %>%
+    arrange(rank) %>%
+    filter(!is.na(ES) & !is.na(gene_symbol)) %>%
+    head(10)
+  .bot <- x %>%
+    arrange(rank) %>%
+    filter(!is.na(ES) & !is.na(gene_symbol)) %>%
+    tail(10)
   return(bind_rows(.top, .bot))
 }
 
 
 p <- fgsea::plotEnrichment(pathways_list_of_lists$H_$HALLMARK_ADIPOGENESIS, ranks_list[[1]])
-p + geom_text_repel(data = rankorder %>% make_selection, aes(x=rank, y=ES, label = gene_symbol ), max.overlaps = Inf  )
-#print(p)
+p + geom_text_repel(data = rankorder %>% make_selection(), aes(x = rank, y = ES, label = gene_symbol), max.overlaps = Inf)
+# print(p)
 ```

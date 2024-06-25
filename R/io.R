@@ -35,7 +35,10 @@ make_random_gct <- function(nrow = 10, ncol = 4) {
   gct
 }
 
-create_rnkfiles_from_emat <- function(emat, apply_z_score = FALSE, ...) {
+create_rnkfiles_from_emat <- function(
+    emat,
+    apply_z_score = FALSE,
+    ...) {
   gct <- cmapR::parse_gctx(emat)
   if (apply_z_score) {
     .new <- gct@mat %>%
@@ -102,7 +105,9 @@ create_rnkfiles_from_volcano <- function(
 }
 
 
-write_rnkfiles <- function(lst, dir = "rnkfiles") {
+write_rnkfiles <- function(
+    lst,
+    dir = "rnkfiles") {
   if (!fs::dir_exists(dir)) fs::dir_create(dir)
   lst %>% purrr::iwalk( # .x is the value, .y is the name
     ~ {

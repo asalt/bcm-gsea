@@ -15,7 +15,9 @@ geneset_tools <- new.env()
 source(file.path(src_dir, "./geneset_utils.R"), local = geneset_tools)
 
 
-filter_on_mainpathway <- function(pathway_object, main_pathway_ratio = .1) {
+filter_on_mainpathway <- function(
+    pathway_object,
+    main_pathway_ratio = .1) {
   if (!"var" %in% colnames(pathway_object)) {
     stop("var column not found in the input data")
   }
@@ -38,7 +40,12 @@ filter_on_mainpathway <- function(pathway_object, main_pathway_ratio = .1) {
   return(filtered_pathway_object)
 }
 
-run_one <- function(rankobj, geneset, minSize = 15, maxSize = 500, collapse = FALSE) {
+run_one <- function(
+    rankobj,
+    geneset,
+    minSize = 15,
+    maxSize = 500,
+    collapse = FALSE) {
   # to look for duplicate gene names
   # rankobj %>% names %>% table %>% as.data.frame %>% pull(Freq) %>% max
   .maxcounts <- rankobj %>%
@@ -53,7 +60,10 @@ run_one <- function(rankobj, geneset, minSize = 15, maxSize = 500, collapse = FA
   set.seed(789)
 
   fgseaRes <- fgsea(
-    pathways = geneset, stats = rankobj, minSize = minSize, maxSize = maxSize,
+    pathways = geneset,
+    stats = rankobj,
+    minSize = minSize,
+    maxSize = maxSize,
     # eps = 0.0
   ) # , nperm=1000)
 
@@ -191,7 +201,10 @@ run_all_pathways <- function(
 
 
 
-get_rankorder <- function(geneset, rankobj, geneset_df = NULL) {
+get_rankorder <- function(
+    geneset,
+    rankobj,
+    geneset_df = NULL) {
   # geneset_df has addl info
   if (!class(geneset) == "character") {
     stop("geneset must be a character")
@@ -214,7 +227,10 @@ get_rankorder <- function(geneset, rankobj, geneset_df = NULL) {
   rankorder_edge$stat == rankorder_edge$stat_tick
 
   if (!is.null(geneset_df)) {
-    rankorder_edge %<>% left_join(geneset_df %>% mutate(entrez_gene = as.character(entrez_gene)) %>% distinct(entrez_gene, .keep_all = TRUE),
+    rankorder_edge %<>% left_join(
+      geneset_df %>%
+        mutate(entrez_gene = as.character(entrez_gene)) %>%
+        distinct(entrez_gene, .keep_all = TRUE),
       by = c("id" = "entrez_gene")
     )
   }
@@ -236,7 +252,11 @@ get_rankorder <- function(geneset, rankobj, geneset_df = NULL) {
 
 
 
-simulate_preranked_data <- function(seed = 4321, geneset = NULL, spike_terms = c("INTERFERON"), ...) {
+simulate_preranked_data <- function(
+    seed = 4321,
+    geneset = NULL,
+    spike_terms = c("INTERFERON"),
+    ...) {
   set.seed(seed)
 
   # geneset <- msigdbr::msigdbr(

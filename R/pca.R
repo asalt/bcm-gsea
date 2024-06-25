@@ -10,6 +10,11 @@ src_dir <- file.path(here("R"))
 fgsea_tools <- new.env()
 source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
+plot_tools <- new.env()
+source(file.path(src_dir, "./plot.R"), local = plot_tools)
+make_partial <- plot_tools$make_partial
+get_args <- plot_tools$get_args
+
 #' handle 1 long form gsea result table
 #'
 #' This function runs PCA on a single GSEA result table
@@ -27,7 +32,11 @@ source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 #' mean_numeric(c(1, 2, NA, 4, 5), na.rm = TRUE)
 #'
 #' @export
-do_one <- function(gsea_object, metadata = NULL, main_pathway_ratio = 0.1) {
+do_one <- function(
+    gsea_object,
+    metadata = NULL,
+    main_pathway_ratio = 0.1,
+    ...) {
   # if ("mainpathway" %in% colnames(gsea_object)) {
   #   gsea_object <- gsea_object %>% filter(mainpathway == TRUE)
   # }
@@ -44,7 +53,9 @@ do_one <- function(gsea_object, metadata = NULL, main_pathway_ratio = 0.1) {
     rownames(metadata) <- metadata$id
   }
 
-  gsea_object <- fgsea_tools$filter_on_mainpathway(gsea_object, main_pathway_ratio = main_pathway_ratio)
+  gsea_object <- fgsea_tools$filter_on_mainpathway(gsea_object,
+    main_pathway_ratio = main_pathway_ratio
+  )
 
   # clean names
   gsea_object <- gsea_object %>%
@@ -66,14 +77,33 @@ do_one <- function(gsea_object, metadata = NULL, main_pathway_ratio = 0.1) {
   return(pca_res)
 }
 
-do_all <- function(gsea_objects, metadata = NULL) {
+do_all <- function(
+    gsea_objects,
+    metadata = NULL) {
   pca_objects <- gsea_objects %>%
     purrr::map(~ do_one(.x, metadata = metadata))
   names(pca_objects) <- names(gsea_objects)
   return(pca_objects)
 }
 
-plot_biplot <- function(pca_object, top_pc = 3, showLoadings = T, labSize = 2, pointSize = 3, sizeLoadingsNames = 2, colby = "group", encircle = T, title = "") {
+plot_biplot <- function(
+    pca_object,
+    top_pc = 3,
+    showLoadings = T,
+    labSize = 2,
+    pointSize = 3,
+    sizeLoadingsNames = 2,
+    colby = "group",
+    encircle = T,
+    title = "",
+    ...) {
+  args <- list(...)
+  if ("save_func" %in% names(args)) {
+    save_func <- args$save_func
+  } else {
+    save_func <- NULL
+  }
+
   vec <- c("PC1", "PC2", "PC3") # "PC4")
   pcs <- combn(vec, 2) %>%
     as.data.frame() %>%
@@ -84,39 +114,75 @@ plot_biplot <- function(pca_object, top_pc = 3, showLoadings = T, labSize = 2, p
     colby <- NULL
     encircle <- F
   }
-  pcs %>%
-    purrr::map(
-      ~ {
-        # stopifnot(~COLBY%in%colnames(.metadata))
-        .x1 <- .x[[1]]
-        .x2 <- .x[[2]]
+  plts <- pcs %>%
+    purrr::map(~ {
+      # stopifnot(~COLBY%in%colnames(.metadata))
+      .x1 <- .x[[1]]
+      .x2 <- .x[[2]]
 
-        plt <- PCAtools::biplot(
-          pca_object,
-          x = .x1,
-          y = .x2,
+      plt <- PCAtools::biplot(
+        pca_object,
+        x = .x1,
+        y = .x2,
+        showLoadings = showLoadings,
+        labSize = labSize,
+        pointSize = pointSize,
+        sizeLoadingsNames = sizeLoadingsNames,
+        colby = colby,
+        # shape="source",
+        legendPosition = "right",
+        encircle = encircle,
+        title = title
+      ) #+      coord_equal()
+
+      if (!is.null(save_func)) {
+        current_args <- get_args(save_func)
+        filename <- current_args$filename
+        if (is.null(filename)) {
+          filename <- paste0("pca_biplot_")
+        }
+        filename <- paste0(filename, "_", .x1, "_", .x2)
+        save_func(plot_code = function() print(plt), filename = filename)
+      } else {
+        print(plt)
+      }
+      return(plt)
+    })
+  return(plts)
+}
+
+plot_all_biplots <- function(
+    pca_objects,
+    top_pc = 3,
+    showLoadings = T,
+    labSize = 2,
+    pointSize = 3,
+    sizeLoadingsNames = 2,
+    colby = "group",
+    save_func = NULL,
+    ...) {
+  pca_objects %>%
+    purrr::imap(
+      ~ {
+        title <- .y
+
+        if (!is.null(save_func)) {
+          save_func <- make_partial(save_func,
+            filename = paste0("pca_biplot_", make.names(title))
+          )
+        }
+
+        plot_biplot(.x,
+          top_pc = top_pc,
           showLoadings = showLoadings,
           labSize = labSize,
           pointSize = pointSize,
           sizeLoadingsNames = sizeLoadingsNames,
           colby = colby,
-          # shape="source",
-          legendPosition = "right",
-          encircle = encircle,
-          title = title
-        ) #+      coord_equal()
-
-        print(plt)
-      }
-    )
-}
-
-plot_all_biplots <- function(pca_objects, top_pc = 3, showLoadings = T, labSize = 2, pointSize = 3, sizeLoadingsNames = 2, colby = "group") {
-  pca_objects %>%
-    purrr::imap(
-      ~ {
-        title <- .y
-        plot_biplot(.x, top_pc = top_pc, showLoadings = showLoadings, labSize = labSize, pointSize = pointSize, sizeLoadingsNames = sizeLoadingsNames, colby = colby, title = title)
+          title = title,
+          save_func = save_func,
+          # ...
+        )
       }
     )
 }

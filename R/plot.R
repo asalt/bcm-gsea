@@ -9,6 +9,7 @@ suppressPackageStartupMessages(library(circlize))
 
 suppressPackageStartupMessages(library(here))
 
+basedir <- file.path(here())
 src_dir <- file.path(here("R"))
 
 util_tools <- new.env()
@@ -17,10 +18,95 @@ source(file.path(src_dir, "./utils.R"), local = util_tools)
 fgsea_tools <- new.env()
 source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
-# DEBUG
+
+# Helper function to get current preset arguments or an empty list if none are set
+get_args <- function(f) {
+  if (!is.null(attr(f, "preset_args"))) {
+    return(attr(f, "preset_args"))
+  } else {
+    return(list()) # Return an empty list for easier handling
+  }
+}
+get_arg <- function(f, arg) {
+  args <- get_args(f)
+  val <- args[[arg]]
+  if (is.null(val)) {
+    return("")
+  }
+  return(val)
+}
+
+# Custom partial function with dynamic argument handling
+make_partial <- function(.f, ...) {
+  # Retrieve current preset arguments, if any
+  current_args <- get_args(.f)
+
+  # New fixed arguments
+  args_fixed <- list(...)
+
+  # Ensure that named arguments are handled properly
+  if (!is.null(names(args_fixed))) {
+    # Overwrite or add new arguments
+    current_args[names(args_fixed)] <- args_fixed
+  }
+
+  # Inner function to call .f with the correct arguments
+  inner <- function(...) {
+    # Combine fixed arguments with any new ones provided at call time
+    args <- modifyList(current_args, list(...))
+    do.call(.f, args)
+  }
+
+  # Attach updated preset arguments to the inner function for later inspection
+  attr(inner, "preset_args") <- current_args
+
+  return(inner)
+}
 
 
-make_heatmap <- function(.gct, row_note = "", scale = T) {
+plot_and_save <- function(
+    plot_code,
+    filename,
+    path = file.path(
+      basedir,
+      "plots/"
+    ),
+    type = "pdf",
+    width = 8,
+    height = 6,
+    ignore_exists = F,
+    ...) {
+  # Setup: Open the appropriate graphics device
+
+  full_path <- file.path(path, paste0(filename, ".", type))
+  if (!fs::dir_exists(path)) fs::dir_create(path)
+
+  if (file.exists(full_path) && !ignore_exists) {
+    return()
+  }
+
+  if (type == "pdf") {
+    pdf(full_path, width = width, height = height)
+  } else if (type == "png") {
+    png(full_path, width = width, height = height, units = "in", res = 300)
+  } else {
+    stop("Unsupported file type")
+  }
+
+  # Execute the plot code (passed as a function)
+  h <- plot_code()
+
+  # Teardown: Close the graphics device
+  dev.off()
+
+  return(h)
+}
+
+
+make_heatmap <- function(
+    .gct,
+    row_note = "",
+    scale = T) {
   # .gct <- subgct
   # .gct@cdesc$treat <-
   #   factor(.gct@cdesc$treat , levels = c("untreated", "carboplatin", "IMT", "carboplatin_IMT"), ordered = T)
@@ -133,7 +219,12 @@ prepare_data_for_barplot <- function(df) {
 
 #' @param df dataframe with columns pathway, NES, padj, leadingEdge, size
 #' @param title title of the plot
-barplot_with_numbers <- function(df, title = "", use_custom_labeller = T, ...) {
+barplot_with_numbers <- function(
+    df,
+    title = "",
+    use_custom_labeller = T,
+    save_func = NULL,
+    ...) {
   sel <- prepare_data_for_barplot(df)
 
   if (use_custom_labeller == T) {
@@ -174,16 +265,78 @@ barplot_with_numbers <- function(df, title = "", use_custom_labeller = T, ...) {
   if ("rankname" %in% colnames(df) && (length(unique(df$rankname)) > 1)) {
     p <- p + facet_wrap(~rankname, labeller = as_labeller(labeller_func))
   }
-  p
+
+  if (!is.null(save_func)) {
+    save_func(plot_code = function() {
+      print(p)
+    })
+  }
+  return(p)
+}
+
+all_barplots_with_numbers <- function(
+    results_list,
+    use_custom_labeller = T,
+    save_func = NULL,
+    ...) {
+  if (!is.null(save_func)) {
+    filename <- paste0(get_arg(save_func, "filename"), "barplot_")
+    save_func <- make_partial(save_func, filename = filename)
+  }
+
+  plts <- results_list %>% purrr::imap(
+    ~ {
+      pathway <- .y
+      list_of_comparisons <- .x
+      plts <- list_of_comparisons %>% imap(
+        ~ {
+          dataframe <- .x
+          comparison_name <- .y
+          sel <- dataframe %>%
+            arrange(pval) %>%
+            head(20)
+          .title <- comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
+
+          if (!is.null(save_func)) {
+            filename <- paste0(
+              get_arg(save_func, "filename"),
+              make.names(pathway), "_", make.names(comparison_name)
+            )
+            save_func <- make_partial(save_func, filename = filename)
+          }
+          p <- plot_tools$barplot_with_numbers(sel, title = .title, use_custom_labeller = T, save_func = save_func, ...)
+          return(p)
+        }
+      )
+    }
+  )
 }
 
 
-process_results_across_rnks <- function(results_list, genesets = NULL, ...) {
+
+
+process_results_across_rnks <- function(
+    results_list,
+    genesets = NULL,
+    save_func = NULL,
+    ...) {
   # Ensure names are aligned and iterate over them
   # geneset_names <- names(results_list)
   if (is.null(genesets)) {
     genesets <- names(results_list)
   }
+
+  if (!is.null(save_func)) {
+    filename <- paste0(get_arg(save_func, "filename"), "barplot")
+    save_func <- make_partial(save_func, filename = filename)
+  }
+
+  # args <- list(...)
+  # if ("save_func" %in% names(args)) {
+  #   save_func <- args$save_func
+  # } else {
+  #   save_func <- NULL
+  # }
 
   purrr::map(genesets, ~ {
     geneset_name <- .x
@@ -203,7 +356,16 @@ process_results_across_rnks <- function(results_list, genesets = NULL, ...) {
 
     # pathway_df <- get_pathway_info(geneset_name)
     # .merge <- left_join(res , pathway_df, by= )
-    p <- res %>% barplot_with_numbers(title = geneset_name, use_custom_labeller = T)
+    if (!is.null(save_func)) {
+      filename <- paste0(get_arg(save_func, "filename"), "_", geneset_name)
+      save_func <- make_partial(save_func, filename = filename)
+    }
+    p <- res %>% barplot_with_numbers(
+      title = geneset_name,
+      use_custom_labeller = T,
+      save_func = save_func,
+      ...
+    )
 
     return(p)
 
@@ -269,11 +431,11 @@ concat_results_one_collection <- function(list_of_dfs) {
   return(res)
 }
 
-concat_results_all_collections <- function(list_of_lists) {
+concat_results_all_collections <- function(list_of_lists, ...) {
   res <- list_of_lists %>%
     purrr::imap(
       ~ {
-        concat_results_one_collection(.x)
+        concat_results_one_collection(.x, ...)
       }
     ) # %>%
   # purrr::reduce(rbind)
@@ -287,15 +449,23 @@ plot_results_all_collections <- function(
     cut_by = NULL,
     limit = 120,
     main_pathway_ratio = 0.1,
+    save_func = NULL,
     ...) {
   res <- list_of_lists %>% purrr::imap(
     ~ {
+      if (!is.null(save_func)) {
+        filename <- paste0(get_arg(save_func, "filename"), "gsea_heatmap_", make.names(.y))
+        save_func <- make_partial(save_func, filename = filename)
+      }
+
       plot_results_one_collection(.x,
         title = .y,
         metadata = metadata,
         cut_by = cut_by,
         limit = limit,
-        main_pathway_ratio = main_pathway_ratio
+        main_pathway_ratio = main_pathway_ratio,
+        save_func = save_func,
+        ...
       )
     }
   )
@@ -312,6 +482,7 @@ plot_results_one_collection <- function(
     limit = 120,
     title = "",
     main_pathway_ratio = 0.1,
+    save_func = NULL,
     ...) {
   # Ensure necessary columns are present
   required_cols <- c("pathway", "NES")
@@ -454,10 +625,16 @@ plot_results_one_collection <- function(
     cell_fun = cell_fun # Use the updated cell_fun here
   )
 
-  draw(ht,
-    heatmap_legend_side = "bottom",
-    padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
-  )
+  do_draw <- function() {
+    draw(ht,
+      heatmap_legend_side = "bottom",
+      padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
+    )
+  }
+
+  if (!is.null(save_func)) {
+    save_func(do_draw)
+  }
 
   return(ht)
 }
@@ -598,7 +775,10 @@ plot_table <- function(fgsea_res,
 }
 
 
-plot_tables <- function(results_list, ranks_list, pathways_list) {
+plot_tables <- function(
+    results_list,
+    ranks_list,
+    pathways_list) {
   # Ensure names are aligned and iterate over them
   pathway_names <- names(results_list)
 
@@ -643,7 +823,10 @@ plot_tables <- function(results_list, ranks_list, pathways_list) {
   })
 }
 
-plot_tables_faster <- function(results_list, ranks_list, pathways_list) {
+plot_tables_faster <- function(
+    results_list,
+    ranks_list,
+    pathways_list) {
   # Ensure names are aligned and iterate over them
   pathway_names <- names(results_list)
 
