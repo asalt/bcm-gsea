@@ -68,6 +68,9 @@ source("./R/fgsea.R", fgsea_tools)
 plot_tools <- new.env()
 source("./R/plot.R", local = plot_tools)
 
+plot_utils <- new.env()
+source("./R/plot_utils.R", local = plot_utils)
+
 pca_tools <- new.env()
 source("./R/pca.R", local = pca_tools)
 
@@ -75,10 +78,12 @@ savedir <- params$savedir
 if (is.null(savedir)) {
   savedir <- "./plots"
 }
-save_func <- plot_tools$make_partial(
-  plot_tools$plot_and_save,
+save_func <- plot_utils$make_partial(
+  plot_utils$plot_and_save,
   path = savedir
 )
+
+TESTING <- FALSE
 ```
 # explanations
 
@@ -117,7 +122,7 @@ genesets_of_interest <- tibble::tribble(
   "C5", "GO:MF", TRUE
 ) %>% mutate(collection_name = stringr::str_c(category, subcategory, sep = "_")) # todo put this somewhere else
 
-list_of_geneset_dfs <- genesets
+list_of_geneset_dfs <- geneset_list
 
 
 genesets_list_of_lists <- list_of_geneset_dfs %>% purrr::map(geneset_tools$genesets_df_to_list)
@@ -217,15 +222,18 @@ msigdbr::msigdbr_collections()
 ## load gene sets
 
 ```{r, label='load params'}
+species <- params$species
+if (is.null(species)) species <- "Homo sapiens"
+
 # genesets_of_interest <- jsonlite::parse_json(params$genesets_json)
 if (!exists("genesets_of_interest")) {
-  genesets_of_interest <- jsonlite::fromJSON(params$genesets_json)
-  genesets_of_interest <- genesets_of_interest %>% dplyr::mutate(
-    collection_name = stringr::str_c(category, subcategory, sep = "_")
-  )
+  json_str <- params$genesets_json
+  genesets_of_interest <- io_tools$load_genesets_from_json(json_str)
+  # genesets_of_interest <- jsonlite::fromJSON(params$genesets_json)
+  # genesets_of_interest <- genesets_of_interest %>% dplyr::mutate(
+  #   collection_name = stringr::str_c(category, subcategory, sep = "_")
+  # )
 }
-
-species <- params$species
 
 
 # SPECIES <- "Homo sapiens" # or "Mus musculus" or Saccharomyces cerevisiae, and others
@@ -234,15 +242,24 @@ species <- params$species
 
 
 ```{r, label='get genesets'}
-# geneset_lists <- list_of_geneset_dfs %>% purrr::imap( ~geneset_tools$genesets_df_to_list(.x) )
-if (!exists("genesets_list_of_lists")) {
-  genesets_list_of_lists <- genesets_of_interest %>% purrr::map(geneset_tools$genesets_df_to_list)
+
+if (!exists("list_of_geneset_dfs")) {
+  list_of_geneset_dfs <- genesets_of_interest %>%
+    geneset_tools$get_collections(species = species)
 }
+
+if (!exists("genesets_list_of_lists")) {
+  genesets_list_of_lists <- list_of_geneset_dfs %>% purrr::map(geneset_tools$genesets_df_to_list)
+}
+
+
 ```
 
 ## prepare ranks
 
 ```{r, label='load ranks'}
+if (!exists('TESTING')) TESTING <- FALSE
+
 if ((!file.exists(params$volcanodir)) &
   (!file.exists(params$gct_path)) &
   (!file.exists(params$rankfiledir)) &
@@ -250,6 +267,7 @@ if ((!file.exists(params$volcanodir)) &
   print("no files present")
   knitr::knit_exit()
 }
+
 ```
 
 
@@ -260,6 +278,7 @@ volcanodir <- params$volcanodir
 gct_path <- params$gct_path
 ranks_from <- params$ranks_from
 
+gct <- NULL
 if ((file.exists(gct_path)) && (!exists("gct"))) gct <- cmapR::parse_gctx(gct_path)
 
 if (length(fs::dir_ls(rankfiledir, fail = F)) == 0) {
@@ -289,7 +308,7 @@ ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
 
 # run fgsea
 ```{r, label='run fgsea', cache=T}
-if (!TESTING == FALSE) {
+if (TESTING == FALSE) {
   results_list <- fgsea_tools$run_all_pathways(genesets_list_of_lists,
     ranks_list,
     parallel = T,
@@ -417,7 +436,7 @@ hts <- all_gsea_results %>% plot_tools$plot_results_all_collections()
 ```
 
 
-```{r, fig.height=12}
+```{r, fig.height=12, label="plot edges"}
 # library(org.Hs.eg.db)
 # gene_symbols <- AnnotationDbi::select(org.Hs.eg.db,
 #                                       keys = gct@rid
@@ -427,72 +446,11 @@ hts <- all_gsea_results %>% plot_tools$plot_results_all_collections()
 # gct@rdesc <- merged_data
 
 
-head(mat(gct))
+  (!file.exists(params$gct_path)) &
+if (!is.null(gct)){
+  ht_edge_plots <- plot_tools$plot_heatmap_of_edges(gct, results_list)
+}
 
-(head(gct@rdesc))
-
-names(results_list) %>%
-  purrr::map(
-    ~ {
-      collection_name <- .x
-      names(results_list[[collection_name]]) %>%
-        purrr::map(
-          ~ {
-            comparison_name <- .x
-            result <- results_list[[collection_name]][[comparison_name]]
-            print(collection_name)
-            print(comparison_name)
-            forplot <- result %>%
-              arrange(pval) %>%
-              head(10) %>%
-              mutate(leadingedgelist = stringr::str_split(leadingEdge, ","))
-            for (i in 1:nrow(forplot)) {
-              row <- forplot[i, ]
-              .id <- row$pathway
-              .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', "", x)))
-              .row_title <- row$pval
-
-              print(.id)
-              print(paste0("pval: ", row$pval))
-              print(paste0("padj: ", row$padj))
-              print(paste0("NES: ", row$NES))
-
-              # print(.leading_edge)
-
-              tryCatch(
-                {
-                  subgct <- cmapR::subset_gct(gct, rid = .leading_edge)
-                  ht <- plot_tools$make_heatmap(subgct)
-                  print(ht)
-                },
-                error = function(e) print(e$message)
-              )
-            }
-          }
-        )
-    }
-  )
-
-# results_list %>%
-#   purrr::imap(
-#     ~{
-#    collection_name <- .x
-#    comparisons <- .y
-#    # print(collection_name)
-#    comparisons %>%
-#        purrr::imap(
-#             ~{
-#                 gsea_res <- .x
-#                 comparison_name <- .y
-#                 print(comparison_name)
-#                 print(gsea_res)
-#                 # .row <- gsea_res %>% arrange(pval) %>% head(1)
-#                 # .leading_edge <- stringr::str_split(.row$leadingEdge)
-#                 # subgct <- cmapR::subset_gct( rids = .leading_edge )
-#                 # print(head(mat(subgct)))
-#
-#              })
-#   })
 ```
 
 ## pca and clustering
@@ -507,13 +465,12 @@ pca_objects <- all_gsea_results %>% pca_tools$do_all()
 
 
 ```{r}
-save_func <- purrr::partial(plot_tools$plot_and_save)
-pca_objects[[1]] %>% pca_tools$plot_biplot(title = "first pca object", save_func = save_func)
+pca_objects[[1]] %>% pca_tools$plot_biplot(title = "first pca object",
+ save_func = save_func)
 ```
 
 
 ```{r}
-save_func <- purrr::partial(plot_tools$plot_and_save)
 pca_objects %>% pca_tools$plot_all_biplots(save_func = save_func)
 ```
 
@@ -593,14 +550,16 @@ res <- plot_tools$plot_tables(
 ```
 
 ## examine rankorder
+not functional, need to move to supporting R file
 
 
-```{r}
+```{r, eval=F}
 # rankorder <- .GlobalEnv$get_rankorder(ranks_list[[1]], geneset_lists[[1]][[1]]  )
 
 
+
 genesets_of_interest <- genesets_list_of_lists[[1]]
-rankobject <- rankobjs[[1]]
+rankobject <- ranks_list[[1]]
 # enplot_data <- plotEnrichmentData(genesets_of_interest[[1]], rankobject)
 collection_name <- names(genesets_list_of_lists)[[1]]
 geneset_of_interest_name <- names(genesets_of_interest)[[1]]
@@ -616,7 +575,7 @@ rankorder_object <- fgsea_tools$get_rankorder(
 rankorder_object %>% plot_tools$plotES() +
   labs(title = geneset_of_interest_name)
 ```
-```{r}
+```{r, eval=F}
 make_selection <- function(x) {
   x <- x %>% arrange(rank)
   es_min <- x %>%
@@ -671,7 +630,7 @@ with(
 
 
 
-```{r}
+```{r, eval=F}
 rankorder_object <- fgsea_tools$get_rankorder(genesets_of_interest[[1]], rankobject)
 
 enplot_data <- plotEnrichmentData(genesets_of_interest[[1]], rankobject)
@@ -697,7 +656,7 @@ plot_tools$edgeplot1(rankorder_object = rankorder_object) +
   geom_text_repel(data = . %>% filter(!is.na(stat_tick)) %>% make_selection(), aes(label = gene_symbol), max.overlaps = Inf)
 ```
 
-```{r}
+```{r, eval=F}
 plot_tools$edgeplot1(rankorder_object = rankorder_object) +
   geom_text_repel(data = . %>% filter(!is.na(stat_tick)) %>% make_selection(), aes(label = gene_symbol), max.overlaps = Inf)
 ```
