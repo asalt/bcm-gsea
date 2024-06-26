@@ -194,19 +194,19 @@ prepare_data_for_barplot <- function(df) {
     mutate(pathway = str_replace_all(pathway, "_", " ") %>% str_wrap(width = 40)) %>%
     mutate(pathway = factor(pathway, levels = unique(pathway), ordered = T)) %>%
     arrange(pathway) # %>%
-  sel <- sel %>%
-    mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1) %>%
-    dplyr::mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>%
-    dplyr::mutate(outline_val = dplyr::if_else(padj < .05, "black", NA))
+  # sel <- sel %>%
+  #   mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1) %>%
+  #   dplyr::mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>%
+  #   dplyr::mutate(outline_val = dplyr::if_else(padj < .05, "black", NA))
 
   # Ensure leadingEdge is treated as a character vector
   sel <- sel %>%
-    mutate(leadingEdge = as.character(leadingEdge)) %>%
-    mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
-
-  sel <- sel %>%
+    rowwise() %>%
+    mutate(leadingEdgeNum = length(leadingEdge)) %>%
     mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>%
+    ungroup() %>%
     mutate(outline_val = dplyr::if_else(padj < .05, "black", NA))
+
 
   # sel %<>% mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
   # sel %<>% mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size))
@@ -432,10 +432,12 @@ concat_results_one_collection <- function(list_of_dfs) {
 }
 
 concat_results_all_collections <- function(list_of_lists, ...) {
+  .dotargs <- list(...) ## this is not used nor passed to inner func
+
   res <- list_of_lists %>%
-    purrr::imap(
+    purrr::map(
       ~ {
-        concat_results_one_collection(.x, ...)
+        concat_results_one_collection(.x)
       }
     ) # %>%
   # purrr::reduce(rbind)

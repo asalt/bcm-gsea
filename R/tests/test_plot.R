@@ -159,7 +159,7 @@ test_that("test concat results one collection", {
 })
 
 
-test_that("test concat results all collection", {
+test_that("test concat results all collections", {
   res <- TEST_DATA
   res_c <- res %>% plot_tools$concat_results_all_collections()
   testthat::expect_true(
@@ -172,8 +172,9 @@ test_that("test heatmap of NES", {
   res <- TEST_DATA
   res_c <- res %>% plot_tools$concat_results_all_collections()
   ht <- res_c[[1]] %>% plot_tools$plot_results_one_collection()
+
   testthat::expect_true(
-    "HeatmapList" %in% class(ht)
+    "Heatmap" %in% class(ht)
   )
 })
 
@@ -195,7 +196,7 @@ test_that("test run though all heatmaps of NES", {
   # })
   for (ht in ht_list) {
     testthat::expect_true(
-      "HeatmapList" %in% class(ht)
+      "Heatmap" %in% class(ht)
     )
   }
 })
@@ -203,8 +204,7 @@ test_that("test run though all heatmaps of NES", {
 
 
 
-
-test_that(" test test data with collapse", {
+test_that("test test data with collapse", {
   # scratch
   # TEST_DATA$`C5_GO:BP` %>% map(~ .x %>%
   #     pull(mainpathway) %>%
@@ -212,8 +212,6 @@ test_that(" test test data with collapse", {
   # TEST_DATA_withCollapse$`C5_GO:BP` %>% map(~ .x %>%
   #     pull(mainpathway) %>%
   #     table())
-
-
 
   # the test
   TEST_DATA_withCollapse
