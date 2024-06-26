@@ -222,8 +222,6 @@ msigdbr::msigdbr_collections()
 ## load gene sets
 
 ```{r, label='load params'}
-species <- params$species
-if (is.null(species)) species <- "Homo sapiens"
 
 # genesets_of_interest <- jsonlite::parse_json(params$genesets_json)
 if (!exists("genesets_of_interest")) {
@@ -242,6 +240,9 @@ if (!exists("genesets_of_interest")) {
 
 
 ```{r, label='get genesets'}
+
+species <- params$species
+if (is.null(species)) species <- "Homo sapiens"
 
 if (!exists("list_of_geneset_dfs")) {
   list_of_geneset_dfs <- genesets_of_interest %>%
@@ -372,7 +373,7 @@ results_list[[1]] %>% imap(
 
 ## plotting all barplots for each comparison across all genesets
 ```{r, fig.width=10, fig.height=8}
-plts <- results_list %>% plot_tools$all_barplots_with_numbers(save_func = save_func)
+plts <- results_list %>% plot_tools$all_barplots_with_numbers(save_func = make_partial(save_func, width=12))
 # if youw ant to print the plots:
 # for (plt in plts){
 #   print(plt)
