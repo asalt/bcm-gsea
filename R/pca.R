@@ -99,6 +99,7 @@ plot_biplot <- function(
     pointSize = 3,
     sizeLoadingsNames = 2,
     colby = NULL, # or a string like 'group'
+    shape = NULL, # or a string like 'group'
     encircle = ifelse(!is.null(colby), T, F),
     title = "",
     ...) {
@@ -128,34 +129,48 @@ plot_biplot <- function(
       .x1 <- .x[[1]]
       .x2 <- .x[[2]]
 
-      plt <- PCAtools::biplot(
-        pca_object,
-        x = .x1,
-        y = .x2,
-        showLoadings = showLoadings,
-        labSize = labSize,
-        pointSize = pointSize,
-        sizeLoadingsNames = sizeLoadingsNames,
-        colby = colby,
-        # shape="source",
-        legendPosition = "right",
-        encircle = encircle,
-        title = title
-      ) #+      coord_equal()
+      if (!.x1 %in% names(pca_object$rotated)){
+        warning("not enough PCs")
+        return()
+    }
 
-      if (!is.null(save_func)) {
-        current_args <- get_args(save_func)
-        filename <- current_args$filename
-        if (is.null(filename)) {
-          filename <- paste0("pca_biplot_")
-        }
-        filename <- paste0(filename, "_", .x1, "_", .x2)
-        save_func(plot_code = function() print(plt), filename = filename)
-      } else {
-        print(plt)
+      if (!.x2 %in% names(pca_object$rotated)){
+        warning("not enough PCs")
+        return()
+    }
+
+    plt <- PCAtools::biplot(
+      pca_object,
+      x = .x1,
+      y = .x2,
+      showLoadings = showLoadings,
+      labSize = labSize,
+      pointSize = pointSize,
+      sizeLoadingsNames = sizeLoadingsNames,
+      colby = colby,
+      shape=shape,
+      # shape="source",
+      legendPosition = "right",
+      encircle = encircle,
+      title = title,
+      max.overlaps = Inf,
+      maxoverlapsConnectors = Inf,
+      ntopLoadings=5,
+    ) #+      coord_equal()
+
+    if (!is.null(save_func)) {
+      current_args <- get_args(save_func)
+      filename <- current_args$filename
+      if (is.null(filename)) {
+        filename <- paste0("pca_biplot_")
       }
-      return(plt)
-    })
+      filename <- paste0(filename, "_", .x1, "_", .x2)
+      save_func(plot_code = function() print(plt), filename = filename)
+    } else {
+      print(plt)
+    }
+    return(plt)
+  })
   return(plts)
 }
 
