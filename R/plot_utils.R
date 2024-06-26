@@ -80,7 +80,7 @@ plot_and_save <- function(
   full_path <- file.path(path, paste0(filename, ".", type))
   if (!fs::dir_exists(path)) fs::dir_create(path)
 
-  if (file.exists(full_path) && !ignore_exists) {
+  if (file.exists(full_path) && ignore_exists == TRUE) {
     return()
   }
 

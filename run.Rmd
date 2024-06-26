@@ -373,7 +373,7 @@ results_list[[1]] %>% imap(
 
 ## plotting all barplots for each comparison across all genesets
 ```{r, fig.width=10, fig.height=8}
-plts <- results_list %>% plot_tools$all_barplots_with_numbers(save_func = make_partial(save_func, width=12))
+plts <- results_list %>% plot_tools$all_barplots_with_numbers(save_func = plot_utils$make_partial(save_func, width=12))
 # if youw ant to print the plots:
 # for (plt in plts){
 #   print(plt)
@@ -386,7 +386,7 @@ prewritten function to merge gsea results across comparisons and make faceted ba
 ```{r, fig.width=12, fig.height=12}
 plts <- results_list %>%
   plot_tools$process_results_across_rnks(
-    save_func = save_func
+    save_func = plot_utils$make_partial(save_func, width=14)
   )
 
 for (plt in plts) {
