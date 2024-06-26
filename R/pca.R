@@ -10,10 +10,15 @@ src_dir <- file.path(here("R"))
 fgsea_tools <- new.env()
 source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
-plot_tools <- new.env()
-source(file.path(src_dir, "./plot.R"), local = plot_tools)
-make_partial <- plot_tools$make_partial
-get_args <- plot_tools$get_args
+# plot_tools <- new.env()
+# source(file.path(src_dir, "./plot.R"), local = plot_tools)
+
+
+plot_utils <- new.env()
+source(file.path(src_dir, "./plot_utils.R"), local = plot_utils)
+make_partial <- plot_utils$make_partial
+get_args <- plot_utils$get_args
+
 
 #' handle 1 long form gsea result table
 #'

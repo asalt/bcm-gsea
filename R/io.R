@@ -145,3 +145,14 @@ ranks_dfs_to_lists <- function(rnkdfs) {
   )
   return(ranks_list)
 }
+
+load_genesets_from_json <- function(json_str){
+
+  genesets_of_interest <- jsonlite::fromJSON(json_str)
+  genesets_of_interest <- genesets_of_interest %>% dplyr::mutate(
+    collection_name = stringr::str_c(category, subcategory, sep = "_")
+  )
+  return(genesets_of_interest)
+
+}
+

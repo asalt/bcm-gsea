@@ -4,6 +4,7 @@ suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(cmapR))
 suppressPackageStartupMessages(library(ComplexHeatmap))
 suppressPackageStartupMessages(library(circlize))
 
@@ -18,89 +19,11 @@ source(file.path(src_dir, "./utils.R"), local = util_tools)
 fgsea_tools <- new.env()
 source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
-
-# Helper function to get current preset arguments or an empty list if none are set
-get_args <- function(f) {
-  if (!is.null(attr(f, "preset_args"))) {
-    return(attr(f, "preset_args"))
-  } else {
-    return(list()) # Return an empty list for easier handling
-  }
-}
-get_arg <- function(f, arg) {
-  args <- get_args(f)
-  val <- args[[arg]]
-  if (is.null(val)) {
-    return("")
-  }
-  return(val)
-}
-
-# Custom partial function with dynamic argument handling
-make_partial <- function(.f, ...) {
-  # Retrieve current preset arguments, if any
-  current_args <- get_args(.f)
-
-  # New fixed arguments
-  args_fixed <- list(...)
-
-  # Ensure that named arguments are handled properly
-  if (!is.null(names(args_fixed))) {
-    # Overwrite or add new arguments
-    current_args[names(args_fixed)] <- args_fixed
-  }
-
-  # Inner function to call .f with the correct arguments
-  inner <- function(...) {
-    # Combine fixed arguments with any new ones provided at call time
-    args <- modifyList(current_args, list(...))
-    do.call(.f, args)
-  }
-
-  # Attach updated preset arguments to the inner function for later inspection
-  attr(inner, "preset_args") <- current_args
-
-  return(inner)
-}
-
-
-plot_and_save <- function(
-    plot_code,
-    filename,
-    path = file.path(
-      basedir,
-      "plots/"
-    ),
-    type = "pdf",
-    width = 8,
-    height = 6,
-    ignore_exists = F,
-    ...) {
-  # Setup: Open the appropriate graphics device
-
-  full_path <- file.path(path, paste0(filename, ".", type))
-  if (!fs::dir_exists(path)) fs::dir_create(path)
-
-  if (file.exists(full_path) && !ignore_exists) {
-    return()
-  }
-
-  if (type == "pdf") {
-    pdf(full_path, width = width, height = height)
-  } else if (type == "png") {
-    png(full_path, width = width, height = height, units = "in", res = 300)
-  } else {
-    stop("Unsupported file type")
-  }
-
-  # Execute the plot code (passed as a function)
-  h <- plot_code()
-
-  # Teardown: Close the graphics device
-  dev.off()
-
-  return(h)
-}
+plot_utils <- new.env()
+source(file.path(src_dir, "./plot_utils.R"), local = plot_utils)
+make_partial <- plot_utils$make_partial
+get_args <- plot_utils$get_args
+get_arg <- plot_utils$get_arg
 
 
 make_heatmap <- function(
@@ -158,6 +81,52 @@ make_heatmap <- function(
 
   ht
 }
+
+plot_heatmap_of_edges <- function(
+    gct,
+    results_list,
+    save_func = NULL,
+    ...) {
+  names(results_list) %>%
+    purrr::map(
+      ~ {
+        collection_name <- .x
+        names(results_list[[collection_name]]) %>%
+          purrr::map(
+            ~ {
+              comparison_name <- .x
+              result <- results_list[[collection_name]][[comparison_name]]
+              print(collection_name)
+              print(comparison_name)
+              forplot <- result %>%
+                arrange(pval) %>%
+                head(10) %>%
+                mutate(leadingedgelist = stringr::str_split(leadingEdge, ","))
+              for (i in 1:nrow(forplot)) {
+                row <- forplot[i, ]
+                .id <- row$pathway
+                .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', "", x)))
+                .row_title <- row$pval
+
+                print(.id)
+                print(paste0("pval: ", row$pval))
+                print(paste0("padj: ", row$padj))
+                print(paste0("NES: ", row$NES))
+                tryCatch(
+                  {
+                    subgct <- cmapR::subset_gct(gct, rid = .leading_edge)
+                    ht <- plot_tools$make_heatmap(subgct)
+                    print(ht)
+                  },
+                  error = function(e) print(e$message)
+                )
+              }
+            }
+          )
+      }
+    )
+}
+
 
 
 custom_labeller <- function(value) {
