@@ -98,8 +98,8 @@ plot_biplot <- function(
     labSize = 2,
     pointSize = 3,
     sizeLoadingsNames = 2,
-    colby = "group",
-    encircle = T,
+    colby = NULL, # or a string like 'group'
+    encircle = ifelse(!is.null(colby), T, F),
     title = "",
     ...) {
   args <- list(...)
@@ -109,12 +109,15 @@ plot_biplot <- function(
     save_func <- NULL
   }
 
-  vec <- c("PC1", "PC2", "PC3") # "PC4")
+  vec <- paste0("PC", 1:top_pc)
+  # vec <- c("PC1", "PC2", "PC3") # "PC4")
   pcs <- combn(vec, 2) %>%
     as.data.frame() %>%
     as.list()
   #
-  if (!colby %in% colnames(pca_object$metadata)) {
+  if (!is.null(colby) &&
+    !is.null(pca_object$metadata) &&
+    !colby %in% colnames(pca_object$metadata)) {
     warning(paste0(colby, " not found in metadata"))
     colby <- NULL
     encircle <- F
