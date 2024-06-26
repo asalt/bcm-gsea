@@ -66,6 +66,7 @@ test_render <- function() {
     output_file = "test_defaults.html",
     params = list(
       rankfiledir = "testdata",
+      savedir = output_dir,
       genesets_json = '[{"category": "H", "subcategory": ""}]'
     )
   )
@@ -78,6 +79,7 @@ test_invalid_dir <- function() {
     output_file = "test_invalid_dir.html",
     params = list(
       rankfiledir = "does-not-exist",
+      savedir = output_dir,
       genesets_json = '[{"category": "H", "subcategory": ""}]'
     )
   )
@@ -111,6 +113,7 @@ test_one <- function() {
     output_file = "test_full.html",
     params = list(
       rankfiledir = data_dir,
+      savedir = file.path(output_dir, "test_full"),
       genesets_json = '[{"category": "H", "subcategory": ""}]'
     )
   )

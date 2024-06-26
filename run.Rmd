@@ -341,23 +341,9 @@ head(results_list[[1]][[1]])
 
 
 ```{r, label=save}
-names(results_list) %>%
-  purrr::map(
-    ~ {
-      collection_name <- .x
-      names(results_list[[collection_name]]) %>%
-        purrr::map(
-          ~ {
-            comparison_name <- .x
-            result <- results_list[[collection_name]][[comparison_name]]
-            print(collection_name)
-            print(comparison_name)
-            outf <- paste0(make.names(collection_name), "_", make.names(comparison_name), ".tsv")
-            if (!fs::file_exists(outf)) result %>% readr::write_tsv(outf)
-          }
-        )
-    }
-  )
+results_list %>% 
+  io_tools$save_gsea_results(savedir=file.path(savedir, "gsea_tables"))
+
 ```
 
 ## making plots

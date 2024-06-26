@@ -146,13 +146,43 @@ ranks_dfs_to_lists <- function(rnkdfs) {
   return(ranks_list)
 }
 
-load_genesets_from_json <- function(json_str){
-
+load_genesets_from_json <- function(json_str) {
   genesets_of_interest <- jsonlite::fromJSON(json_str)
   genesets_of_interest <- genesets_of_interest %>% dplyr::mutate(
     collection_name = stringr::str_c(category, subcategory, sep = "_")
   )
   return(genesets_of_interest)
-
 }
 
+
+save_gsea_results <- function(
+    results_list,
+    savedir = NULL) {
+  if (is.null(savedir)) savedir <- "gsea_tables"
+  if (!file.exists(savedir)) fs::dir_create(savedir)
+  names(results_list) %>%
+    purrr::map(
+      ~ {
+        collection_name <- .x
+        names(results_list[[collection_name]]) %>%
+          purrr::map(
+            ~ {
+              comparison_name <- .x
+              result <- results_list[[collection_name]][[comparison_name]]
+              print(collection_name)
+              print(comparison_name)
+
+              outf <- paste0(
+                make.names(collection_name),
+                "_",
+                make.names(comparison_name),
+                ".tsv"
+              )
+              outf <- file.path(savedir, outf)
+              result %>% readr::write_tsv(outf)
+              # if (!fs::file_exists(outf)) result %>% readr::write_tsv(outf)
+            }
+          )
+      }
+    )
+}
