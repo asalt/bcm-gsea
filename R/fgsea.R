@@ -206,12 +206,12 @@ get_rankorder <- function(
     rankobj,
     geneset_df = NULL) {
   # geneset_df has addl info
-  if (!class(geneset) == "character") {
-    stop("geneset must be a character")
-  }
-  if (!class(rankobj) == "numeric") {
-    stop("rankobj must be a named numeric vector")
-  }
+  # if (!class(geneset) == "character") {
+  #   stop("geneset must be a character")
+  # }
+  # if (!class(rankobj) == "numeric") {
+  #   stop("rankobj must be a named numeric vector")
+  # }
 
   enplot_data <- plotEnrichmentData(geneset, rankobj)
   rnkorder <- -rankobj %>% rank()

@@ -84,42 +84,10 @@ test_fgsea_runone <- function() {
   return("Success")
 }
 
-test_get_edge <- function() {
-  data <- fgsea_tools$simulate_preranked_data()
-  geneset <- geneset_tools$get_collection("H", "")
-  geneset_list <- geneset_tools$genesets_df_to_list(geneset)
-  rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
-  rankobj <- rankobjs[[1]]
-
-
-  res <- rankobj %>% fgsea_tools$run_one(geneset_list) # we aren't actually using this result
-  # all we need for this test is the rankobj and gene list
-
-  geneset_name <- names(geneset_list)[1]
-  geneset_collection_ids <- geneset_list[[geneset_name]]
-
-  rankorder_edge <- fgsea_tools$get_rankorder(rankobj, geneset_collection_ids)
-
-  rankorder_edge_specific <- rankorder_edge %>% filter(id %in% geneset_collection_ids)
-
-  assertthat::noNA(rankorder_edge_specific$stat_tick)
-  assertthat::assert_that(
-    all(rankorder_edge_specific$stat == rankorder_edge_specific$stat_tick),
-    TRUE
-  )
-
-
-  return("Success")
-}
-
-
 test_that("test fgsea runone", {
   expect_equal(test_fgsea_runone(), "Success")
 })
 
-test_that("test get edge", {
-  expect_equal(test_get_edge(), "Success")
-})
 
 
 
@@ -237,4 +205,64 @@ test_that("test run all collapse.", { # this will take a while. testing if can s
       nrow() > 1
   )
   #
+})
+
+
+test_get_edge <- function() {
+  data <- fgsea_tools$simulate_preranked_data()
+  geneset <- geneset_tools$get_collection("H", "")
+  geneset_list <- geneset_tools$genesets_df_to_list(geneset)
+  rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
+  rankobj <- rankobjs[[1]]
+
+
+  res <- rankobj %>% fgsea_tools$run_one(geneset_list) # we aren't actually using this result
+  # all we need for this test is the rankobj and gene list
+
+  geneset_name <- names(geneset_list)[1]
+  geneset_collection_ids <- geneset_list[[geneset_name]]
+
+  rankorder_edge_list <- fgsea_tools$get_rankorder(geneset_collection_ids, rankobj)
+
+  assertthat::assert_that(
+    "list" %in% class(rankorder_edge_list)
+  )
+
+  assertthat::assert_that(
+    "edge" %in% names(rankorder_edge_list)
+  )
+  # now look at edge
+
+  edge <- rankorder_edge_list$edge
+
+  assertthat::assert_that(
+    "data.frame" %in% class(edge)
+  )
+
+  assertthat::assert_that(
+    "id" %in% names(edge)
+  )
+
+  .expected_names <- c("id", "rank", "stat", "ES", "stat_tick") # , "stat_stat")
+  for (name in .expected_names) {
+    assertthat::assert_that(
+      name %in% names(edge)
+    )
+  }
+
+
+
+  edge_specific <- edge %>% filter(id %in% geneset_collection_ids)
+
+  assertthat::noNA(edge_specific$stat_tick)
+  assertthat::assert_that(
+    all(edge_specific$stat == edge_specific$stat_tick),
+    TRUE
+  )
+  return("Success")
+}
+
+
+test_that("test get edge", {
+  expect_equal(test_get_edge(), "Success")
 })
