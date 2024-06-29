@@ -326,7 +326,7 @@ process_results_across_rnks <- function(
     # pathway_df <- get_pathway_info(geneset_name)
     # .merge <- left_join(res , pathway_df, by= )
     if (!is.null(save_func)) {
-      filename <- paste0(get_arg(save_func, "filename"), "_", geneset_name)
+      filename <- paste0(get_arg(save_func, "filename"), "_", make.names(geneset_name))
       save_func <- make_partial(save_func, filename = filename)
     }
     p <- res %>% barplot_with_numbers(
@@ -575,14 +575,18 @@ plot_results_one_collection <- function(
     }
   }
 
+  height <- 6 + (nrows(dfp) * .16)
   ht <- ComplexHeatmap::Heatmap(
     dfp %>% as.matrix(),
     col = col,
-    cluster_rows = F,
-    cluster_columns = F,
+    cluster_rows = T,
+    cluster_columns = T,
     heatmap_legend_param = heatmap_legend_param,
     column_split = cut_by,
     row_labels = rownames(dfp) %>%
+      str_replace_all("_", " ") %>%
+      str_wrap(width = 28),
+    column_labels = colnames(dfp) %>%
       str_replace_all("_", " ") %>%
       str_wrap(width = 28),
     row_names_gp = grid::gpar(fontsize = 12),
@@ -604,7 +608,8 @@ plot_results_one_collection <- function(
   }
 
   if (!is.null(save_func)) {
-    save_func(do_draw)
+    save_func <- make_partial(save_func, width = height)
+    save_func(plot_code=do_draw)
   }
 
   return(ht)
