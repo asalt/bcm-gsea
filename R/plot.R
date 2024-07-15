@@ -174,7 +174,7 @@ prepare_data_for_barplot <- function(df) {
     mutate(leadingEdgeNum = length(leadingEdge)) %>%
     mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>%
     ungroup() %>%
-    mutate(outline_val = dplyr::if_else(padj < .05, "black", NA))
+    mutate(outline_val = dplyr::if_else(padj < .25, "black", NA))
 
 
   # sel %<>% mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
@@ -213,8 +213,8 @@ barplot_with_numbers <- function(
     ) +
     # scale_color_gradient(low = "#0000ffee", high = "#ff0000ee") +  # Adjust colors to represent p-values
     # geom_point() +
-    scale_fill_gradient2(high = "grey", mid = "#ba2020", low = "#c92020", midpoint = .25) +
-    geom_col(aes(color = sel$outline_val)) +
+    scale_fill_gradient2(high = "grey", mid = "#ba2020", low = "#c92020", midpoint = .25, limits = c(0,1)) +
+    geom_col(size=1.0, aes(color = sel$outline_val)) +
     scale_color_identity() +
     labs(title = title %>% labeller_func()) +
     # scale_color_manual(values=c("black", 'blue'))+
@@ -346,7 +346,7 @@ process_results_across_rnks <- function(
       distinct(pathway) %>%
       dim() %>%
       .[1]
-    height <- max(6, npathways * .5)
+    height <- min(6, npathways * .5)
 
     nfacets <- p$data %>%
       distinct(rankname) %>%
@@ -354,7 +354,7 @@ process_results_across_rnks <- function(
       .[1]
     nfacetrows <- nfacets %/% 3
     height <- height * nfacetrows
-    height <- min(height, 34)
+    # height <- min(height, 34)
     height <- max(height, 6)
 
     max_facet_len <- res$rankname %>%
@@ -575,17 +575,22 @@ plot_results_one_collection <- function(
     }
   }
 
-  height <- 6 + (nrows(dfp) * .16)
+  # height <- 6 + (nrows(dfp) * .16)
+  .ncol <- ncol(dfp)
   ht <- ComplexHeatmap::Heatmap(
     dfp %>% as.matrix(),
     col = col,
     cluster_rows = T,
     cluster_columns = T,
     heatmap_legend_param = heatmap_legend_param,
+    column_gap = unit(1, "mm"),
+    width = ncol(dfp) * 9,
+    height = nrow(dfp) * 5,
+    border = T,
     column_split = cut_by,
     row_labels = rownames(dfp) %>%
       str_replace_all("_", " ") %>%
-      str_wrap(width = 28),
+      str_wrap(width = 42),
     column_labels = colnames(dfp) %>%
       str_replace_all("_", " ") %>%
       str_wrap(width = 28),
@@ -599,6 +604,7 @@ plot_results_one_collection <- function(
     column_title = title,
     cell_fun = cell_fun # Use the updated cell_fun here
   )
+  ._ <- draw(ht) # necessary to get size correct
 
   do_draw <- function() {
     draw(ht,
@@ -607,8 +613,10 @@ plot_results_one_collection <- function(
     )
   }
 
+  height <- 8 + (nrow(dfp) * .20)
+  width <- 6 + (nrow(dfp) * .26)
   if (!is.null(save_func)) {
-    save_func <- make_partial(save_func, width = height)
+    save_func <- make_partial(save_func, height=height, width = width)
     save_func(plot_code=do_draw)
   }
 
