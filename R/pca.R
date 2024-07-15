@@ -56,6 +56,7 @@ do_one <- function(
   if (is.null(metadata)) {
     metadata <- data.frame(id = unique(gsea_object$var))
     rownames(metadata) <- metadata$id
+    metadata$dummy <- "a" ## ?
   }
 
   gsea_object <- fgsea_tools$filter_on_mainpathway(gsea_object,
@@ -77,7 +78,7 @@ do_one <- function(
   wide_df$pathway <- NULL
   wide_df[is.na(wide_df)] <- 0
 
-  pca_res <- wide_df %>% PCAtools::pca(metadata = metadata)
+  pca_res <- wide_df %>% PCAtools::pca(metadata = metadata[colnames(wide_df), ])
 
   return(pca_res)
 }
