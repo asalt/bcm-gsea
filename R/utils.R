@@ -49,3 +49,39 @@ make_random_gct <- function(nrow = 10, ncol = 4) {
   gct <- cmapR::GCT(mat = .mat, rid = .rids, cid = .cids, cdesc = .cdesc, rdesc = .rdesc)
   gct
 }
+
+
+# this is exploratory rewrite of plot_utils::make_partial
+get_arg <- function(f, arg, default = "") {
+  args <- if (!is.null(attr(f, "preset_args"))) attr(f, "preset_args") else list()
+  if (arg %in% names(args)) {
+    return(args[[arg]])
+  }
+  return(default)
+}
+
+# Revised make_partial using an environment for cleaner argument handling
+make_partial <- function(.f, ...) {
+  # Environment to store arguments
+  env <- new.env()
+  env$preset_args <- if (!is.null(attr(.f, "preset_args"))) attr(.f, "preset_args") else list()
+
+  # New fixed arguments
+  args_fixed <- list(...)
+  
+  # Combine old and new arguments
+  if (!is.null(names(args_fixed))) {
+    env$preset_args[names(args_fixed)] <- args_fixed
+  }
+  
+  # Inner function using environment
+  inner <- function(...) {
+    combined_args <- modifyList(env$preset_args, list(...))
+    do.call(.f, combined_args)
+  }
+  
+  # Attach environment as an attribute (optional but can be helpful for debugging)
+  attr(inner, "preset_args", env$preset_args)
+  
+  return(inner)
+}
