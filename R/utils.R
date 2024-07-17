@@ -60,6 +60,15 @@ get_arg <- function(f, arg, default = "") {
   return(default)
 }
 
+# another version, maybe easier to read
+get_arg <- function(f, arg, default = "") {
+  args <- attr(f, "preset_args") # will return NULL if no attr
+  if (!is.null(args) && !is.null(args[[arg]])) {
+    return(args[[arg]])
+  }
+  return(default)
+}
+
 # Revised make_partial using an environment for cleaner argument handling
 make_partial <- function(.f, ...) {
   # Environment to store arguments
