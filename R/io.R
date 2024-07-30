@@ -16,14 +16,18 @@ make_random_gct <- function(nrow = 10, ncol = 4) {
   ncol <- max(ncol, 1)
   .mat <- matrix(runif(nrow * ncol), nrow = nrow, ncol = ncol)
   .rids <- seq(1, dim(.mat)[1]) %>% as.character()
+  rownames(.mat) <- .rids
+
   .cids <- seq(1, dim(.mat)[2]) %>% as.character()
   .cids <- paste0("X", .cids)
   .cdesc <- data.frame(
+    id = .cids,
     metavar1 = sample(letters[1:5], ncol, replace = T),
     metavar2 = sample(letters[1:5], ncol, replace = T)
   )
   .rdesc <- data.frame(
-    rdesc = paste0("gene", seq(1, nrow))
+    id = rownames(.mat),
+    rdesc = rownames(.mat)
   )
   gct <- cmapR::GCT(
     mat = .mat,
@@ -32,7 +36,9 @@ make_random_gct <- function(nrow = 10, ncol = 4) {
     cdesc = .cdesc,
     rdesc = .rdesc
   )
-  gct
+  #
+  return(gct)
+  #
 }
 
 create_rnkfiles_from_emat <- function(

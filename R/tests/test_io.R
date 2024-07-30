@@ -124,7 +124,11 @@ test_that("make random gct works", {
   expect_equal(length(result@rid), 50)
   expect_equal(length(result@cid), 5)
   expect_equal(nrow(result@cdesc), 5)
-  expect_equal(ncol(result@cdesc), 2)
+  expect_equal(ncol(result@cdesc), 3) # expected based on how make_random_gct is coded. hardcoded id and 2 metadata cols
+
+  # expect_success( # test we can melt
+  #   result %>% melt_gct()
+  # )
 })
 
 # Test that the function creates an object of the correct type
