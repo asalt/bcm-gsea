@@ -1,5 +1,6 @@
-library(cmapR)
-library(magrittr)
+suppressPackageStartupMessages(library(cmapR))
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(dplyr))
 
 
 myzscore <- function(value, minval = NA, remask = TRUE) {
@@ -22,6 +23,9 @@ myzscore <- function(value, minval = NA, remask = TRUE) {
   if (remask == TRUE) {
     out[mask] <- NA
   }
+  # coerce to vector
+  out <- as.vector(out)
+
   return(out)
 }
 
@@ -30,6 +34,53 @@ dist_no_na <- function(mat) {
   edist <- dist(mat)
   return(edist)
 }
+
+scale_gct <- function(gct, subset = NULL) {
+  # Start the pipe with the initial gct object
+  res <- gct %>%
+    melt_gct() %>%
+    {
+      # Conditionally add group_by
+      if (!is.null(subset)) {
+        group_by(., id.x, !!sym(subset))
+      } else {
+        group_by(., id.x)
+      }
+    } %>%
+    dplyr::mutate(zscore = util_tools$myzscore(value)) %>%
+    dplyr::ungroup()
+
+  # make a new gct and return
+  res <- res %>%
+    dplyr::select(id.x, id.y, zscore) %>%
+    tidyr::pivot_wider(names_from = id.y, values_from = zscore) %>%
+    as.data.frame()
+  rownames(res) <- res$id.x
+  res$id.x <- NULL
+  res <- as.matrix(res)
+  rdesc <- gct@rdesc
+  cdesc <- gct@cdesc
+
+  if (length(colnames(gct@rdesc)) == 1) {
+    rdesc["dummy"] <- "X"
+  }
+
+  if (length(colnames(res)) == 1) {
+    rdesc["dummy"] <- "X"
+  }
+
+  newgct <- new("GCT",
+    mat = res,
+    rid = rownames(res),
+    cid = colnames(res),
+    rdesc = rdesc[rownames(res), ],
+    cdesc = cdesc[colnames(res), ]
+  )
+
+  return(newgct)
+}
+
+
 
 make_random_gct <- function(nrow = 10, ncol = 4) {
   set.seed(369)
@@ -51,22 +102,33 @@ make_random_gct <- function(nrow = 10, ncol = 4) {
 }
 
 
-# this is exploratory rewrite of plot_utils::make_partial
-get_arg <- function(f, arg, default = "") {
-  args <- if (!is.null(attr(f, "preset_args"))) attr(f, "preset_args") else list()
-  if (arg %in% names(args)) {
-    return(args[[arg]])
-  }
-  return(default)
-}
+# # this is exploratory rewrite of plot_utils::make_partial
+# get_arg <- function(f, arg, default = "") {
+#   args <- if (!is.null(attr(f, "preset_args"))) attr(f, "preset_args") else list()
+#   if (arg %in% names(args)) {
+#     return(args[[arg]])
+#   }
+#   return(default)
+# }
 
 # another version, maybe easier to read
+# rewrite of plot_utils::make_partial
 get_arg <- function(f, arg, default = "") {
   args <- attr(f, "preset_args") # will return NULL if no attr
   if (!is.null(args) && !is.null(args[[arg]])) {
     return(args[[arg]])
   }
   return(default)
+}
+
+# another version, maybe easier to read
+# rewrite of plot_utils::make_partial
+get_args <- function(f, ...) {
+  args <- attr(f, "preset_args") # will return NULL if no attr
+  if (!is.null(args)) {
+    return(args)
+  }
+  return(list())
 }
 
 # Revised make_partial using an environment for cleaner argument handling
@@ -77,20 +139,20 @@ make_partial <- function(.f, ...) {
 
   # New fixed arguments
   args_fixed <- list(...)
-  
+
   # Combine old and new arguments
   if (!is.null(names(args_fixed))) {
     env$preset_args[names(args_fixed)] <- args_fixed
   }
-  
+
   # Inner function using environment
   inner <- function(...) {
     combined_args <- modifyList(env$preset_args, list(...))
     do.call(.f, combined_args)
   }
-  
+
   # Attach environment as an attribute (optional but can be helpful for debugging)
   attr(inner, "preset_args", env$preset_args)
-  
+
   return(inner)
 }
