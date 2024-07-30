@@ -13,7 +13,11 @@ source("../geneset_utils.R", local = geneset_tools)
 fgsea_tools <- new.env()
 source("../fgsea.R", local = fgsea_tools)
 
+# ==================================
+data_dir <- "test_data" %>% fs::path_abs()
+output_dir <- "test_output" %>% fs::path_abs()
 
+# ==================================
 
 
 trycatch <- function(expr, silent = TRUE) {
@@ -25,8 +29,6 @@ trycatch <- function(expr, silent = TRUE) {
 }
 
 
-data_dir <- "test_data" %>% fs::path_abs()
-output_dir <- "test_output" %>% fs::path_abs()
 
 setup <- function() {
   if (!fs::dir_exists(data_dir)) fs::dir_create(data_dir)
@@ -121,7 +123,22 @@ test_one <- function() {
 
 
 setup()
-test_render()
+
+testthat::test_that(
+  "test base render",
+  {
+    testthat::expect_no_error(test_render())
+    # assertthat::file_ex
+    assertthat::are_equal(
+      fs::file_exists(
+        file.path(output_dir, "test_defaults.html")
+      ),
+      TRUE
+    )
+  }
+)
+
+# test_render()
 test_invalid_dir()
 test_one()
 
