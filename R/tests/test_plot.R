@@ -135,42 +135,11 @@ test_that("test generate testdata", {
   )
 })
 
-test_that("test concat results one collection", {
-  res <- TEST_DATA
-  res1 <- res[[names(res)[1]]]
-
-  testthat::expect_true(
-    "list" %in% class(res1)
-  )
-
-  res1_c <- res1 %>% plot_tools$concat_results_one_collection()
-
-  testthat::expect_true(
-    "data.frame" %in% class(res1_c)
-  )
-
-  testthat::expect_true(
-    "var" %in% colnames(res1_c)
-  )
-
-  testthat::expect_true(
-    all(sort(unique(res1_c$var)) == c("first", "second"))
-  )
-})
-
-
-test_that("test concat results all collections", {
-  res <- TEST_DATA
-  res_c <- res %>% plot_tools$concat_results_all_collections()
-  testthat::expect_true(
-    "list" %in% class(res_c)
-  )
-})
 
 
 test_that("test heatmap of NES", {
-  res <- TEST_DATA
-  res_c <- res %>% plot_tools$concat_results_all_collections()
+  gsea_res <- TEST_DATA
+  res_c <- gsea_res %>% fgsea_tools$concat_results_all_collections()
   ht <- res_c[[1]] %>% plot_tools$plot_results_one_collection()
 
   testthat::expect_true(
@@ -181,8 +150,8 @@ test_that("test heatmap of NES", {
 
 
 test_that("test run though all heatmaps of NES", {
-  res <- TEST_DATA
-  res_c <- res %>% plot_tools$concat_results_all_collections()
+  gsea_res <- TEST_DATA
+  res_c <- gsea_res %>% fgsea_tools$concat_results_all_collections()
   ht_list <- plot_tools$plot_results_all_collections(res_c)
   testthat::expect_true(
     "list" %in% class(ht_list)

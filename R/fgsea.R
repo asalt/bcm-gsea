@@ -57,7 +57,7 @@ run_one <- function(
   assertthat::are_equal(.maxcounts, 1)
 
 
-  set.seed(789)
+  # set.seed(789)
 
   fgseaRes <- fgsea(
     pathways = geneset,
@@ -305,4 +305,30 @@ simulate_preranked_data <- function(
   data %<>% dplyr::mutate(id = as.character(id))
 
   return(data)
+}
+
+
+concat_results_one_collection <- function(list_of_dfs) {
+  res <- list_of_dfs %>%
+    purrr::imap(
+      .f = ~ {
+        .x %>% dplyr::mutate(var = .y)
+      }
+    ) %>%
+    dplyr::bind_rows()
+
+  return(res)
+}
+
+concat_results_all_collections <- function(list_of_lists, ...) {
+  .dotargs <- list(...) ## this is not used nor passed to inner func
+
+  res <- list_of_lists %>%
+    purrr::map(
+      ~ {
+        concat_results_one_collection(.x)
+      }
+    ) # %>%
+  # purrr::reduce(rbind)
+  return(res)
 }

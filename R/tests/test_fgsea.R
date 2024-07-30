@@ -32,6 +32,8 @@ plot_tools <- new.env()
 source("../plot.R", local = plot_tools)
 
 
+
+
 testthat::test_that("test fgsea parse additional_info", {
   #
   geneset <- geneset_tools$get_collection("H", "")
@@ -69,7 +71,20 @@ testthat::test_that("test fgsea parse additional_info", {
   #
 })
 
+testthat::test_that("test simulate", {
+  data <- fgsea_tools$simulate_preranked_data()
+  testthat::expect_true(
+    "data.frame" %in% class(data)
+  )
 
+  testthat::expect_true(
+    "id" %in% colnames(data)
+  )
+
+  testthat::expect_true(
+    "value" %in% colnames(data)
+  )
+})
 
 test_fgsea_runone <- function() {
   # data <- .GlobalEnv$simulate_preranked_data()
@@ -81,46 +96,131 @@ test_fgsea_runone <- function() {
   res <- rankobj %>% fgsea_tools$run_one(geneset_list)
 
 
-  return("Success")
+  return(res)
 }
 
 test_that("test fgsea runone", {
-  expect_equal(test_fgsea_runone(), "Success")
+  res <- test_fgsea_runone()
+  expect_true(
+    "data.frame" %in% class(res)
+  )
 })
 
 
 
 
 test_that("test run one collapse", {
+  #
   geneset <- geneset_tools$get_collection("C5", "GO:BP")
   spike_terms <- c("CYCLE", "CHECKPOINT")
   data <- fgsea_tools$simulate_preranked_data(geneset = geneset)
   data %<>% dplyr::sample_frac(size = .75)
 
+  #
   geneset_list <- geneset_tools$genesets_df_to_list(geneset)
   rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
   rankobj <- rankobjs[[1]]
 
-  res <- rankobj %>% fgsea_tools$run_one(geneset_list, collapse = TRUE)
+  res_withcollapse <- rankobj %>% fgsea_tools$run_one(geneset_list, collapse = TRUE)
   res_all <- rankobj %>% fgsea_tools$run_one(geneset_list, collapse = FALSE)
 
+  testthat::expect_true( # ES should be true, NES can vary based on, .. rng?
+    all(res_withcollapse$ES == res_all$ES)
+  )
+
+  .nrow1 <- res_withcollapse %>%
+    dplyr::filter(mainpathway == TRUE) %>%
+    nrow()
+  .nrow2 <- res_all %>%
+    dplyr::filter(mainpathway == TRUE) %>%
+    nrow()
+
   testthat::expect_true(
-    all(res$NES == res_all$NES)
+    .nrow1 <= .nrow2
   )
 
   testthat::expect_true(
-    res %>% dplyr::filter(mainpathway == TRUE) %>% nrow() <=
-      res_all %>%
-        dplyr::filter(mainpathway == TRUE) %>%
-        nrow()
-  )
-
-  testthat::expect_true(
-    res %>%
+    res_all %>%
       dplyr::filter(mainpathway == TRUE) %>%
+      nrow() == res_all %>% nrow()
+  )
+
+  testthat::expect_true( # this one should obviously be true
+    res_withcollapse %>%
+      dplyr::filter(mainpathway == FALSE) %>%
       nrow() > 1
   )
 })
+
+# =====  this is only used for two specific tests and is somewhat redundant with previous
+generate_test_data <- function(collapse = FALSE) {
+  # this function relies on simulate preranked data from fgsea tools,
+  # which depends on test_fgsea.R for guaranteed* success
+  # *not guaranteed
+
+  # genesets_of_interest <- list(
+  #     list(category = "H", subcategory = ""),
+  #     list(category = "C5", subcategory = "GO:BP")
+  # )
+
+  genesets_of_interest <- tibble::tribble(
+    ~category, ~subcategory, ~collapse, ~collection_name,
+    "H", "", FALSE, "H_",
+    "C5", "GO:BP", FALSE, "C5_GO:BP",
+  )
+  genesets <- geneset_tools$get_collections(
+    genesets_of_interest
+  )
+
+  geneset_list <- genesets %>% purrr::imap(~ geneset_tools$genesets_df_to_list(.x))
+
+  # named_data = list(data=data)
+  data1 <- fgsea_tools$simulate_preranked_data(seed = 1234) %>% dplyr::sample_frac(.4)
+  data2 <- fgsea_tools$simulate_preranked_data(seed = 4321) %>% dplyr::sample_frac(.4)
+  data <- list(first = data1, second = data2)
+  rankobjs <- io_tools$ranks_dfs_to_lists(data)
+  # res <- fgsea_tools$run_all_pathways(geneset_list, rankobjs, collapse. = collapse)
+  res <- fgsea_tools$run_all_pathways(geneset_list, rankobjs, collapse = collapse)
+  return(res)
+}
+
+# ================================ test data ================================
+TEST_DATA <- generate_test_data()
+
+test_that("test concat results one collection", {
+  res <- TEST_DATA
+  res1 <- res[[names(res)[1]]]
+
+  testthat::expect_true(
+    "list" %in% class(res1)
+  )
+
+  res1_c <- res1 %>% fgsea_tools$concat_results_one_collection()
+
+  testthat::expect_true(
+    "data.frame" %in% class(res1_c)
+  )
+
+  testthat::expect_true(
+    "var" %in% colnames(res1_c)
+  )
+
+  testthat::expect_true(
+    all(sort(unique(res1_c$var)) == c("first", "second"))
+  )
+})
+
+
+test_that("test concat results all collections", {
+  res <- TEST_DATA
+  res_c <- res %>% fgsea_tools$concat_results_all_collections()
+  testthat::expect_true(
+    "list" %in% class(res_c)
+  )
+})
+
+
+# ===
 
 test_that("test run all geneset lists not named.", { # this will take a while. testing if can set collapse. var
   geneset <- geneset_tools$get_collection("C5", "GO:BP")
@@ -164,6 +264,8 @@ test_that("test run all ranks lists not named.", { # this will take a while. tes
 })
 
 
+#
+# tests if the "collapse" argument is working as expected
 test_that("test run all collapse.", { # this will take a while. testing if can set collapse. var
   geneset <- geneset_tools$get_collection("C5", "GO:BP")
   spike_terms <- c("CYCLE", "CHECKPOINT")
@@ -207,6 +309,7 @@ test_that("test run all collapse.", { # this will take a while. testing if can s
   #
 })
 
+# ==
 
 test_get_edge <- function() {
   data <- fgsea_tools$simulate_preranked_data()
@@ -214,7 +317,6 @@ test_get_edge <- function() {
   geneset_list <- geneset_tools$genesets_df_to_list(geneset)
   rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
   rankobj <- rankobjs[[1]]
-
 
   res <- rankobj %>% fgsea_tools$run_one(geneset_list) # we aren't actually using this result
   # all we need for this test is the rankobj and gene list
@@ -261,7 +363,6 @@ test_get_edge <- function() {
   )
   return("Success")
 }
-
 
 test_that("test get edge", {
   expect_equal(test_get_edge(), "Success")

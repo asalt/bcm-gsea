@@ -26,25 +26,30 @@ get_args <- plot_utils$get_args
 get_arg <- plot_utils$get_arg
 
 
-make_heatmap <- function(
-    .gct,
+make_heatmap_fromgct <- function(
+    gct,
     row_note = "",
-    scale = T) {
-  # .gct <- subgct
-  # .gct@cdesc$treat <-
+    # scale = T
+    ...) {
+  # gct <- subgct
+  # gct@cdesc$treat <-
   #   factor(.gct@cdesc$treat , levels = c("untreated", "carboplatin", "IMT", "carboplatin_IMT"), ordered = T)
 
-  ca <- ComplexHeatmap::columnAnnotation(
-    group = .gct@cdesc$group, # this needs to be dynamically set
-    col = list(
-      group = c(
-        `168EC` = "blue",
-        `Ox_hTERT` = "red",
-        `No_Ox` = "yellow"
-      )
-    )
-  )
+  cat("make_heatmap\n")
 
+  ca <- NULL
+  if ("group" %in% colnames(gct@cdesc)) {
+    ca <- ComplexHeatmap::columnAnnotation(
+      group = gct@cdesc$group # this needs to be dynamically set
+      # col = list(
+      #   group = c(
+      #     `168EC` = "blue",
+      #     `Ox_hTERT` = "red",
+      #     `No_Ox` = "yellow"
+      #   )
+      # )
+    )
+  }
 
   .legend_width <- unit(2.5, "cm")
   .cbar_title <- "zscore"
@@ -58,18 +63,24 @@ make_heatmap <- function(
 
   # .note <- paste0(description, '\nNES ', sprintf("%.2f", NES), '  pvalue: ', pval)
 
+  if ("rdesc" %in% colnames(gct@rdesc)) {
+    row_labels <- gct@rdesc$rdesc
+  } else if ("genesymbol" %in% colnames(gct@rdesc)) {
+    row_labels <- gct@rdesc$genesymbol
+  } else {
+    row_labels <- gct@rid
+  }
+
+
+  .mat <- gct@mat
+  # gct@mat %>% apply( 1, function(x) scale(x, center = T, scale = scale)) %>% t() %>% as.matrix()),
 
   ht <- ComplexHeatmap::Heatmap(
-    .gct@mat %>% apply(
-      1,
-      function(x) scale(x, center = T, scale = scale)
-    ) %>%
-      t() %>%
-      as.matrix(),
+    .mat,
     # TODO use z_score_withna or other custom func for handling nas when scaling
-    row_labels = .gct@rdesc$rdesc,
-    column_labels = .gct@cdesc$id, # id should always be here
-    column_split = .gct@cdesc$group, # treat is not guaranteed to be here, this needs to be dynamically set
+    row_labels = row_labels,
+    column_labels = gct@cdesc$id, # id should always be here
+    column_split = gct@cdesc$group, # treat is not guaranteed to be here, this needs to be dynamically set
     top_annotation = ca,
     heatmap_legend_param = heatmap_legend_param,
     row_names_gp = grid::gpar(fontsize = 7),
@@ -78,20 +89,21 @@ make_heatmap <- function(
     column_names_side = "top",
     cluster_columns = F,
   )
-
-  ht
+  return(ht)
 }
 
 plot_heatmap_of_edges <- function(
     gct,
     results_list,
+    scale = T,
+    scale_subset = NULL,
     save_func = NULL,
     ...) {
-  names(results_list) %>%
+  hts <- names(results_list) %>%
     purrr::map(
       ~ {
         collection_name <- .x
-        names(results_list[[collection_name]]) %>%
+        hts <- names(results_list[[collection_name]]) %>%
           purrr::map(
             ~ {
               comparison_name <- .x
@@ -102,7 +114,8 @@ plot_heatmap_of_edges <- function(
                 arrange(pval) %>%
                 head(10) %>%
                 mutate(leadingedgelist = stringr::str_split(leadingEdge, ","))
-              for (i in 1:nrow(forplot)) {
+              # for (i in 1:nrow(forplot)) {
+              for (i in 1:seq_len(nrow(forplot))) {
                 row <- forplot[i, ]
                 .id <- row$pathway
                 .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', "", x)))
@@ -112,19 +125,27 @@ plot_heatmap_of_edges <- function(
                 print(paste0("pval: ", row$pval))
                 print(paste0("padj: ", row$padj))
                 print(paste0("NES: ", row$NES))
+
+                ht <- NULL
+                if (scale == T) gct <- util_tools$scale_gct(gct, subset = scale_subset)
+
                 tryCatch(
                   {
+                    #
                     subgct <- cmapR::subset_gct(gct, rid = .leading_edge)
-                    ht <- plot_tools$make_heatmap(subgct)
+                    ht <- make_heatmap_fromgct(subgct)
                     print(ht)
                   },
-                  error = function(e) print(e$message)
+                  error = function(e) print(sprintf("failed to produce heatmap, %s", e$message))
                 )
-              }
-            }
+                return(ht)
+              } # end of one heatmap
+            } # end of all heatmaps for one collection
           )
+        return(hts)
       }
     )
+  return(hts)
 }
 
 
@@ -213,8 +234,8 @@ barplot_with_numbers <- function(
     ) +
     # scale_color_gradient(low = "#0000ffee", high = "#ff0000ee") +  # Adjust colors to represent p-values
     # geom_point() +
-    scale_fill_gradient2(high = "grey", mid = "#ba2020", low = "#c92020", midpoint = .25, limits = c(0,1)) +
-    geom_col(size=1.0, aes(color = sel$outline_val)) +
+    scale_fill_gradient2(high = "grey", mid = "#ba2020", low = "#c92020", midpoint = .25, limits = c(0, 1)) +
+    geom_col(size = 1.0, aes(color = sel$outline_val)) +
     scale_color_identity() +
     labs(title = title %>% labeller_func()) +
     # scale_color_manual(values=c("black", 'blue'))+
@@ -273,7 +294,7 @@ all_barplots_with_numbers <- function(
             )
             save_func <- make_partial(save_func, filename = filename)
           }
-          p <- plot_tools$barplot_with_numbers(sel, title = .title, use_custom_labeller = T, save_func = save_func, ...)
+          p <- barplot_with_numbers(sel, title = .title, use_custom_labeller = T, save_func = save_func, ...)
           return(p)
         }
       )
@@ -385,33 +406,6 @@ process_results_across_rnks <- function(
   })
 }
 
-
-# maybe these should be somewhere else
-
-concat_results_one_collection <- function(list_of_dfs) {
-  res <- list_of_dfs %>%
-    purrr::imap(
-      .f = ~ {
-        .x %>% dplyr::mutate(var = .y)
-      }
-    ) %>%
-    dplyr::bind_rows()
-
-  return(res)
-}
-
-concat_results_all_collections <- function(list_of_lists, ...) {
-  .dotargs <- list(...) ## this is not used nor passed to inner func
-
-  res <- list_of_lists %>%
-    purrr::map(
-      ~ {
-        concat_results_one_collection(.x)
-      }
-    ) # %>%
-  # purrr::reduce(rbind)
-  return(res)
-}
 
 
 plot_results_all_collections <- function(
@@ -616,8 +610,8 @@ plot_results_one_collection <- function(
   height <- 8 + (nrow(dfp) * .20)
   width <- 6 + (nrow(dfp) * .26)
   if (!is.null(save_func)) {
-    save_func <- make_partial(save_func, height=height, width = width)
-    save_func(plot_code=do_draw)
+    save_func <- make_partial(save_func, height = height, width = width)
+    save_func(plot_code = do_draw)
   }
 
   return(ht)
@@ -833,7 +827,7 @@ plot_tables_faster <- function(
 
 
       .fgsea_res <- fgsea_res_list[[rank_name]]
-      p <- plot_tools$plot_table(
+      p <- plot_table(
         fgsea_res = .fgsea_res,
         ranks = rankobj,
         pathways = genesets,
