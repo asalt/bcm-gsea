@@ -10,6 +10,14 @@ suppressPackageStartupMessages(library(here))
 src_dir <- file.path(here("R"))
 source(file.path(src_dir, "utils.R"))
 
+
+util_tools <- new.env()
+source(file.path(src_dir, "./utils.R"), local = util_tools)
+
+log_msg <- util_tools$make_partial(util_tools$log_msg)
+
+# ==
+
 make_random_gct <- function(nrow = 10, ncol = 4) {
   set.seed(369)
   nrow <- max(nrow, 1)
@@ -76,6 +84,7 @@ create_rnkfiles_from_emat <- function(
 }
 
 
+
 create_rnkfiles_from_volcano <- function(
     volcanodir,
     id_col = "GeneID",
@@ -89,6 +98,8 @@ create_rnkfiles_from_volcano <- function(
   }
 
   (volcanofiles <- fs::dir_ls(path = volcanodir, regexp = ".*tsv"))
+  log_msg(msg = paste0("Found ", length(volcanofiles), " tsv files"))
+
   lst <- volcanofiles %>%
     purrr::set_names(nm = ~ basename(.) %>%
       fs::path_ext_remove()) %>% # set names first
@@ -104,9 +115,18 @@ create_rnkfiles_from_volcano <- function(
     })
 
 
+  log_msg(msg = "trying to shorten names")
+
   shorternames <- names(lst) %>%
-    stringr::str_extract(., pattern = "(?<=group_)(.*)(?=_di*)")
-  names(lst) <- shorternames
+    stringr::str_extract(., pattern = "(?<=group_)(.*)(?=_*)")
+
+  log_msg(msg = paste0("shorter names are ", paste0(shorternames, "\n")))
+  if (!any(is.na(shorternames))) {
+    names(lst) <- shorternames
+  } else {
+    log_msg(msg = "nas in shorter names, not reassigning")
+  }
+
   lst
 }
 

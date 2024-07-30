@@ -10,6 +10,7 @@ src_dir <- file.path(here("R"))
 fgsea_tools <- new.env()
 source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
+
 # plot_tools <- new.env()
 # source(file.path(src_dir, "./plot.R"), local = plot_tools)
 
@@ -19,6 +20,11 @@ source(file.path(src_dir, "./plot_utils.R"), local = plot_utils)
 make_partial <- plot_utils$make_partial
 get_args <- plot_utils$get_args
 
+util_tools <- new.env()
+source(file.path(src_dir, "./utils.R"), local = util_tools)
+log_msg <- util_tools$make_partial(util_tools$log_msg)
+
+# ==
 
 #' handle 1 long form gsea result table
 #'
@@ -46,6 +52,8 @@ do_one <- function(
   #   gsea_object <- gsea_object %>% filter(mainpathway == TRUE)
   # }
 
+  log_msg(msg = "plotting one pca biplot collection")
+
   required_cols <- c("pathway", "NES", "var")
   for (col in required_cols) {
     if (!(col %in% colnames(gsea_object))) {
@@ -54,9 +62,11 @@ do_one <- function(
   }
 
   if (is.null(metadata)) {
+    log_msg(msg = "metadata is null, making standin")
     metadata <- data.frame(id = unique(gsea_object$var))
     rownames(metadata) <- metadata$id
     metadata$dummy <- "a" ## ?
+    log_msg(msg = paste0("metadata is \n", metadata))
   }
 
   gsea_object <- fgsea_tools$filter_on_mainpathway(gsea_object,

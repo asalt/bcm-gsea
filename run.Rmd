@@ -48,6 +48,7 @@ suppressPackageStartupMessages(library(tictoc))
 suppressPackageStartupMessages(library(ggrepel))
 suppressPackageStartupMessages(library(reactable))
 suppressPackageStartupMessages(library(ggalt))
+# suppressPackageStartupMessages(library(logger)) # logging never seems to work right inside Rmd..
 # knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
@@ -73,9 +74,6 @@ source("./R/plot.R", local = plot_tools)
 plot_utils <- new.env()
 source("./R/plot_utils.R", local = plot_utils)
 
-util_tools <- new.env()
-source("./R/utils.R", local = util_tools)
-
 pca_tools <- new.env()
 source("./R/pca.R", local = pca_tools)
 
@@ -89,7 +87,13 @@ save_func <- util_tools$make_partial(
   path = savedir
 )
 
+
+log_msg <- util_tools$make_partial(util_tools$log_msg)
+#log_message <- make_partial(util_tools$log_message)
+log_msg(msg=paste0('===\n*starting bcm gsea*\n==='))
+
 TESTING <- FALSE
+
 ```
 # explanations
 
@@ -107,7 +111,7 @@ rnkdfs <-
     datas2,
     datas3
   )
-names(rnkdfs) <- paste0("test", 1:length(datas))
+names(rnkdfs) <- paste0("test", 1:length(rnkdfs))
 # rankobj <- io_tools$ranks_dfs_to_lists(list(test = datas[[1]]))
 # .res <- rankobj[[1]] %>% fgsea_tools$run_one(geneset_list)
 # .name <- .res[1, "pathway"][[1]]
@@ -159,9 +163,12 @@ rownames(.mat) <- .mat$id
   group = c(rep("A", 3), rep("B", 3), rep("C", 3))
 )
 rownames(.meta) <- .meta$id
+.rdesc = data.frame(id=rownames(.mat), dummy="X")
+rownames(.rdesc) <- rownames(.mat)
 gct <- new("GCT",
   mat = .mat %>% as.matrix(),
-  cdesc = .meta
+  cdesc = .meta,
+  rdesc = .rdesc
 )
 
 TESTING <- TRUE
@@ -213,15 +220,32 @@ if (!exists("genesets_list_of_lists")) {
 ## prepare ranks
 
 ```{r, label='locate ranks'}
+
+rankfiledir <- params$rankfiledir
+volcanodir <- params$volcanodir
+gct_path <- params$gct_path
+ranks_from <- params$ranks_from
+
+log_msg(paste0('rankfiledir: ', rankfiledir))
+log_msg(paste0('volcanodir: ', volcanodir))
+log_msg(paste0('gct_path: ', gct_path))
+log_msg(paste0('ranks from: ', ranks_from))
+
+
 if (!exists("TESTING")) TESTING <- FALSE
 
-if ((!file.exists(params$volcanodir)) &
-  (!file.exists(params$gct_path)) &
-  (!file.exists(params$rankfiledir)) &
+
+if ((!is.null(volcanodir) && !file.exists(volcanodir)) &&
+  (!is.null(gct_path) && !file.exists(gct_path)) &&
+  (!is.null(rankfiledir) && !file.exists(rankfiledir)) &&
   (!TESTING == TRUE)) {
   print("no files present")
+  log_msg(msg="no files present")
   knitr::knit_exit()
 }
+
+
+log_msg(msg=paste0('TESTING: ', TESTING))
 ```
 
 
@@ -229,25 +253,27 @@ if ((!file.exists(params$volcanodir)) &
 ```{r, label='load ranks', eval=!TESTING}
 # this whole section can (and should) be skipped if TESTING == TRUE
 
-rankfiledir <- params$rankfiledir
-volcanodir <- params$volcanodir
-gct_path <- params$gct_path
-ranks_from <- params$ranks_from
 
 if (!exists("gct")){
-  if (file.exists(gct_path)) {
+  if (!is.null(gct_path) && file.exists(gct_path)) {
     gct <- cmapR::parse_gctx(gct_path) 
   } else{
   gct <- NULL
   }
 }
-  
+log_msg(msg=paste0('gct: ', class(gct)))
 
-if (!is.null(rankfiledir) && length(fs::dir_ls(rankfiledir, fail = FALSE)) == 0) {
+if (!is.null(rankfiledir) && file.exists(rankfiledir)) {
   if (ranks_from == "volcano") {
+    if (is.null(volcanodir) || !file.exists(volcanodir)){
+      log_msg(msg='improper volcanodir specification')
+      stop('improper volcanodir specification')
+    }
+    log_msg(msg='saving rankfiles from volcano output. using signedlogp as value')
     rnkdfs <- io_tools$create_rnkfiles_from_volcano(volcanodir, value_col = "signedlogP")
+    log_msg(msg=paste0('length of retrieved rankfiles: ', length(rnkdfs)))
   }
-  if (ranks_from == "gct") {
+  if (ranks_from == "gct" && !is.null(gct_path)) {
     rnkdfs <- io_tools$create_rnkfiles_from_emat(gct_path, apply_z_score = T)
   }
   rnkdfs %>% io_tools$write_rnkfiles(dir = rankfiledir)
@@ -255,14 +281,19 @@ if (!is.null(rankfiledir) && length(fs::dir_ls(rankfiledir, fail = FALSE)) == 0)
 
 # always reload rank files from new location to ensure proper format
 # any format / name issues are fixed in the create_rnkfiles func
-rnkfiles <- dir_ls(rankfiledir, pattern = ".rnk$", fail = F)
+rnkfiles <- dir_ls(path=rankfiledir, regexp = ".*rnk$", fail = F)
+log_msg(msg=paste0('n rank files: ', length(rnkfiles)))
+log_msg(msg=paste0('rank files: ', str_c(rnkfiles, sep='\n')))
 rnkdfs <- rnkfiles %>% io_tools$load_rnkfiles()
-# }
+
 names(rnkdfs) <- names(rnkdfs) %>%
   fs::path_file() %>%
   fs::path_ext_remove()
 
 ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
+
+log_msg(msg=paste0('names ranks list '))
+log_msg(msg=str_c(names(ranks_list), sep='\n'))
 ```
 
 
@@ -278,6 +309,11 @@ if (TESTING == FALSE) {
 }
 # results_list2 <- .GlobalEnv$run_all_pathways(geneset_lists, ranks_list, parallel=T) # parallel if you c
 
+log_msg(msg='names gsea results list: ')
+log_msg(msg=str_c(names(results_list), sep='\n'))
+
+log_msg(msg='comparison  names gsea results list: ')
+log_msg(msg=str_c(names(results_list[[1]]), sep='\n'))
 ```
 
 
@@ -334,6 +370,7 @@ results_list[[1]] %>% imap(
 ## plotting all barplots for each comparison across all genesets
 ```{r, label='all barplots, separate, save', fig.width=10, fig.height=8, eval=T}
 
+log_msg(msg='plotting individual barplots')
 plts <- results_list %>% plot_tools$all_barplots_with_numbers(save_func = util_tools$make_partial(save_func, width = 12, height=12))
 
 # if you want to print the plots:
@@ -346,6 +383,8 @@ plts <- results_list %>% plot_tools$all_barplots_with_numbers(save_func = util_t
 
 prewritten function to merge gsea results across comparisons and make faceted barplot
 ```{r, label="combined barplots, save", fig.width=12, fig.height=12, eval=T}
+
+log_msg(msg='plotting faceted barplots')
 plts <- results_list %>%
   plot_tools$process_results_across_rnks(
     save_func = util_tools$make_partial(save_func, width = 14, height=22)
@@ -360,12 +399,16 @@ for (plt in plts) {
 
 
 ```{r, label='combine gsea matrices'}
-all_gsea_results <- fgesa_tools$concat_results_all_collections(results_list)
+log_msg(msg='combining gsea marices')
+all_gsea_results <- fgsea_tools$concat_results_all_collections(results_list)
 ```
 
 
-```{r, label='plot one gsea level heatmap', fig.height=7}
+```{r, label='plot one gsea level heatmap', fig.height=7, eval=T}
 # below are the args for plotting gsea level heatmaps
+
+log_msg(msg='drawing a heatmap. save_func is null')
+
 ht <- all_gsea_results$H_ %>% plot_tools$plot_results_one_collection(
   metadata = NULL,
   cut_by = NULL,
@@ -375,14 +418,18 @@ ht <- all_gsea_results$H_ %>% plot_tools$plot_results_one_collection(
   save_func=NULL
 )
 
-draw(ht,
-  heatmap_legend_side = "bottom",
-  padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
-)
+log_msg(msg=paste0("drew a heatmap, got this: ", class(ht)))
+# log_msg(msg='calling ComplexHeatmap::draw')
+# ComplexHeatmap::draw(ht,
+#   heatmap_legend_side = "bottom",
+#   padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
+# )
+
 ```
 
-```{r, label='plot all gsea level heatmaps', fig.height=9, label="heatmaps"}
+```{r, label='plot all gsea level heatmaps', fig.height=9 }
 
+log_msg(msg='drawing all heatmap. save_func is not null')
 # here is where changes to the save func are made (e.g. width, height, file format)
 .gsea_heatmap_save_func <- util_tools$make_partial(save_func, width = 24, height=18)
 
@@ -400,13 +447,12 @@ hts <- all_gsea_results %>% plot_tools$plot_results_all_collections(
 
 
 ```{r, fig.height=12, label="plot edges"}
-# library(org.Hs.eg.db)
-# gene_symbols <- AnnotationDbi::select(org.Hs.eg.db,
-#                                       keys = gct@rid
-#                                       columns = c("SYMBOL"),
-#                                       keytype = "ENTREZID")
-# merged_data <- merge(gct@rdesc, gene_symbols, by.x = "id", by.y = "ENTREZID", all.x = TRUE)
-# gct@rdesc <- merged_data
+
+# plot_tools$make_heatmap_fromgct(
+#   gct %>% subset_gct(rid=gct@rid %>% head(10))
+# )
+
+log_msg(msg = paste0("maybe plot edges"))
 
 if( !is.null(gct) ) {
     ht_edge_plots <- plot_tools$plot_heatmap_of_edges(gct, results_list)
@@ -422,6 +468,9 @@ if( !is.null(gct) ) {
 run pca
 ```{r, label='do pca'}
 
+
+log_msg(msg = paste0("pca on gsea"))
+
 if (exists("gct")) {
   metadata <- gct@cdesc
 }else{
@@ -436,6 +485,9 @@ pca_objects <- all_gsea_results %>% pca_tools$do_all(
 
 
 ```{r, label='plot one level biplot'}
+
+
+log_msg(msg = paste0("plot pca on biplot"))
 
 pca_objects[[1]] %>% pca_tools$plot_biplot(
   top_pc = 3,
@@ -454,6 +506,8 @@ pca_objects[[1]] %>% pca_tools$plot_biplot(
 
 
 ```{r, label='plot pca all biplots'}
+
+log_msg(msg = paste0("plot pca all biplots"))
 pca_objects %>% pca_tools$plot_all_biplots(
   save_func = save_func,
   
@@ -483,7 +537,7 @@ res <- plot_tools$plot_tables(
 
 
 ```{r, label='..', eval=F,  include=F}
-gct_path <- params$gct_path
+gct_path <- gct_path
 gct <- cmapR::parse_gctx(gct_path)
 all_gsea_results <- fgesa_tools$concat_results_all_collections(results_list)
 .metadata <- gct@cdesc

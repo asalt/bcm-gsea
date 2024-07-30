@@ -19,11 +19,16 @@ source(file.path(src_dir, "./utils.R"), local = util_tools)
 fgsea_tools <- new.env()
 source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
+
 plot_utils <- new.env()
 source(file.path(src_dir, "./plot_utils.R"), local = plot_utils)
 make_partial <- plot_utils$make_partial
 get_args <- plot_utils$get_args
 get_arg <- plot_utils$get_arg
+
+util_tools <- new.env()
+source(file.path(src_dir, "./utils.R"), local = util_tools)
+log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 
 make_heatmap_fromgct <- function(
@@ -449,6 +454,8 @@ plot_results_one_collection <- function(
     main_pathway_ratio = 0.1,
     save_func = NULL,
     ...) {
+  log_msg(msg = paste0("calling plot results one collection"))
+
   # Ensure necessary columns are present
   required_cols <- c("pathway", "NES")
   if (!all(required_cols %in% colnames(df))) {
@@ -598,8 +605,9 @@ plot_results_one_collection <- function(
     column_title = title,
     cell_fun = cell_fun # Use the updated cell_fun here
   )
-  ._ <- draw(ht) # necessary to get size correct
+  ht <- draw(ht) # necessary to get size correct
 
+  log_msg(msg = paste0("defining draw func"))
   do_draw <- function() {
     draw(ht,
       heatmap_legend_side = "bottom",
@@ -607,10 +615,21 @@ plot_results_one_collection <- function(
     )
   }
 
+  log_msg(msg = paste0("save func: ", class(save_func) %>% as.character()))
+  log_msg(msg = paste0("is null save func: ", is.null(save_func)))
+
   height <- 8 + (nrow(dfp) * .20)
   width <- 6 + (nrow(dfp) * .26)
+
   if (!is.null(save_func)) {
+    log_msg(msg = paste0("save func attrs before: "))
+    log_msg(msg = paste0(names(get_args(save_func)), "-", get_args(save_func)))
+
     save_func <- make_partial(save_func, height = height, width = width)
+
+    log_msg(msg = paste0("save func attrs after: "))
+    log_msg(msg = paste0(names(get_args(save_func)), "-", get_args(save_func)))
+
     save_func(plot_code = do_draw)
   }
 

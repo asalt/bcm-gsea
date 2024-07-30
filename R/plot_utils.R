@@ -14,6 +14,7 @@ src_dir <- file.path(here("R"))
 
 util_tools <- new.env()
 source(file.path(src_dir, "./utils.R"), local = util_tools)
+log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 fgsea_tools <- new.env()
 source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
@@ -78,7 +79,12 @@ plot_and_save <- function(
     ...) {
   # Setup: Open the appropriate graphics device
 
+  log_msg(msg = "plot_and_save")
+
   full_path <- file.path(path, paste0(filename, ".", type))
+
+  log_msg(msg = paste0("full_path: ", full_path))
+
   if (!fs::dir_exists(path)) fs::dir_create(path)
 
   if (file.exists(full_path) && ignore_exists == TRUE) {
@@ -98,6 +104,7 @@ plot_and_save <- function(
 
   # Teardown: Close the graphics device
   dev.off()
+  log_msg(msg = paste0("done"))
 
   return(h)
 }

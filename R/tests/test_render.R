@@ -2,6 +2,7 @@ suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(msigdbr))
 suppressPackageStartupMessages(library(rmarkdown))
+suppressPackageStartupMessages(library(cmapR))
 suppressPackageStartupMessages(library(fs))
 
 io_tools <- new.env()
@@ -48,12 +49,34 @@ setup <- function() {
     )
 
   names(datas) <- c(
-    paste0("Group A vs B dirB ", seq_along(datas1)),
-    paste0("Group C vs D dirB ", seq_along(datas2)),
-    paste0("Group E vs F dirB ", seq_along(datas3))
+    paste0("group_A_vs_B_dirB ", seq_along(datas1)),
+    paste0("group_C_vs_D_dirB ", seq_along(datas2)),
+    paste0("group_E_vs_F_dirB ", seq_along(datas3))
   )
 
   ._ <- datas %>% purrr::imap(~ write_tsv(.x, file.path(data_dir, paste0(.y, ".tsv"))))
+
+  .mat <- base::Reduce(
+    accumulate = F,
+    f = function(...) full_join(..., by = "id"),
+    x = datas
+  ) %>% as.data.frame()
+
+  rownames(.mat) <- .mat$id
+  .mat$id <- NULL
+  .meta <- data.frame(
+    id = colnames(.mat),
+    group = c(rep("A", 3), rep("B", 3), rep("C", 3))
+  )
+  rownames(.meta) <- .meta$id
+  .rdesc <- data.frame(id = rownames(.mat), dummy = "X")
+  rownames(.rdesc) <- rownames(.mat)
+  gct <- new("GCT",
+    mat = .mat %>% as.matrix(),
+    cdesc = .meta,
+    rdesc = .rdesc
+  )
+  cmapR::write_gctx(gct, file.path(data_dir, "test.gct"))
 }
 
 teardown <- function() {
@@ -61,18 +84,6 @@ teardown <- function() {
   if (fs::dir_exists(output_dir)) fs::dir_delete(output_dir)
 }
 
-test_render <- function() {
-  rmarkdown::render("../../run.Rmd",
-    output_format = "html_document",
-    output_dir = output_dir,
-    output_file = "test_defaults.html",
-    params = list(
-      rankfiledir = "testdata",
-      savedir = output_dir,
-      genesets_json = '[{"category": "H", "subcategory": ""}]'
-    )
-  )
-}
 
 test_invalid_dir <- function() {
   rmarkdown::render("../../run.Rmd",
@@ -86,6 +97,23 @@ test_invalid_dir <- function() {
     )
   )
 }
+
+test_render <- function() {
+  rmarkdown::render("../../run.Rmd",
+    output_format = "html_document",
+    output_dir = output_dir,
+    output_file = "test_defaults.html",
+    params = list(
+      rankfiledir = data_dir,
+      volcanodir = data_dir,
+      gct_path = NULL,
+      savedir = output_dir,
+      ranks_from = "volcano",
+      genesets_json = '[{"category": "H", "subcategory": ""}]'
+    )
+  )
+}
+
 
 test_one <- function() {
   # geneset <- msigdbr::msigdbr(
