@@ -18,49 +18,50 @@ source(file.path(src_dir, "./utils.R"), local = util_tools)
 fgsea_tools <- new.env()
 source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
-# Helper function to get current preset arguments or an empty list if none are set
-get_args <- function(f) {
-  if (!is.null(attr(f, "preset_args"))) {
-    return(attr(f, "preset_args"))
-  } else {
-    return(list()) # Return an empty list for easier handling
-  }
-}
-get_arg <- function(f, arg) {
-  args <- get_args(f)
-  val <- args[[arg]]
-  if (is.null(val)) {
-    return("")
-  }
-  return(val)
-}
+# moved to utils.R
+# # Helper function to get current preset arguments or an empty list if none are set
+# get_args <- function(f) {
+#   if (!is.null(attr(f, "preset_args"))) {
+#     return(attr(f, "preset_args"))
+#   } else {
+#     return(list()) # Return an empty list for easier handling
+#   }
+# }
+# get_arg <- function(f, arg) {
+#   args <- get_args(f)
+#   val <- args[[arg]]
+#   if (is.null(val)) {
+#     return("")
+#   }
+#   return(val)
+# }
 
-# Custom partial function with dynamic argument handling
-make_partial <- function(.f, ...) {
-  # Retrieve current preset arguments, if any
-  current_args <- get_args(.f)
+# # Custom partial function with dynamic argument handling
+# make_partial <- function(.f, ...) {
+#   # Retrieve current preset arguments, if any
+#   current_args <- get_args(.f)
 
-  # New fixed arguments
-  args_fixed <- list(...)
+#   # New fixed arguments
+#   args_fixed <- list(...)
 
-  # Ensure that named arguments are handled properly
-  if (!is.null(names(args_fixed))) {
-    # Overwrite or add new arguments
-    current_args[names(args_fixed)] <- args_fixed
-  }
+#   # Ensure that named arguments are handled properly
+#   if (!is.null(names(args_fixed))) {
+#     # Overwrite or add new arguments
+#     current_args[names(args_fixed)] <- args_fixed
+#   }
 
-  # Inner function to call .f with the correct arguments
-  inner <- function(...) {
-    # Combine fixed arguments with any new ones provided at call time
-    args <- modifyList(current_args, list(...))
-    do.call(.f, args)
-  }
+#   # Inner function to call .f with the correct arguments
+#   inner <- function(...) {
+#     # Combine fixed arguments with any new ones provided at call time
+#     args <- modifyList(current_args, list(...))
+#     do.call(.f, args)
+#   }
 
-  # Attach updated preset arguments to the inner function for later inspection
-  attr(inner, "preset_args") <- current_args
+#   # Attach updated preset arguments to the inner function for later inspection
+#   attr(inner, "preset_args") <- current_args
 
-  return(inner)
-}
+#   return(inner)
+# }
 
 
 plot_and_save <- function(
