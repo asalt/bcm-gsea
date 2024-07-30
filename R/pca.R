@@ -117,6 +117,7 @@ plot_biplot <- function(
     as.data.frame() %>%
     as.list()
   #
+
   if (!is.null(colby) &&
     !is.null(pca_object$metadata) &&
     !colby %in% colnames(pca_object$metadata)) {
@@ -124,54 +125,65 @@ plot_biplot <- function(
     colby <- NULL
     encircle <- F
   }
+
+  if (!is.null(shape) &&
+    !is.null(pca_object$metadata) &&
+    !shape %in% colnames(pca_object$metadata)) {
+    warning(paste0(shape, " not found in metadata"))
+    shape <- NULL
+  }
+
+
   plts <- pcs %>%
-    purrr::map(~ {
-      # stopifnot(~COLBY%in%colnames(.metadata))
-      .x1 <- .x[[1]]
-      .x2 <- .x[[2]]
+    purrr::map(
+      ~ {
+        # stopifnot(~COLBY%in%colnames(.metadata))
+        .x1 <- .x[[1]]
+        .x2 <- .x[[2]]
 
-      if (!.x1 %in% names(pca_object$rotated)){
-        warning("not enough PCs")
-        return()
-    }
+        if (!.x1 %in% names(pca_object$rotated)) {
+          warning("not enough PCs")
+          return()
+        }
 
-      if (!.x2 %in% names(pca_object$rotated)){
-        warning("not enough PCs")
-        return()
-    }
+        if (!.x2 %in% names(pca_object$rotated)) {
+          warning("not enough PCs")
+          return()
+        }
 
-    plt <- PCAtools::biplot(
-      pca_object,
-      x = .x1,
-      y = .x2,
-      showLoadings = showLoadings,
-      labSize = labSize,
-      pointSize = pointSize,
-      sizeLoadingsNames = sizeLoadingsNames,
-      colby = colby,
-      shape=shape,
-      # shape="source",
-      legendPosition = "right",
-      encircle = encircle,
-      title = title,
-      max.overlaps = Inf,
-      maxoverlapsConnectors = Inf,
-      ntopLoadings=5,
-    ) #+      coord_equal()
+        plt <- PCAtools::biplot(
+          pca_object,
+          x = .x1,
+          y = .x2,
+          showLoadings = showLoadings,
+          labSize = labSize,
+          pointSize = pointSize,
+          sizeLoadingsNames = sizeLoadingsNames,
+          colby = colby,
+          shape = shape,
+          # shape="source",
+          legendPosition = "right",
+          encircle = encircle,
+          title = title,
+          max.overlaps = Inf,
+          maxoverlapsConnectors = Inf,
+          ntopLoadings = 5,
+        ) #+      coord_equal()
 
-    if (!is.null(save_func)) {
-      current_args <- get_args(save_func)
-      filename <- current_args$filename
-      if (is.null(filename)) {
-        filename <- paste0("pca_biplot_")
-      }
-      filename <- paste0(filename, "_", .x1, "_", .x2)
-      save_func(plot_code = function() print(plt), filename = filename)
-    } else {
-      print(plt)
-    }
-    return(plt)
-  })
+        if (!is.null(save_func)) {
+          current_args <- get_args(save_func)
+          filename <- current_args$filename
+          if (is.null(filename)) {
+            filename <- paste0("pca_biplot_")
+          }
+          filename <- paste0(filename, "_", .x1, "_", .x2)
+          save_func(plot_code = function() print(plt), filename = filename)
+        } else {
+          print(plt)
+        }
+        return(plt)
+      } # exit inner
+    ) # exit outer
   return(plts)
 }
 
