@@ -133,7 +133,19 @@ get_args <- function(f, ...) {
 
 # Revised make_partial using an environment for cleaner argument handling
 make_partial <- function(.f, ...) {
+  # Ensure the function is correctly resolved
+  if (is.character(.f)) {
+    .f <- get(.f, envir = parent.frame())
+  }
+
+  # print(.f)
+  # print(is.function(.f)) # Should be TRUE if .f is correctly resolved
+  if (!is.function(.f)) {
+    stop("The first argument must be a function")
+  }
+
   # Environment to store arguments
+
   env <- new.env()
   env$preset_args <- if (!is.null(attr(.f, "preset_args"))) attr(.f, "preset_args") else list()
 
@@ -147,12 +159,24 @@ make_partial <- function(.f, ...) {
 
   # Inner function using environment
   inner <- function(...) {
-    combined_args <- modifyList(env$preset_args, list(...))
+    new_args <- list(...)
+    # combined_args <- c(env$preset_args, new_args)
+    for (arg in names(new_args)) {
+      env$preset_args[[arg]] <- new_args[[arg]]
+    }
+    combined_args <- env$preset_args
+    # combined_args <- modifyList(env$preset_args, list(...))
     do.call(.f, combined_args)
   }
 
   # Attach environment as an attribute (optional but can be helpful for debugging)
-  attr(inner, "preset_args", env$preset_args)
+  attr(inner, "preset_args") <- env$preset_args
 
   return(inner)
+}
+
+
+
+log_msg <- function(msg, filename = "run.log", end = "\n") {
+  cat(paste0(msg, end), file = filename, append = TRUE)
 }

@@ -14,6 +14,8 @@ src_dir <- file.path(here("R"))
 
 util_tools <- new.env()
 source(file.path(src_dir, "./utils.R"), local = util_tools)
+make_partial <- util_tools$make_partial
+get_args <- util_tools$get_args
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 fgsea_tools <- new.env()

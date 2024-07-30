@@ -471,7 +471,7 @@ run pca
 
 log_msg(msg = paste0("pca on gsea"))
 
-if (exists("gct")) {
+if (exists("gct") && !is.null(gct)) {
   metadata <- gct@cdesc
 }else{
   metadata <- NULL

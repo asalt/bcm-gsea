@@ -17,11 +17,12 @@ source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
 plot_utils <- new.env()
 source(file.path(src_dir, "./plot_utils.R"), local = plot_utils)
-make_partial <- plot_utils$make_partial
-get_args <- plot_utils$get_args
 
 util_tools <- new.env()
 source(file.path(src_dir, "./utils.R"), local = util_tools)
+
+make_partial <- util_tools$make_partial
+get_args <- util_tools$get_args
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 # ==
