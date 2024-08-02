@@ -3,11 +3,14 @@ title: "run.Rmd"
 author: "BCM MSPC"
 date: '`r Sys.Date()`'
 output:
-  html_document:
-    code_folding: hide
-    highlight: zenburn # pygments, kate, monochrome, zenburn
-    toc: yes
-    toc_float: true
+  rmdformats::downcute:
+    downcute_theme: "chaos"
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    code_folding: "hide"
+    css: "custom.css"
 params:
   volcanodir: "../results/MSPC001128/volcano/"
   rankfiledir: null
@@ -48,6 +51,7 @@ suppressPackageStartupMessages(library(tictoc))
 suppressPackageStartupMessages(library(ggrepel))
 suppressPackageStartupMessages(library(reactable))
 suppressPackageStartupMessages(library(ggalt))
+suppressPackageStartupMessages(library(rmdformats))
 # suppressPackageStartupMessages(library(logger)) # logging never seems to work right inside Rmd..
 # knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
@@ -281,6 +285,7 @@ if (!is.null(rankfiledir) && file.exists(rankfiledir)) {
 
 # always reload rank files from new location to ensure proper format
 # any format / name issues are fixed in the create_rnkfiles func
+log_msg(msg=paste0('rankfiledir :', rankfiledir))
 rnkfiles <- dir_ls(path=rankfiledir, regexp = ".*rnk$", fail = F)
 log_msg(msg=paste0('n rank files: ', length(rnkfiles)))
 log_msg(msg=paste0('rank files: ', str_c(rnkfiles, sep='\n')))
@@ -333,15 +338,16 @@ names(results_list[[1]])
 ```
 
 ```{r}
-head(results_list[[1]][[1]])
+results_list[[1]][[1]] %>% arrange(pval) %>% head(30) %>% reactable()
 ```
 
 
 
 ```{r, label=save, eval=T}
-results_list %>%
+._ <- results_list %>%
   io_tools$save_gsea_results(savedir = file.path(savedir, "gsea_tables"))
 ```
+
 
 ## barplots
 

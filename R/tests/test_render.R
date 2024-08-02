@@ -100,7 +100,7 @@ test_invalid_dir <- function() {
 
 test_render <- function() {
   rmarkdown::render("../../run.Rmd",
-    output_format = "html_document",
+    # output_format = "html_document",
     output_dir = output_dir,
     output_file = "test_defaults.html",
     params = list(
