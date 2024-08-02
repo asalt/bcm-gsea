@@ -13,16 +13,12 @@ body {
     max-width: 100% !important
 }
 
-/* .main-container {
-/*  max-width: 100% !important;
-/*  margin: auto;
+
+
+/* .Reactable {
+/*     color: #bbb; /* Light grey text */
+/*     background-color: #2b2b2b; /* Dark background similar to downcute dark themes */
 /* }
-
-
-.Reactable {
-    color: #bbb; /* Light grey text */
-    background-color: #2b2b2b; /* Dark background similar to downcute dark themes */
-}
 
 
 /* see https://github.com/glin/reactable/blob/363068caab2fa708b247a4ab0f73cdc694223587/srcjs/reactable.css#L4

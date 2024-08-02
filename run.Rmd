@@ -55,7 +55,24 @@ suppressPackageStartupMessages(library(rmdformats))
 # suppressPackageStartupMessages(library(logger)) # logging never seems to work right inside Rmd..
 # knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
 
+```{r}
+options(reactable.theme = reactableTheme(
+  color = "hsl(233, 9%, 87%)",
+  backgroundColor = "hsl(233, 9%, 19%)",
+  borderColor = "hsl(56, 100%, 58%, 0.76)",
+  stripedColor = "hsl(233, 12%, 22%)",
+  highlightColor = "hsl(233, 12%, 24%)",
+  inputStyle = list(backgroundColor = "hsl(233, 9%, 25%)"),
+  selectStyle = list(backgroundColor = "hsl(233, 9%, 25%)"),
+  pageButtonHoverStyle = list(backgroundColor = "hsl(233, 9%, 25%)"),
+  pageButtonActiveStyle = list(backgroundColor = "hsl(233, 9%, 28%)")
+))
+
+```
+
+```{r}
 library(future)
 n_cores <- future::availableCores() - 1
 future::plan(future::multisession, workers = min(n_cores, 8))
@@ -338,7 +355,27 @@ names(results_list[[1]])
 ```
 
 ```{r}
-results_list[[1]][[1]] %>% arrange(pval) %>% head(30) %>% reactable()
+results_list[[1]][[1]] %>% dplyr::select(-c("leadingEdge")) %>% arrange(pval) %>% head(30) %>% reactable(
+    resizable = T,
+    wrap=F,
+    bordered=T,
+    filterable = F,
+    searchable = T,
+    defaultPageSize=6,
+    striped=T,
+    compact=T,
+    showSortable=T,
+    showPageSizeOptions = T,
+    columns = list(
+      pval = colDef(format = colFormat(digits = 2)),
+      padj = colDef(format = colFormat(digits = 2)),
+      log2err = colDef(format = colFormat(digits = 2)),
+      ES = colDef(format = colFormat(digits = 4)),
+      NES = colDef(format = colFormat(digits = 4))
+    
+))
+
+
 ```
 
 
