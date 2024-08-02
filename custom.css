@@ -1,0 +1,28 @@
+/* Filename: custom.css */
+
+
+body {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    font-size: 16px;
+    line-height: 1.7;
+    font-family: 'Brush Script', sans-serif;
+}
+
+.Wrap {
+    max-width: 100% !important
+}
+
+/* .main-container {
+/*  max-width: 100% !important;
+/*  margin: auto;
+/* }
+
+
+.Reactable {
+    color: #bbb; /* Light grey text */
+    background-color: #2b2b2b; /* Dark background similar to downcute dark themes */
+}
+
+
+/* see https://github.com/glin/reactable/blob/363068caab2fa708b247a4ab0f73cdc694223587/srcjs/reactable.css#L4
