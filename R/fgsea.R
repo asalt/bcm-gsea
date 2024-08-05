@@ -249,6 +249,52 @@ get_rankorder <- function(
   )
 }
 
+get_rankorder_across <- function(
+    df, # long form data frame with var col
+    ranks_list,
+    geneset_lists,
+    collection_name = "",
+    topn = 25,
+    limit = 120,
+    title = "",
+    pstat_cutoff=1,
+    pstat_usetype='padj',
+    main_pathway_ratio = 0.1,
+    ...){
+
+  if (!"var" %in% colnames(df)){
+    stop('var not in fgesa_longdf')
+    }
+
+  df <- filter_on_mainpathway(df, main_pathway_ratio = main_pathway_ratio)
+  df <- df %>% filter(!!as.symbol(pstat_usetype) < pstat_cutoff) %>%
+    arrange( pval ) %>%
+    distinct(pathway, .keep_all = TRUE) %>%
+    head(n = limit)
+
+  pathways_to_plot <- df$pathway
+
+  rank_ids <- names(ranks_list)
+ 
+  rankorders <- pathways_to_plot %>% purrr::map(~{
+    if (!.x %in% names(geneset_lists)){
+      cat(paste0('does not have access to geneset : ', .x))
+      return()
+    }
+    geneset <- geneset_lists[[.x]]
+    
+    rank_ids %>% purrr::map(~{
+      fgsea_tools$get_rankorder(
+          geneset,
+          ranks_list[[.x]],
+          )
+      }) %>% set_names(rank_ids)
+    }) %>% set_names(pathways_to_plot)
+  
+  return(rankorders)
+}
+    
+
 
 
 
