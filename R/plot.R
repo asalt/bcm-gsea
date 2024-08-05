@@ -80,8 +80,13 @@ make_heatmap_fromgct <- function(
   .mat <- gct@mat
   # gct@mat %>% apply( 1, function(x) scale(x, center = T, scale = scale)) %>% t() %>% as.matrix()),
 
+  heatmap_matrix_width <- unit(ncol(.mat) * .2, 'in')
+  heatmap_matrix_height <- unit(nrow(.mat) * .2, 'in')
+
   ht <- ComplexHeatmap::Heatmap(
     .mat,
+    width = heatmap_matrix_width,
+    height = heatmap_matrix_height,
     # TODO use z_score_withna or other custom func for handling nas when scaling
     row_labels = row_labels,
     column_labels = gct@cdesc$id, # id should always be here
@@ -418,9 +423,12 @@ plot_results_all_collections <- function(
     metadata = NULL,
     cut_by = NULL,
     limit = 120,
+    pstat_cutoff=1,
+    pstat_usetype='padj',
     main_pathway_ratio = 0.1,
     save_func = NULL,
     ...) {
+  xtra_args <- list(...) # dunno what to do with these
   res <- list_of_lists %>% purrr::imap(
     ~ {
       if (!is.null(save_func)) {
@@ -433,9 +441,10 @@ plot_results_all_collections <- function(
         metadata = metadata,
         cut_by = cut_by,
         limit = limit,
+        pstat_cutoff=pstat_cutoff,
+        pstat_usetype=pstat_usetype,
         main_pathway_ratio = main_pathway_ratio,
-        save_func = save_func,
-        ...
+        save_func = save_func
       )
     }
   )
@@ -451,6 +460,8 @@ plot_results_one_collection <- function(
     cut_by = NULL,
     limit = 120,
     title = "",
+    pstat_cutoff=1,
+    pstat_usetype='padj',
     main_pathway_ratio = 0.1,
     save_func = NULL,
     ...) {
@@ -481,13 +492,12 @@ plot_results_one_collection <- function(
 
   df <- fgsea_tools$filter_on_mainpathway(df, main_pathway_ratio = main_pathway_ratio)
   # Limit the number of pathways if necessary
-  if (nrow(df) > limit) {
-    top_pathways <- df %>%
-      arrange(-abs(NES)) %>%
-      slice_head(n = limit) %>%
-      pull(pathway)
-    df <- df %>% filter(pathway %in% top_pathways)
-  }
+  top_pathways <- df %>%
+    arrange(-abs(NES)) %>%
+    filter(!!as.symbol(pstat_usetype) < pstat_cutoff) %>%
+    slice_head(n = limit) %>%
+    pull(pathway)
+  df <- df %>% filter(pathway %in% top_pathways)
 
   # Prepare data for heatmap
   dfp <- df %>%
@@ -498,6 +508,8 @@ plot_results_one_collection <- function(
     dplyr::mutate(pathway = str_remove(pathway, "HALLMARK_")) %>%
     dplyr::mutate(pathway = str_remove(pathway, "KEGG_")) %>%
     dplyr::mutate(pathway = str_remove(pathway, "GOMF_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "GOBP_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "GOCC_")) %>%
     dplyr::mutate(pathway = str_remove(pathway, "REACTOME_"))
   dfp <- .df_renamed
   rownames(dfp) <- dfp$pathway
@@ -578,6 +590,9 @@ plot_results_one_collection <- function(
 
   # height <- 6 + (nrows(dfp) * .16)
   .ncol <- ncol(dfp)
+  heatmap_matrix_width <- unit(ncol(dfp) * .2, 'in')
+  heatmap_matrix_height <- unit(nrow(dfp) * .2, 'in')
+
   ht <- ComplexHeatmap::Heatmap(
     dfp %>% as.matrix(),
     col = col,
@@ -585,27 +600,31 @@ plot_results_one_collection <- function(
     cluster_columns = T,
     heatmap_legend_param = heatmap_legend_param,
     column_gap = unit(1, "mm"),
-    width = ncol(dfp) * 9,
-    height = nrow(dfp) * 5,
+    width = heatmap_matrix_width, 
+    height = heatmap_matrix_height,
+    # width = ncol(dfp) * 9,
+    # height = nrow(dfp) * 5,
     border = T,
     column_split = cut_by,
     row_labels = rownames(dfp) %>%
       str_replace_all("_", " ") %>%
       str_wrap(width = 42),
+    row_names_gp = grid::gpar(fontsize = 6.8, lineheight=.8),
+    row_names_side = 'right',
+    row_names_rot=(pi/24)*180,
     column_labels = colnames(dfp) %>%
       str_replace_all("_", " ") %>%
       str_wrap(width = 28),
-    row_names_gp = grid::gpar(fontsize = 12),
-    column_title_gp = grid::gpar(fontsize = 14),
+    column_title_gp = grid::gpar(fontsize = 12, hjust=2),
     clustering_distance_rows = util_tools$dist_no_na,
     clustering_distance_columns = util_tools$dist_no_na,
     clustering_method_rows = "ward.D2",
     clustering_method_columns = "ward.D2",
     column_names_side = "top",
     column_title = title,
-    cell_fun = cell_fun # Use the updated cell_fun here
+    cell_fun = cell_fun 
   )
-  ht <- draw(ht) # necessary to get size correct
+  # ht <- draw(ht, heatmap_legend_side = "bottom") # necessary to get size correct, or is it?
 
   log_msg(msg = paste0("defining draw func"))
   do_draw <- function() {
@@ -615,11 +634,18 @@ plot_results_one_collection <- function(
     )
   }
 
+
+ # decorate_heatmap_body("mat", {
+ #   # grid.text(paste("Annotation:", the_annotation), unit(xunit, "cm"), unit(-5, "mm"))
+ #   grid.text(paste("Annotation:", ' test test test '), unit(xunit, "cm"), unit(-5, "mm"), gp=gpar(fontsize=7))
+ #     })
+
+
   log_msg(msg = paste0("save func: ", class(save_func) %>% as.character()))
   log_msg(msg = paste0("is null save func: ", is.null(save_func)))
 
-  height <- 8 + (nrow(dfp) * .20)
-  width <- 6 + (nrow(dfp) * .26)
+  height <- 4 + (nrow(dfp) * .20)
+  width <- 8 + (ncol(dfp) * .26)
 
   if (!is.null(save_func)) {
     log_msg(msg = paste0("save func attrs before: "))
@@ -707,14 +733,14 @@ other3 <- function(enplot_data, ticksSize = 4) {
 }
 
 
-plotES <- function(enplot_data, ticksSize = 4) {
+plotES <- function(enplot_data, ticksSize = 4, title="") {
   # this is directly from the example in fgsea plotEnrichmentData
   maxAbsStat <- enplot_data$maxAbsStat
   spreadES <- enplot_data$spreadES
   posES <- enplot_data$posES
   negES <- enplot_data$negES
 
-  with(
+  p <- with(
     enplot_data,
     ggplot(data = curve) +
       geom_line(aes(x = rank, y = ES), color = "green") +
@@ -743,12 +769,16 @@ plotES <- function(enplot_data, ticksSize = 4) {
       ) +
       labs(x = "rank", y = "enrichment score")
   )
+  p <- p + labs(title=title)
+  return(p)
 }
+
 
 plot_table <- function(fgsea_res,
                        ranks,
                        pathways,
                        gsea_param = 1.0,
+                       savefunc = NULL,
                        ...) {
   # top_pathways_u <- fgsea_res[ES > 0][head(order(pval), n=10), pathway]
   # top_pathways_d <- fgsea_res[ES < 0][head(order(pval), n=10), pathway]
@@ -763,12 +793,13 @@ plot_table <- function(fgsea_res,
     head(10) %>%
     pull(pathway)
   top_pathways <- c(top_pathways_u, rev(top_pathways_d)) #  rev reverse order
-  pathways[top_pathways] %>%
+  tableobject <- pathways[top_pathways] %>%
     plotGseaTable(ranks,
       fgsea_res,
       gseaParam = gsea_param
       # gseaParam=1.0
     )
+   return(tableobject)
 }
 
 
