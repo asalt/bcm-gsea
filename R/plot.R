@@ -80,8 +80,8 @@ make_heatmap_fromgct <- function(
   .mat <- gct@mat
   # gct@mat %>% apply( 1, function(x) scale(x, center = T, scale = scale)) %>% t() %>% as.matrix()),
 
-  heatmap_matrix_width <- unit(ncol(.mat) * .2, 'in')
-  heatmap_matrix_height <- unit(nrow(.mat) * .2, 'in')
+  heatmap_matrix_width <- unit(ncol(.mat) * .2, "in")
+  heatmap_matrix_height <- unit(nrow(.mat) * .2, "in")
 
   ht <- ComplexHeatmap::Heatmap(
     .mat,
@@ -157,6 +157,52 @@ plot_heatmap_of_edges <- function(
     )
   return(hts)
 }
+
+
+do_plot_edge_heatmaps_onecollection <- function(
+    df,
+    cut_by = NULL,
+    limit = 120,
+    pstat_cutoff = 1,
+    pstat_usetype = "padj",
+    main_pathway_ratio = 0.1,
+    cluster_rows = F,
+    cluster_columns = F,
+    ...) {
+  kwargs <- list(...)
+  sampleresults_names <- names(sampleresults_list)
+  if (!"var" %in% colnames(df)) {
+    warning("var not in colnames df, returning")
+    return(NULL)
+  }
+
+  df <- fgsea_tools$filter_on_mainpathway(df, main_pathway_ratio = main_pathway_ratio)
+  # Limit the number of pathways if necessary
+  top_pathways <- df %>%
+    arrange(-abs(NES)) %>%
+    filter(!!as.symbol(pstat_usetype) < pstat_cutoff) %>%
+    slice_head(n = limit) %>%
+    pull(pathway)
+  df <- df %>% filter(pathway %in% top_pathways)
+}
+
+do_plot_edge_heatmaps_allcollections <- function(results_list, ...) {
+  # input is named list
+  # names are collection names
+  # values are gsea dataframe results, long form
+  # with comparison/sample names inside
+  kwargs <- list(...)
+  collections <- names(results_list)
+  # if is null then exit
+  purrr::map(~ {
+    collection <- .x
+    do_plot_edge_heatmaps_onecollection(results_list[[collection]])
+  })
+}
+
+
+
+
 
 
 
@@ -423,8 +469,10 @@ plot_results_all_collections <- function(
     metadata = NULL,
     cut_by = NULL,
     limit = 120,
-    pstat_cutoff=1,
-    pstat_usetype='padj',
+    pstat_cutoff = 1,
+    pstat_usetype = "padj",
+    cluster_rows = FALSE,
+    cluster_columns = FALSE,
     main_pathway_ratio = 0.1,
     save_func = NULL,
     ...) {
@@ -441,9 +489,11 @@ plot_results_all_collections <- function(
         metadata = metadata,
         cut_by = cut_by,
         limit = limit,
-        pstat_cutoff=pstat_cutoff,
-        pstat_usetype=pstat_usetype,
+        pstat_cutoff = pstat_cutoff,
+        pstat_usetype = pstat_usetype,
         main_pathway_ratio = main_pathway_ratio,
+        cluster_rows = cluster_rows,
+        cluster_columns = cluster_columns,
         save_func = save_func
       )
     }
@@ -457,12 +507,14 @@ plot_results_all_collections <- function(
 plot_results_one_collection <- function(
     df,
     metadata = NULL,
+    title = "",
     cut_by = NULL,
     limit = 120,
-    title = "",
-    pstat_cutoff=1,
-    pstat_usetype='padj',
+    pstat_cutoff = 1,
+    pstat_usetype = "padj",
     main_pathway_ratio = 0.1,
+    cluster_rows = F,
+    cluster_columns = F,
     save_func = NULL,
     ...) {
   log_msg(msg = paste0("calling plot results one collection"))
@@ -523,7 +575,7 @@ plot_results_one_collection <- function(
   dfp_padj["pathway"] <- NULL
   dfp_padj <- dfp_padj[, metadata$id]
   # %>% select(-pathway, all_of(metadata$id))
-  logical_matrix <- dfp_padj < 0.05
+  logical_matrix <- dfp_padj < 0.25
   star_matrix <- ifelse(logical_matrix, "*", "")
   star_matrix <- star_matrix[, metadata$id] # shouldn't be necessary as comes from dfp_padj
   star_matrix[is.na(star_matrix)] <- ""
@@ -590,17 +642,21 @@ plot_results_one_collection <- function(
 
   # height <- 6 + (nrows(dfp) * .16)
   .ncol <- ncol(dfp)
-  heatmap_matrix_width <- unit(ncol(dfp) * .2, 'in')
-  heatmap_matrix_height <- unit(nrow(dfp) * .2, 'in')
+  heatmap_matrix_width <- unit(ncol(dfp) * .2, "in")
+  heatmap_matrix_height <- unit(nrow(dfp) * .2, "in")
+
+  # .row_fontsizes <- ifelse(nchar(rownames(dfp) < 20), 9.8, 5.8)
+  .row_fontsizes <- lapply(rownames(dfp), function(x) ifelse(nchar(x) < 36, 7.6, ifelse(nchar(x) < 64, 6.6, ifelse(nchar(x) < 84, 6.2, 5.2))))
+  # rownames_gp <- ifelse(nchar(rownames(dfp) < 20), c(grid::gpar(fontsize=9.8, lineheight=.8)), c(grid::gpar(fontsize=5.8, lineheight=.8)))
 
   ht <- ComplexHeatmap::Heatmap(
     dfp %>% as.matrix(),
     col = col,
-    cluster_rows = T,
-    cluster_columns = T,
+    cluster_rows = cluster_rows,
+    cluster_columns = cluster_columns,
     heatmap_legend_param = heatmap_legend_param,
     column_gap = unit(1, "mm"),
-    width = heatmap_matrix_width, 
+    width = heatmap_matrix_width,
     height = heatmap_matrix_height,
     # width = ncol(dfp) * 9,
     # height = nrow(dfp) * 5,
@@ -609,20 +665,21 @@ plot_results_one_collection <- function(
     row_labels = rownames(dfp) %>%
       str_replace_all("_", " ") %>%
       str_wrap(width = 42),
-    row_names_gp = grid::gpar(fontsize = 6.8, lineheight=.8),
-    row_names_side = 'right',
-    row_names_rot=(pi/24)*180,
+    # row_names_gp = grid::gpar(fontsize = 6.8, lineheight=.8),
+    row_names_gp = grid::gpar(fontsize = .row_fontsizes, lineheight = .8),
+    row_names_side = "right",
+    # row_names_rot=(pi/24)*180,
     column_labels = colnames(dfp) %>%
       str_replace_all("_", " ") %>%
       str_wrap(width = 28),
-    column_title_gp = grid::gpar(fontsize = 12, hjust=2),
+    column_title_gp = grid::gpar(fontsize = 12, hjust = 2),
     clustering_distance_rows = util_tools$dist_no_na,
     clustering_distance_columns = util_tools$dist_no_na,
     clustering_method_rows = "ward.D2",
     clustering_method_columns = "ward.D2",
     column_names_side = "top",
     column_title = title,
-    cell_fun = cell_fun 
+    cell_fun = cell_fun
   )
   # ht <- draw(ht, heatmap_legend_side = "bottom") # necessary to get size correct, or is it?
 
@@ -635,10 +692,10 @@ plot_results_one_collection <- function(
   }
 
 
- # decorate_heatmap_body("mat", {
- #   # grid.text(paste("Annotation:", the_annotation), unit(xunit, "cm"), unit(-5, "mm"))
- #   grid.text(paste("Annotation:", ' test test test '), unit(xunit, "cm"), unit(-5, "mm"), gp=gpar(fontsize=7))
- #     })
+  # decorate_heatmap_body("mat", {
+  #   # grid.text(paste("Annotation:", the_annotation), unit(xunit, "cm"), unit(-5, "mm"))
+  #   grid.text(paste("Annotation:", ' test test test '), unit(xunit, "cm"), unit(-5, "mm"), gp=gpar(fontsize=7))
+  #     })
 
 
   log_msg(msg = paste0("save func: ", class(save_func) %>% as.character()))
@@ -732,8 +789,83 @@ other3 <- function(enplot_data, ticksSize = 4) {
     labs(x = "rank", y = "enrichment score"))
 }
 
+plot_top_ES_across <- function(gsea_results, ranks_list, geneset_collections, limit = 30, save_func = NULL, ...) {
+  if (!"list" %in% class(gsea_results)) {
+    stop(cat("gsea_results should be a list of data frames"))
+  }
 
-plotES <- function(enplot_data, ticksSize = 4, title="") {
+  if (!"list" %in% class(geneset_collections)) {
+    stop(cat("geneset_collections should be a list of data frames"))
+  }
+
+  missing <- setdiff(
+    names(gsea_results),
+    names(geneset_collections)
+  )
+  if (length(missing) > 0) {
+    cat(paste0("missing some genesets..."))
+  }
+
+  list_of_plts <- gsea_results %>%
+    purrr::imap(~ {
+      df <- .x
+      collection_name <- .y
+      geneset_collection <- geneset_collections[[collection_name]]
+
+      if (!is.null(save_func)) {
+        path <- get_arg(save_func, "path")
+        newpath <- file.path(path, make.names(collection_name))
+        filename <- make.names(collection_name)
+        save_func <- make_partial(save_func, path = newpath, filename = filename)
+      }
+
+      plts <- plot_top_ES(df, ranks_list, geneset_collection, limit = limit, save_func = save_func)
+      return(plts)
+    })
+  return(list_of_plts)
+}
+
+plot_top_ES <- function(df, ranks_list, geneset_collection, limit = 30, save_func = NULL) {
+  subdf <- fgsea_tools$filter_on_mainpathway(df) %>%
+    fgsea_tools$select_topn(limit = limit)
+  pathways <- subdf$pathway %>% unique()
+  geneset_lists <- geneset_collection[pathways]
+  rankorder_by_pw <- fgsea_tools$get_rankorder_across(
+    subdf,
+    ranks_list,
+    geneset_lists
+  )
+
+  plts <- rankorder_by_pw %>%
+    purrr::imap(~ {
+      rankorders <- .x
+      pathway_name <- .y
+
+      rankorders %>% purrr::imap(~ {
+        rankorder <- .x
+        comparison <- .y
+        plt <- plotES(rankorder, title = paste0(comparison, "\n", pathway_name))
+
+
+        if (!is.null(save_func)) {
+          filename <- paste(get_arg(save_func, "filename"),
+            make.names(pathway_name),
+            make.names(comparison),
+            sep = "_"
+          )
+          save_func <- make_partial(save_func, filename = filename)
+          # and now call it
+          save_func(plot_code = function() print(plt))
+        }
+
+        return(plt)
+      })
+    })
+
+  return(plts)
+}
+
+plotES <- function(enplot_data, ticksSize = 4, title = "") {
   # this is directly from the example in fgsea plotEnrichmentData
   maxAbsStat <- enplot_data$maxAbsStat
   spreadES <- enplot_data$spreadES
@@ -769,9 +901,10 @@ plotES <- function(enplot_data, ticksSize = 4, title="") {
       ) +
       labs(x = "rank", y = "enrichment score")
   )
-  p <- p + labs(title=title)
+  p <- p + labs(title = title)
   return(p)
 }
+
 
 
 plot_table <- function(fgsea_res,
@@ -799,7 +932,7 @@ plot_table <- function(fgsea_res,
       gseaParam = gsea_param
       # gseaParam=1.0
     )
-   return(tableobject)
+  return(tableobject)
 }
 
 
