@@ -86,7 +86,7 @@ create_rnkfiles_from_emat <- function(
 
 
 create_rnkfiles_from_volcano <- function(
-    volcanodir,
+    volcanodir="./",
     id_col = "GeneID",
     value_col = "value") {
   if (is.null(volcanodir)) {
@@ -118,7 +118,7 @@ create_rnkfiles_from_volcano <- function(
   log_msg(msg = "trying to shorten names")
 
   shorternames <- names(lst) %>%
-    stringr::str_extract(., pattern = "(?<=group_)(.*)(?=_*)")
+    stringr::str_extract(., pattern = "(?<=group_)([^_]*)(?=_*)")
 
   log_msg(msg = paste0("shorter names are ", paste0(shorternames, "\n")))
   if (!any(is.na(shorternames))) {
@@ -134,13 +134,17 @@ create_rnkfiles_from_volcano <- function(
 write_rnkfiles <- function(
     lst,
     dir = "rnkfiles") {
-  if (!fs::dir_exists(dir)) fs::dir_create(dir)
+  if (!fs::dir_exists(dir)){
+      log_msg(msg = paste0("creating ", dir))
+      fs::dir_create(dir)
+  }
   lst %>% purrr::iwalk( # .x is the value, .y is the name
     ~ {
       .outname <- fs::path_join(
         c(dir, paste0(.y, ".rnk"))
       )
       if (!fs::file_exists(.outname)) {
+        if (("GeneID" %in% colnames(.x)) && (!"id" %in% colnames(.x))) .x %<>% rename(id=GeneID)
         .x %>%
           dplyr::select(id, value) %>%
           write_tsv(.outname, col_names = FALSE)

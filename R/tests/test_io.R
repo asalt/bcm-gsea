@@ -52,10 +52,11 @@ test_that("create_rnkfiles_from_volcano processes files correctly", {
 
     # Test the function
     result <- io_tools$create_rnkfiles_from_volcano("volcano_test")
-    expect_true("test1" %in% names(result))
-    expect_true("test2" %in% names(result))
-    expect_equal(nrow(result[["test1"]]), 2)
-    expect_equal(nrow(result[["test2"]]), 2)
+
+    expect_true(stringr::str_detect( names(result), 'test1' ) %>% any() )
+    expect_true(stringr::str_detect( names(result), 'test2' ) %>% any() )
+    expect_equal(nrow(result[[1]]), 2)
+    expect_equal(nrow(result[[2]]), 2)
   })
 })
 
