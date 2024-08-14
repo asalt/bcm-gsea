@@ -205,7 +205,11 @@ save_gsea_results <- function(
                 ".tsv"
               )
               outf <- file.path(savedir, outf)
+              # one last check here
+              result %<>% mutate(leadingEdge = sapply(leadingEdge, paste, collapse="/"))
+              log_msg(msg=paste0("Writing: ", outf, "..."))
               result %>% readr::write_tsv(outf)
+              log_msg(msg="done")
               # if (!fs::file_exists(outf)) result %>% readr::write_tsv(outf)
             }
           )
