@@ -691,15 +691,13 @@ plot_results_one_collection <- function(
     )
   }
 
-
   # decorate_heatmap_body("mat", {
   #   # grid.text(paste("Annotation:", the_annotation), unit(xunit, "cm"), unit(-5, "mm"))
   #   grid.text(paste("Annotation:", ' test test test '), unit(xunit, "cm"), unit(-5, "mm"), gp=gpar(fontsize=7))
   #     })
 
-
-  log_msg(msg = paste0("save func: ", class(save_func) %>% as.character()))
-  log_msg(msg = paste0("is null save func: ", is.null(save_func)))
+  log_msg(debug = paste0("save func: ", class(save_func) %>% as.character()))
+  log_msg(debug = paste0("is null save func: ", is.null(save_func)))
 
   height <- 4 + (nrow(dfp) * .20)
   width <- 8 + (ncol(dfp) * .26)

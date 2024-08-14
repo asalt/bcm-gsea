@@ -177,6 +177,13 @@ make_partial <- function(.f, ...) {
 
 
 
-log_msg <- function(msg, filename = "run.log", end = "\n") {
-  cat(paste0(msg, end), file = filename, append = TRUE)
+log_msg <- function(msg=NULL, debug=NULL, filename = "run.log", end = "\n") {
+  level <- case_when(
+            !is.null(msg) ~ "INFO",
+            !is.null(debug) ~ "DEBUG",
+            TRUE ~ "INFO"
+            )
+  if (is.null(msg) && (!is.null(debug))) msg <- debug
+  prefix <- paste0(format(Sys.time(), "[%Y-%m-%d %H:%M:%S] "), level, ": ")
+  cat(paste0(prefix, msg, end), file = filename, append = TRUE)
 }

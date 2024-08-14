@@ -14,6 +14,10 @@ source(file.path(src_dir, "./io.R"), local = io_tools)
 geneset_tools <- new.env()
 source(file.path(src_dir, "./geneset_utils.R"), local = geneset_tools)
 
+util_tools <- new.env()
+source(file.path(src_dir, "./utils.R"), local = util_tools)
+log_msg <- util_tools$make_partial(util_tools$log_msg)
+
 
 filter_on_mainpathway <- function(
     pathway_object,
@@ -89,6 +93,7 @@ run_one <- function(
     pull(Freq) %>%
     max()
   assertthat::are_equal(.maxcounts, 1)
+  # this doesn't actually error out??
 
 
   # set.seed(789)
@@ -117,8 +122,6 @@ run_one <- function(
   } else {
     fgseaRes$mainpathway <- TRUE
   }
-
-
   return(fgseaRes)
 }
 
@@ -215,6 +218,7 @@ run_all_pathways <- function(
         if (nrow(geneset_additional_info) > 0) {
           current_collapse <- geneset_additional_info$collapse
         } else {
+          log_msg(paste0("No matching geneset info found for pathway: ", geneset_name))
           warning("No matching geneset info found for pathway: ", geneset_name)
         }
       }
