@@ -6,6 +6,11 @@ suppressPackageStartupMessages(library(memoise))
 suppressPackageStartupMessages(library(dplyr))
 
 
+util_tools <- new.env()
+source(file.path(src_dir, "./utils.R"), local = util_tools)
+log_msg <- util_tools$make_partial(util_tools$log_msg)
+
+
 get_collection_raw <- function(
     category,
     subcategory,
@@ -19,6 +24,7 @@ get_collection_raw <- function(
 
   if (cache && fs::file_exists(collection_id_path)) {
     cat(paste0("reading ", collection_id, " from ", cache_dir, "\n"))
+    log_msg(info = paste0("reading ", collection_id, " from ", cache_dir, "\n"))
     return(readr::read_tsv(collection_id_path, show_col_types = FALSE))
   }
 

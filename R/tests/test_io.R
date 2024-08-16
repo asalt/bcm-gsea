@@ -47,14 +47,14 @@ test_that("create_rnkfiles_from_volcano processes files correctly", {
   withr::with_tempdir({
     # Create a temporary directory and some sample files
     fs::dir_create("volcano_test")
-    write_lines("GeneID\tvalue\nGene1\t0.5\nGene2\t-1.2", "volcano_test/group_test1_data.tsv")
-    write_lines("GeneID\tvalue\nGene3\t1.5\nGene4\t-0.3", "volcano_test/group_test2_data.tsv")
+    write_lines("GeneID\tvalue\nGene1\t0.5\nGene2\t-1.2", "volcano_test/group_test1.tsv")
+    write_lines("GeneID\tvalue\nGene3\t1.5\nGene4\t-0.3", "volcano_test/group_test2.tsv")
 
     # Test the function
     result <- io_tools$create_rnkfiles_from_volcano("volcano_test")
 
-    expect_true(stringr::str_detect( names(result), 'test1' ) %>% any() )
-    expect_true(stringr::str_detect( names(result), 'test2' ) %>% any() )
+    expect_true(stringr::str_detect(names(result), "test1") %>% any())
+    expect_true(stringr::str_detect(names(result), "test2") %>% any())
     expect_equal(nrow(result[[1]]), 2)
     expect_equal(nrow(result[[2]]), 2)
   })
@@ -64,8 +64,8 @@ test_that("create_rnkfiles_from_volcano processes files rename", {
   withr::with_tempdir({
     # Create a temporary directory and some sample files
     fs::dir_create("volcano_test")
-    write_lines("GeneID\tValue\nGene1\t0.5\nGene2\t-1.2", "volcano_test/group_test1_data.tsv")
-    write_lines("GeneID\tValue\nGene3\t1.5\nGene4\t-0.3", "volcano_test/group_test2_data.tsv")
+    write_lines("GeneID\tValue\nGene1\t0.5\nGene2\t-1.2", "volcano_test/group_test1.tsv")
+    write_lines("GeneID\tValue\nGene3\t1.5\nGene4\t-0.3", "volcano_test/group_test2.tsv")
 
     # Test the function
     result <- io_tools$create_rnkfiles_from_volcano("volcano_test", id_col = "GeneID", value_col = "Value")
@@ -75,7 +75,12 @@ test_that("create_rnkfiles_from_volcano processes files rename", {
     expect_equal(nrow(result[["test2"]]), 2)
     expect_true("value" %in% colnames(result[["test1"]]))
 
-    expect_true("id" %in% colnames(result[["test1"]]))
+
+    expect_true("id" %in% colnames(result[["test1"]]),
+      info = paste0(
+        colnames(result[["test1"]]) %>% as.character()
+      )
+    )
   })
 })
 

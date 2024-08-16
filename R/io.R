@@ -86,7 +86,7 @@ create_rnkfiles_from_emat <- function(
 
 
 create_rnkfiles_from_volcano <- function(
-    volcanodir="./",
+    volcanodir = "./",
     id_col = "GeneID",
     value_col = "value") {
   if (is.null(volcanodir)) {
@@ -99,6 +99,7 @@ create_rnkfiles_from_volcano <- function(
 
   (volcanofiles <- fs::dir_ls(path = volcanodir, regexp = ".*tsv"))
   log_msg(msg = paste0("Found ", length(volcanofiles), " tsv files"))
+  log_msg(msg = paste(volcanofiles, collapse = "\n"))
 
   lst <- volcanofiles %>%
     purrr::set_names(nm = ~ basename(.) %>%
@@ -118,8 +119,7 @@ create_rnkfiles_from_volcano <- function(
   log_msg(msg = "trying to shorten names")
 
   shorternames <- names(lst) %>%
-    stringr::str_extract(., pattern = "(?<=group_)([^_]*)(?=_*)")
-
+    stringr::str_extract(., pattern = "(?<=group_)([^.*]*)$")
   log_msg(msg = paste0("shorter names are ", paste0(shorternames, "\n")))
   if (!any(is.na(shorternames))) {
     names(lst) <- shorternames
@@ -134,9 +134,9 @@ create_rnkfiles_from_volcano <- function(
 write_rnkfiles <- function(
     lst,
     dir = "rnkfiles") {
-  if (!fs::dir_exists(dir)){
-      log_msg(msg = paste0("creating ", dir))
-      fs::dir_create(dir)
+  if (!fs::dir_exists(dir)) {
+    log_msg(msg = paste0("creating ", dir))
+    fs::dir_create(dir)
   }
   lst %>% purrr::iwalk( # .x is the value, .y is the name
     ~ {
@@ -144,11 +144,12 @@ write_rnkfiles <- function(
         c(dir, paste0(.y, ".rnk"))
       )
       if (!fs::file_exists(.outname)) {
-        if (("GeneID" %in% colnames(.x)) && (!"id" %in% colnames(.x))) .x %<>% rename(id=GeneID)
+        if (("GeneID" %in% colnames(.x)) && (!"id" %in% colnames(.x))) .x %<>% rename(id = GeneID)
         .x %>%
           dplyr::select(id, value) %>%
           write_tsv(.outname, col_names = FALSE)
         print(paste0("Wrote ", .outname))
+        log_msg(msg = paste0("Wrote ", .outname))
       }
     }
   )
@@ -185,38 +186,97 @@ load_genesets_from_json <- function(json_str) {
 }
 
 
-save_gsea_results <- function(
-    results_list,
-    savedir = NULL) {
-  if (is.null(savedir)) savedir <- "gsea_tables"
-  if (!file.exists(savedir)) fs::dir_create(savedir)
-  names(results_list) %>%
-    purrr::map(
-      ~ {
-        collection_name <- .x
-        names(results_list[[collection_name]]) %>%
-          purrr::map(
-            ~ {
-              comparison_name <- .x
-              result <- results_list[[collection_name]][[comparison_name]]
-              print(collection_name)
-              print(comparison_name)
+# save_gsea_results <- function(
+#     results_list,
+#     savedir = NULL) {
+#   if (is.null(savedir)) savedir <- "gsea_tables"
+#   if (!file.exists(savedir)) fs::dir_create(savedir)
+#   names(results_list) %>%
+#     purrr::map(
+#       ~ {
+#         collection_name <- .x
+#         names(results_list[[collection_name]]) %>%
+#           purrr::map(
+#             ~ {
+#               comparison_name <- .x
+#               result <- results_list[[collection_name]][[comparison_name]]
+#               # print(collection_name)
+#               # print(comparison_name)
+#
+#               outf <- paste0(
+#                 make.names(collection_name),
+#                 "_",
+#                 make.names(comparison_name),
+#                 ".tsv"
+#               )
+#               outf <- file.path(savedir, outf)
+#               # one last check here
+#               result <- result %>% mutate(leadingEdge = purrr::map_chr(leadingEdge, paste, collapse = "/"))
+#               log_msg(msg = paste0("Writing: ", outf, "..."))
+#               if (is.data.frame(result)) {
+#                 result %>% readr::write_tsv(outf)
+#                 log_msg(msg = "done")
+#               } else {
+#                 log_msg(msg = "Invalid result, cannot write to file.")
+#               }
+#               # if (!fs::file_exists(outf)) result %>% readr::write_tsv(outf)
+#             }
+#           )
+#       }
+#     )
+# }
 
-              outf <- paste0(
-                make.names(collection_name),
-                "_",
-                make.names(comparison_name),
-                ".tsv"
-              )
-              outf <- file.path(savedir, outf)
-              # one last check here
-              result %<>% mutate(leadingEdge = sapply(leadingEdge, paste, collapse="/"))
-              log_msg(msg=paste0("Writing: ", outf, "..."))
-              result %>% readr::write_tsv(outf)
-              log_msg(msg="done")
-              # if (!fs::file_exists(outf)) result %>% readr::write_tsv(outf)
-            }
-          )
-      }
-    )
+
+write_results <- function(result, outf) {
+  if (!is.data.frame(result)) {
+    log_msg(msg = "Invalid result, cannot write to file.")
+    stop("Invalid result, cannot write to file.")
+  }
+
+  if (!"leadingEdge" %in% colnames(result)) {
+    log_msg(msg = "leadingEdge column not found in the input data")
+    stop("leadingEdge column not found in the input data")
+  }
+
+  result %>%
+    mutate(leadingEdge = purrr::map_chr(leadingEdge, paste, collapse = "/")) %>%
+    write_tsv(outf)
+  log_msg(msg = paste0("Successfully written to ", outf))
+}
+
+# Main function to save GSEA results
+save_gsea_results <- function(results_list, savedir = "gsea_tables") {
+  fs::dir_create(savedir) # Ensures directory exists, no error if it already does
+
+  imap(results_list, function(collection, collection_name) {
+    imap(collection, function(result, comparison_name) {
+      outf <- file.path(savedir, make.names(paste0(collection_name, "_", comparison_name, ".tsv")))
+      log_msg(paste0("Writing: ", outf, "..."))
+      write_results(result, outf)
+    })
+  })
+}
+
+
+load_from_cache <- function(filename, cache_dir = NULL) {
+  if (is.null(cache_dir)) {
+    cache_dir <- here("cache")
+  }
+  if (!fs::dir_exists(cache_dir)) fs::dir_create(cache_dir)
+  target_file <- paste0(file.path(cache_dir, filename), ".rds")
+  if (!fs::file_exists(target_file)) {
+    log_msg(msg = paste0("File ", target_file, " not found in cache"))
+    return(NULL)
+  } else {
+    log_msg(msg = paste0("File ", target_file, " found in cache"))
+    return(readRDS(target_file))
+  }
+}
+
+write_to_cache <- function(object, filename, cache_dir = NULL) {
+  if (is.null(cache_dir)) {
+    cache_dir <- here("cache")
+  }
+  target_file <- paste0(file.path(cache_dir, filename), ".rds")
+  saveRDS(object, file = target_file)
 }

@@ -22,8 +22,8 @@ log_msg <- util_tools$make_partial(util_tools$log_msg)
 filter_on_mainpathway <- function(
     pathway_object,
     main_pathway_ratio = .1) {
-  if (!"var" %in% colnames(pathway_object)) {
-    stop("var column not found in the input data")
+  if (!"rankname" %in% colnames(pathway_object)) {
+    stop("rankname column not found in the input data")
   }
 
   if (!"mainpathway" %in% colnames(pathway_object)) {
@@ -32,7 +32,7 @@ filter_on_mainpathway <- function(
 
 
   pathway_object <- pathway_object %>%
-    group_by(var) %>%
+    group_by(rankname) %>%
     mutate(n_main = sum(mainpathway == T)) %>%
     mutate(ratio_main = n_main / n()) %>%
     ungroup()
@@ -44,18 +44,48 @@ filter_on_mainpathway <- function(
   return(filtered_pathway_object)
 }
 
+#' Select top pathways based on statistical cutoff
+#'
+#' This function selects the top pathways from a data frame based on a statistical cutoff.
+#' The statistical cutoff is determined by the p-value or adjusted p-value, depending on the value of the `pstat_usetype` parameter.
+#' The function arranges the data frame in descending order of the absolute value of the NES column,
+#' filters the rows where the p-value or adjusted p-value is less than the specified cutoff,
+#' selects the specified number of top pathways, and returns a subset of the data frame containing only the top pathways.
+#'
+#' @param df A data frame containing the pathways and statistical values.
+#' @param pstat_cutoff The cutoff value for the p-value or adjusted p-value.
+#' @param limit The maximum number of top pathways to select.
+#' @param pstat_usetype The type of statistical value to use for the cutoff (either "pval" or "padj").
+#'
+#' @return A subset of the input data frame containing only the top pathways.
+#'
+#' @examples
+#' df <- data.frame(
+#'   pathway = c("Pathway A", "Pathway B", "Pathway C"),
+#'   NES = c(1.5, -2.3, 0.8),
+#'   pval = c(0.01, 0.05, 0.001),
+#'   padj = c(0.05, 0.1, 0.01)
+#' )
+#' select_topn(df, pstat_cutoff = 0.05, limit = 2, pstat_usetype = "pval")
+#' # Returns a data frame with Pathway A and Pathway C
+#' select_topn(df, pstat_cutoff = 0.05, limit = 2, pstat_usetype = "padj")
+#' # Returns a data frame with Pathway A and Pathway B
+#'
+#' @seealso \code{\link{arrange}}, \code{\link{filter}}, \code{\link{slice_head}}, \code{\link{pull}}
+#'
+#' @import dplyr
+#'
+#' @export
 select_topn <- function(df,
                         pstat_cutoff = 1,
                         limit = 120,
-                        pstat_usetype = c("pval", "padj")) {
-  pstat_usetype <- match.arg(pstat_usetype)
-
+                        pstat_usetype = c("pval", "padj"),
+                        ...) {
   if (!"data.frame" %in% class(df)) {
     stop(
       cat("df should be a data frame")
     )
   }
-
 
   if (!"NES" %in% colnames(df)) {
     stop(
@@ -78,12 +108,35 @@ select_topn <- function(df,
   return(subdf)
 }
 
+
+
 run_one <- function(
     rankobj,
     geneset,
     minSize = 15,
     maxSize = 500,
-    collapse = FALSE) {
+    collapse = FALSE,
+    cache = TRUE) {
+  get_hash_val <- function() {
+    rlang::hash(
+      c(
+        rankobj,
+        as.character(geneset),
+        minSize,
+        maxSize,
+        collapse
+      )
+    )
+  }
+
+  if (cache == TRUE) {
+    hashval <- get_hash_val()
+    cache_load <- io_tools$load_from_cache(hashval)
+    if (!is.null(cache_load)) {
+      return(cache_load)
+    }
+  }
+
   # to look for duplicate gene names
   # rankobj %>% names %>% table %>% as.data.frame %>% pull(Freq) %>% max
   .maxcounts <- rankobj %>%
@@ -94,7 +147,6 @@ run_one <- function(
     max()
   assertthat::are_equal(.maxcounts, 1)
   # this doesn't actually error out??
-
 
   # set.seed(789)
 
@@ -122,6 +174,11 @@ run_one <- function(
   } else {
     fgseaRes$mainpathway <- TRUE
   }
+
+  if (cache == TRUE) {
+    io_tools$write_to_cache(object = fgseaRes, filename = hashval)
+  }
+
   return(fgseaRes)
 }
 
@@ -344,6 +401,7 @@ simulate_preranked_data <- function(
     seed = 4321,
     geneset = NULL,
     spike_terms = c("INTERFERON"),
+    sample_frac = 1.0,
     ...) {
   set.seed(seed)
 
@@ -391,6 +449,7 @@ simulate_preranked_data <- function(
   )
   data %<>% distinct(id, .keep_all = TRUE)
   data %<>% dplyr::mutate(id = as.character(id))
+  data %<>% dplyr::sample_frac(size = sample_frac)
 
   return(data)
 }
@@ -400,11 +459,10 @@ concat_results_one_collection <- function(list_of_dfs) {
   res <- list_of_dfs %>%
     purrr::imap(
       .f = ~ {
-        .x %>% dplyr::mutate(var = .y)
+        .x %>% dplyr::mutate(rankname = .y)
       }
     ) %>%
     dplyr::bind_rows()
-
   return(res)
 }
 
@@ -417,6 +475,5 @@ concat_results_all_collections <- function(list_of_lists, ...) {
         concat_results_one_collection(.x)
       }
     ) # %>%
-  # purrr::reduce(rbind)
   return(res)
 }

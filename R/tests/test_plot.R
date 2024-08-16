@@ -3,79 +3,23 @@ suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(ggplot2))
-suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(testthat))
-# suppressPackageStartupMessages(library(assertthat))
+suppressPackageStartupMessages(library(assertthat))
 suppressPackageStartupMessages(library(here))
 
+src_dir <- file.path(here("R"))
 
 io_tools <- new.env()
-source("../io.R", local = io_tools)
+source(file.path(file.path(src_dir, "./io.R")), local = io_tools)
 
 geneset_tools <- new.env()
-source("../geneset_utils.R", local = geneset_tools)
+source(file.path(src_dir, "./geneset_utils.R"), local = geneset_tools)
 
 fgsea_tools <- new.env()
-source("../fgsea.R", local = fgsea_tools)
+source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
 plot_tools <- new.env()
-source("../plot.R", local = plot_tools)
-
-
-test_plot_bar_format <- function() {
-  data <- fgsea_tools$simulate_preranked_data()
-  geneset <- geneset_tools$get_collection("H", "")
-  geneset_list <- geneset_tools$genesets_df_to_list(geneset)
-  rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
-  rankobj <- rankobjs[[1]]
-  res <- rankobj %>% fgsea_tools$run_one(geneset_list)
-
-  res_filtered <- res %>%
-    arrange(pval) %>%
-    head(5)
-
-
-  out <- plot_tools$prepare_data_for_barplot(res_filtered)
-
-  assertthat::has_name(
-    out,
-    c("leadingEdgeNum", "leadingEdgeFrac")
-  )
-
-
-  return("Success")
-}
-
-
-test_plot_bar <- function() {
-  data <- fgsea_tools$simulate_preranked_data()
-  geneset <- geneset_tools$get_collection("H", "")
-  geneset_list <- geneset_tools$genesets_df_to_list(geneset)
-  rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
-  rankobj <- rankobjs[[1]]
-  res <- rankobj %>% fgsea_tools$run_one(geneset_list)
-
-  res_filtered <- res %>%
-    arrange(pval) %>%
-    head(5)
-
-
-  out <- plot_tools$prepare_data_for_barplot(res_filtered)
-
-  plt <- plot_tools$barplot_with_numbers(out)
-
-
-  assertthat::assert_that(
-    all(
-      "gg" %in% class(plt),
-      "ggplot" %in% class(plt)
-    )
-  )
-
-  return("Success")
-}
-
-
+source(file.path(src_dir, "./plot.R"), local = plot_tools)
 
 
 #
@@ -137,52 +81,9 @@ test_that("test generate testdata", {
 
 
 
-test_that("test heatmap of NES", {
-  gsea_res <- TEST_DATA
-  res_c <- gsea_res %>% fgsea_tools$concat_results_all_collections()
-  ht <- res_c[[1]] %>% plot_tools$plot_results_one_collection()
-
-  testthat::expect_true(
-    "Heatmap" %in% class(ht)
-  )
-})
-
-
-
-test_that("test run though all heatmaps of NES", {
-  gsea_res <- TEST_DATA
-  res_c <- gsea_res %>% fgsea_tools$concat_results_all_collections()
-  ht_list <- plot_tools$plot_results_all_collections(res_c)
-  testthat::expect_true(
-    "list" %in% class(ht_list)
-  )
-
-
-  # ht_list %>% purrr::map(~ {
-  #     assert_that(
-  #         "HeatmapList" %in% class(.x)
-  #     )
-  # })
-  for (ht in ht_list) {
-    testthat::expect_true(
-      "Heatmap" %in% class(ht)
-    )
-  }
-})
-
-
 
 
 test_that("test test data with collapse", {
-  # scratch
-  # TEST_DATA$`C5_GO:BP` %>% map(~ .x %>%
-  #     pull(mainpathway) %>%
-  #     table())
-  # TEST_DATA_withCollapse$`C5_GO:BP` %>% map(~ .x %>%
-  #     pull(mainpathway) %>%
-  #     table())
-
-  # the test
   TEST_DATA_withCollapse
   results <- TEST_DATA_withCollapse$`C5_GO:BP` %>%
     map(~ .x %>%
@@ -198,17 +99,7 @@ test_that("test test data with collapse", {
 })
 
 
-test_that(" test test data without collapse", {
-  # TEST_DATA$`C5_GO:BP` %>% map(~ .x %>%
-  #     pull(mainpathway) %>%
-  #     table())
-  # TEST_DATA_withCollapse$`C5_GO:BP` %>% map(~ .x %>%
-  #     pull(mainpathway) %>%
-  #     table())
-
-
-  # the test
-
+test_that("test test data without collapse", {
   results <- TEST_DATA$`C5_GO:BP` %>%
     map(~ .x %>%
       pull(mainpathway) %>%
@@ -218,107 +109,93 @@ test_that(" test test data without collapse", {
   walk(results, ~ {
     expect_true("TRUE" %in% names(.x), info = "only TRUE should be present in mainpathway count.")
     expect_false("FALSE" %in% names(.x), info = "FALSE should not be present in mainpathway count.")
-    expect_true(.x["TRUE"] > 0, info = "There should be more than 0 TRUE values.") # Adjust the number based on your expectations
+    expect_true(.x["TRUE"] > 0, info = "There should be more than 0 TRUE values.")
   })
   #
 })
 
 
-(test_plot_bar_format())
-(test_plot_bar())
+test_that("test formatting for barplot", {
+  data <- TEST_DATA[[1]][[1]]
+  out <- plot_tools$prepare_data_for_barplot(data)
+
+  testthat::expect_true(
+    all(c("leadingEdgeNum", "leadingEdgeFrac") %in% colnames(out))
+  )
+})
 
 
-# ============================
+test_that("test plot a single barplot", {
+  plt <- TEST_DATA$H_[[1]] %>%
+    plot_tools$barplot_with_numbers()
+  testthat::expect_true(
+    all(
+      "gg" %in% class(plt),
+      "ggplot" %in% class(plt)
+    )
+  )
+  plt_b <- ggplot2::ggplot_build(plt)
+  testthat::expect_true(
+    "facet" %in% names(plt_b$layout)
+  )
+  testthat::expect_true(
+    length(plt_b$layout$facet$params) == 0
+  )
+})
 
-other <- function() {
-  # misc not for use
-  .name <- res[1, "pathway"]
-
-  enplot_data <- fgsea::plotEnrichmentData(geneset_list[[.name]], rankobj)
-
-  rnkorder <- -rankobj %>% rank()
-
-  #
-  rankorder_df <- data.frame(
-    id = names(rnkorder),
-    rank = rnkorder,
-    stat = rankobj
+test_that("test plot a faceted barplot", {
+  df <- TEST_DATA$H_ %>% fgsea_tools$concat_results_one_collection()
+  # this should be tested in test_fgsea but we can test it here too
+  testthat::expect_true(
+    "data.frame" %in% class(df),
+    info = "df is not a data.frame. this is an fgsea_tools problem"
+  )
+  testthat::expect_true(
+    "rankname" %in% colnames(df),
+    info = "rankname not in colnames of df. this is an fgsea_tools problem"
   )
 
-  rankorder_edge <- rankorder_df %>% left_join(enplot_data$curve)
-  rankorder_edge %<>% left_join(rename(enplot_data$ticks, stat_tick = stat))
-  rankorder_edge %<>% left_join(rename(enplot_data$stats, stat_stat = stat))
-  rankorder_edge$stat == rankorder_edge$stat_tick
+  plt <- df %>% plot_tools$barplot_with_numbers()
+  testthat::expect_true(
+    all(
+      "gg" %in% class(plt),
+      "ggplot" %in% class(plt)
+    ),
+    info = "plt is not a ggplot object"
+  )
+  plt_b <- ggplot2::ggplot_build(plt)
+
+  testthat::expect_true(
+    "facet" %in% names(plt_b$layout)
+  )
+  testthat::expect_true(
+    length(plt_b$layout$facet$params) > 0,
+    info = "the plot is not faceted, but it should be as there are multiple ranknames (so it is a long form table)"
+  )
+})
 
 
-  all(rankorder_edge$stat == rankorder_edge$stat_tick)
+test_that("test heatmap of NES", {
+  gsea_res <- TEST_DATA
+  res_c <- gsea_res %>% fgsea_tools$concat_results_all_collections()
+  ht <- res_c[[1]] %>% plot_tools$plot_results_one_collection()
 
-  rankorder_edge %<>% drop_na() %>% arrange(-ES)
-  # rankorder_edge %<>% mutate( geneset_rank = 1:dim(rankorder_edge)[1])
-  # i want to rank twice, once for positive es and one for negative es.
-  # higher absolute value gets lower rank
+  testthat::expect_true(
+    "Heatmap" %in% class(ht)
+  )
+})
 
+test_that("test run though all heatmaps of NES", {
+  gsea_res <- TEST_DATA
+  res_c <- gsea_res %>% fgsea_tools$concat_results_all_collections()
+  ht_list <- plot_tools$plot_results_all_collections(res_c)
+  testthat::expect_true(
+    "list" %in% class(ht_list)
+  )
 
-
-  gseaParam <- 1
-  ticksSize <- .2
-
-  with(enplot_data, ggplot(data = curve) +
-    geom_line(aes(x = rank, y = ES),
-      color = "green"
-    ) +
-    geom_segment(data = ticks, mapping = aes(
-      x = rank,
-      y = -spreadES / 16, xend = rank, yend = spreadES / 16
-    ), linewidth = ticksSize) +
-    geom_hline(yintercept = posES, colour = "red", linetype = "dashed") +
-    geom_hline(yintercept = negES, colour = "red", linetype = "dashed") +
-    geom_hline(yintercept = 0, colour = "black") +
-    theme(
-      panel.background = element_blank(),
-      panel.grid.major = element_line(color = "grey92")
-    ) +
-    labs(x = "rank", y = "enrichment score"))
-
-  with(enplot_data, ggplot(data = ticks) +
-    geom_line(aes(x = rank, y = stat),
-      color = "green"
-    ) +
-    geom_segment(data = ticks, mapping = aes(
-      x = rank,
-      y = -spreadES, xend = rank, yend = spreadES
-    ), linewidth = ticksSize) +
-    geom_hline(yintercept = posES, colour = "red", linetype = "dashed") +
-    geom_hline(yintercept = negES, colour = "red", linetype = "dashed") +
-    geom_hline(yintercept = 0, colour = "black") +
-    theme(
-      panel.background = element_blank(),
-      panel.grid.major = element_line(color = "grey92")
-    ) +
-    labs(x = "rank", y = "enrichment score"))
-
-  rankorder_edge %>% ggplot(aes(x = stat_tick, y = ES)) +
-    geom_point()
-
-
-
-  dev.new()
-
-  rankorder_edge %>%
-    filter(!is.na(stat_stat)) %>%
-    dim()
-  ggplot(aes(x = rank, y = ES)) +
-    geom_point()
-
-
-  posES <- enplot_data$posES
-  negES <- enplot_data$negES
-  rankorder_edge %>%
-    ggplot(aes(x = stat_tick, y = ES, col = rank)) +
-    geom_point() +
-    # scale_color_viridis_c(option = "magma") +
-    scale_color_continuous(type = "viridis", option = "H") +
-    # scale_color_continuous(type="viridis")+
-    geom_hline(yintercept = posES, colour = "red", linetype = "dashed") +
-    geom_hline(yintercept = negES, colour = "blue", linetype = "dashed")
-}
+  for (ht in ht_list) {
+    testthat::expect_true(
+      "Heatmap" %in% class(ht)
+    )
+  }
+})

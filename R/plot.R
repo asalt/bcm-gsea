@@ -171,8 +171,8 @@ do_plot_edge_heatmaps_onecollection <- function(
     ...) {
   kwargs <- list(...)
   sampleresults_names <- names(sampleresults_list)
-  if (!"var" %in% colnames(df)) {
-    warning("var not in colnames df, returning")
+  if (!"rankname" %in% colnames(df)) {
+    warning("rankname not in colnames df, returning")
     return(NULL)
   }
 
@@ -206,17 +206,13 @@ do_plot_edge_heatmaps_allcollections <- function(results_list, ...) {
 
 
 
-custom_labeller <- function(value) {
-  wrapped_labels <- sapply(value, function(label) {
-    label %>%
-      str_replace_all("_", " ") %>%
-      str_wrap(width = 30)
-  })
-  return(wrapped_labels)
-}
 
 
-
+# Function: prepare_data_for_barplot
+# Description: This function prepares the data for a barplot by taking in a dataframe as input.
+# Parameters:
+#   - df: The dataframe containing the data for the barplot.
+# Returns: None
 prepare_data_for_barplot <- function(df) {
   df_renamed <- df %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "HALLMARK_")) %>%
@@ -240,12 +236,7 @@ prepare_data_for_barplot <- function(df) {
     mutate(pathway = str_replace_all(pathway, "_", " ") %>% str_wrap(width = 40)) %>%
     mutate(pathway = factor(pathway, levels = unique(pathway), ordered = T)) %>%
     arrange(pathway) # %>%
-  # sel <- sel %>%
-  #   mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1) %>%
-  #   dplyr::mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>%
-  #   dplyr::mutate(outline_val = dplyr::if_else(padj < .05, "black", NA))
 
-  # Ensure leadingEdge is treated as a character vector
   sel <- sel %>%
     rowwise() %>%
     mutate(leadingEdgeNum = length(leadingEdge)) %>%
@@ -253,29 +244,51 @@ prepare_data_for_barplot <- function(df) {
     ungroup() %>%
     mutate(outline_val = dplyr::if_else(padj < .25, "black", NA))
 
-
-  # sel %<>% mutate(leadingEdgeNum = str_count(leadingEdge, ",") + 1)
-  # sel %<>% mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size))
-  # sel %<>% mutate(outline_val = if_else(padj < .05, "black", NA))
-
-  sel
+  return(sel)
 }
 
 
-
+#' Barplot with Numbers
+#'
+#' This function creates a barplot with numbers using the provided dataframe.
+#'
 #' @param df dataframe with columns pathway, NES, padj, leadingEdge, size
 #' @param title title of the plot
+#' @param save_func function to save the plot
+#' @param ... additional arguments to be passed to the function
+#'
+#' @return a ggplot object representing the barplot with numbers
+#' automatic wrapping of pathway names
+#' facet wrap by rankname if present
+#' @examples
+#' df <- data.frame(
+#'   pathway = c("Pathway 1", "Pathway 2", "Pathway 3"),
+#'   NES = c(1.5, 2.0, 1.8),
+#'   padj = c(1.05, 01, 0.001),
+#'   leadingEdge = c("A", "B", "C"),
+#'   size = c(10, 15, 20)
+#' )
+#' barplot_with_numbers(df, title = "Pathway Analysis")
+#'
+#' @export
 barplot_with_numbers <- function(
     df,
     title = "",
-    use_custom_labeller = T,
     save_func = NULL,
     ...) {
   sel <- prepare_data_for_barplot(df)
 
-  if (use_custom_labeller == T) {
-    labeller_func <- custom_labeller
-  } else if (use_custom_labeller == F) labeller_func <- function(x) x
+  custom_labeller <- function(value) {
+    wrapped_labels <- sapply(value, function(label) {
+      label %>%
+        str_replace_all("_", " ") %>%
+        str_wrap(width = 30)
+    })
+    return(wrapped_labels)
+  }
+  labeller_func <- custom_labeller
+
+
   p <- sel %>%
     ggplot2::ggplot(
       aes(
@@ -291,7 +304,7 @@ barplot_with_numbers <- function(
     # scale_color_gradient(low = "#0000ffee", high = "#ff0000ee") +  # Adjust colors to represent p-values
     # geom_point() +
     scale_fill_gradient2(high = "grey", mid = "#ba2020", low = "#c92020", midpoint = .25, limits = c(0, 1)) +
-    geom_col(size = 1.0, aes(color = sel$outline_val)) +
+    geom_col(linewidth = 1.0, aes(color = outline_val)) +
     scale_color_identity() +
     labs(title = title %>% labeller_func()) +
     # scale_color_manual(values=c("black", 'blue'))+
@@ -322,7 +335,6 @@ barplot_with_numbers <- function(
 
 all_barplots_with_numbers <- function(
     results_list,
-    use_custom_labeller = T,
     save_func = NULL,
     ...) {
   if (!is.null(save_func)) {
@@ -338,9 +350,7 @@ all_barplots_with_numbers <- function(
         ~ {
           dataframe <- .x
           comparison_name <- .y
-          sel <- dataframe %>%
-            arrange(pval) %>%
-            head(20)
+          sel <- fgsea_tools$select_topn(dataframe, limit = 20)
           .title <- comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
 
           if (!is.null(save_func)) {
@@ -350,7 +360,7 @@ all_barplots_with_numbers <- function(
             )
             save_func <- make_partial(save_func, filename = filename)
           }
-          p <- barplot_with_numbers(sel, title = .title, use_custom_labeller = T, save_func = save_func, ...)
+          p <- barplot_with_numbers(sel, title = .title, save_func = save_func, ...)
           return(p)
         }
       )
@@ -363,19 +373,9 @@ all_barplots_with_numbers <- function(
 
 process_results_across_rnks <- function(
     results_list,
-    genesets = NULL,
     save_func = NULL,
     ...) {
-  # Ensure names are aligned and iterate over them
-  # geneset_names <- names(results_list)
-  if (is.null(genesets)) {
-    genesets <- names(results_list)
-  }
-
-  if (!is.null(save_func)) {
-    filename <- paste0(get_arg(save_func, "filename"), "barplot")
-    save_func <- make_partial(save_func, filename = filename)
-  }
+  genesets <- names(results_list)
 
   # args <- list(...)
   # if ("save_func" %in% names(args)) {
@@ -392,23 +392,23 @@ process_results_across_rnks <- function(
     res <- fgsea_res_list %>% bind_rows(.id = "rankname") # all comparisons 1 gene set
     res <- res %>% mutate(rankname = rankname %>% fs::path_file() %>% fs::path_ext_remove())
     # take topn
-    .pathways_for_plot <- res %>%
-      arrange(pval) %>%
-      distinct(pathway) %>%
-      head(20) %>%
-      pull(pathway)
-    res <- res %>% filter(pathway %in% .pathways_for_plot)
+    # .pathways_for_plot <- res %>%
+    #   arrange(pval) %>%
+    #   distinct(pathway) %>%
+    #   head(20) %>%
+    #   pull(pathway)
+    # res <- res %>% filter(pathway %in% .pathways_for_plot)
+    res <- fgsea_tools$select_topn(res, limit = 20)
 
 
     # pathway_df <- get_pathway_info(geneset_name)
     # .merge <- left_join(res , pathway_df, by= )
     if (!is.null(save_func)) {
-      filename <- paste0(get_arg(save_func, "filename"), "_", make.names(geneset_name))
+      filename <- paste0(get_arg(save_func, "filename"), "_barplot_", make.names(geneset_name))
       save_func <- make_partial(save_func, filename = filename)
     }
     p <- res %>% barplot_with_numbers(
       title = geneset_name,
-      use_custom_labeller = T,
       save_func = save_func,
       ...
     )
@@ -527,11 +527,11 @@ plot_results_one_collection <- function(
 
   # Align metadata with dataframe
   if (!is.null(metadata)) {
-    if (!all(rownames(metadata) %in% df$var)) {
+    if (!all(rownames(metadata) %in% df$rankname)) {
       stop("Metadata not aligned with df")
     }
   } else {
-    metadata <- data.frame(id = unique(df$var))
+    metadata <- data.frame(id = unique(df$rankname))
   }
 
   # Handling cut_by parameter
@@ -551,9 +551,17 @@ plot_results_one_collection <- function(
     pull(pathway)
   df <- df %>% filter(pathway %in% top_pathways)
 
+  df <- fgsea_tools$filter_on_mainpathway(df, main_pathway_ratio = main_pathway_ratio)
+  df <- fgsea_tools$select_topn(df,
+    pstat_cutoff = pstat_cutoff,
+    pstat_usetype = pstat_usetype,
+    limit = limit
+  )
+
+
   # Prepare data for heatmap
   dfp <- df %>%
-    pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
+    pivot_wider(id_cols = pathway, values_from = NES, names_from = rankname) %>%
     as.data.frame()
 
   .df_renamed <- dfp %>%
@@ -569,7 +577,7 @@ plot_results_one_collection <- function(
   dfp["pathway"] <- NULL
 
   dfp_padj <- df %>%
-    pivot_wider(id_cols = pathway, values_from = padj, names_from = var) %>%
+    pivot_wider(id_cols = pathway, values_from = padj, names_from = rankname) %>%
     as.data.frame()
   rownames(dfp_padj) <- dfp_padj$pathway
   dfp_padj["pathway"] <- NULL
@@ -646,6 +654,7 @@ plot_results_one_collection <- function(
   heatmap_matrix_height <- unit(nrow(dfp) * .2, "in")
 
   # .row_fontsizes <- ifelse(nchar(rownames(dfp) < 20), 9.8, 5.8)
+  .column_fontsizes <- lapply(colnames(dfp), function(x) ifelse(nchar(x) < 22, 9.6, ifelse(nchar(x) < 28, 7.6, ifelse(nchar(x) < 54, 6.2, 5.2))))
   .row_fontsizes <- lapply(rownames(dfp), function(x) ifelse(nchar(x) < 36, 7.6, ifelse(nchar(x) < 64, 6.6, ifelse(nchar(x) < 84, 6.2, 5.2))))
   # rownames_gp <- ifelse(nchar(rownames(dfp) < 20), c(grid::gpar(fontsize=9.8, lineheight=.8)), c(grid::gpar(fontsize=5.8, lineheight=.8)))
 
@@ -667,11 +676,12 @@ plot_results_one_collection <- function(
       str_wrap(width = 42),
     # row_names_gp = grid::gpar(fontsize = 6.8, lineheight=.8),
     row_names_gp = grid::gpar(fontsize = .row_fontsizes, lineheight = .8),
-    row_names_side = "right",
-    # row_names_rot=(pi/24)*180,
+    column_names_gp = grid::gpar(fontsize = .column_fontsizes, lineheight = .8),
     column_labels = colnames(dfp) %>%
       str_replace_all("_", " ") %>%
       str_wrap(width = 28),
+    row_names_side = "right",
+    # row_names_rot=(pi/24)*180,
     column_title_gp = grid::gpar(fontsize = 12, hjust = 2),
     clustering_distance_rows = util_tools$dist_no_na,
     clustering_distance_columns = util_tools$dist_no_na,

@@ -6,30 +6,31 @@ suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(testthat))
+suppressPackageStartupMessages(library(here))
 
 # source("../fgsea.R")
 # source("../io.R")
 # source("../geneset_utils.R")
 
+src_dir <- file.path(here("R"))
 
 io_tools <- new.env()
-source("../io.R", local = io_tools)
+source(file.path(src_dir, "./io.R"), local = io_tools)
 
 geneset_tools <- new.env()
-source("../geneset_utils.R", local = geneset_tools)
+source(file.path(src_dir, "./geneset_utils.R"), local = geneset_tools)
 
 fgsea_tools <- new.env()
-source("../fgsea.R", local = fgsea_tools)
+source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
 fgsea_tools_monkeypatch <- new.env()
-source("../fgsea.R", local = fgsea_tools_monkeypatch)
+source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools_monkeypatch)
 fgsea_tools_monkeypatch$run_one <- function(...) {
   return("success")
 }
 
-
 plot_tools <- new.env()
-source("../plot.R", local = plot_tools)
+source(file.path(src_dir, "./plot.R"), local = plot_tools)
 
 
 
@@ -94,8 +95,6 @@ test_fgsea_runone <- function() {
   rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
   rankobj <- rankobjs[[1]]
   res <- rankobj %>% fgsea_tools$run_one(geneset_list)
-
-
   return(res)
 }
 
@@ -108,13 +107,11 @@ test_that("test fgsea runone", {
 
 
 
-
 test_that("test run one collapse", {
   #
   geneset <- geneset_tools$get_collection("C5", "GO:BP")
   spike_terms <- c("CYCLE", "CHECKPOINT")
-  data <- fgsea_tools$simulate_preranked_data(geneset = geneset)
-  data %<>% dplyr::sample_frac(size = .75)
+  data <- fgsea_tools$simulate_preranked_data(geneset = geneset, sample_frac = .75)
 
   #
   geneset_list <- geneset_tools$genesets_df_to_list(geneset)
@@ -175,8 +172,8 @@ generate_test_data <- function(collapse = FALSE) {
   geneset_list <- genesets %>% purrr::imap(~ geneset_tools$genesets_df_to_list(.x))
 
   # named_data = list(data=data)
-  data1 <- fgsea_tools$simulate_preranked_data(seed = 1234) %>% dplyr::sample_frac(.4)
-  data2 <- fgsea_tools$simulate_preranked_data(seed = 4321) %>% dplyr::sample_frac(.4)
+  data1 <- fgsea_tools$simulate_preranked_data(seed = 1234, sample_frac = .4)
+  data2 <- fgsea_tools$simulate_preranked_data(seed = 4321, sample_frac = .4)
   data <- list(first = data1, second = data2)
   rankobjs <- io_tools$ranks_dfs_to_lists(data)
   # res <- fgsea_tools$run_all_pathways(geneset_list, rankobjs, collapse. = collapse)
@@ -202,11 +199,11 @@ test_that("test concat results one collection", {
   )
 
   testthat::expect_true(
-    "var" %in% colnames(res1_c)
+    "rankname" %in% colnames(res1_c)
   )
 
   testthat::expect_true(
-    all(sort(unique(res1_c$var)) == c("first", "second"))
+    all(sort(unique(res1_c$rankname)) == c("first", "second"))
   )
 })
 
