@@ -4,10 +4,11 @@ suppressPackageStartupMessages(library(fs))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(memoise))
 suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(here))
 
 
 util_tools <- new.env()
-source(file.path(src_dir, "./utils.R"), local = util_tools)
+source(file.path(here("R"), "./utils.R"), local = util_tools)
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 
@@ -124,4 +125,17 @@ genesets_df_to_list <- function(list_of_geneset_dfs) {
     summarise(entrez_gene_ids = list(as.character(entrez_gene)), .groups = "drop") %>%
     tibble::deframe()
   genesets_list
+}
+
+
+geneset_array_to_df <- function(gs) {
+  df <- do.call(rbind, lapply(gs, function(x) {
+    data.frame(
+      category = x$category,
+      subcategory = x$subcategory,
+      collapse = x$collapse,
+      stringsAsFactors = FALSE
+    )
+  }))
+  return(df)
 }

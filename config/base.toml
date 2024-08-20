@@ -1,0 +1,48 @@
+[params]
+volcanodir = '' # use single quote for specifying paths
+rankfiledir = ''
+gct_path = ""
+cut_by = "none"
+ranks_from = ""  # choices are volcano and gct
+species = "Homo sapiens"
+savedir = ""
+
+[[params.genesets]]
+category = "H"
+subcategory = ""
+collapse = false
+
+[[params.genesets]]
+category = "C2"
+subcategory = "CP:KEGG"
+collapse = true
+
+[[params.genesets]]
+category = "C2"
+subcategory = "CP:REACTOME"
+collapse = true
+
+[[params.genesets]]
+category = "C5"
+subcategory = "GO:MF"
+collapse = true
+
+[[params.genesets]]
+category = "C5"
+subcategory = "GO:BP"
+collapse = true
+
+[[params.genesets]]
+category = "C5"
+subcategory = "GO:CC"
+collapse = true
+
+[[params.genesets]]
+category = "C5"
+subcategory = "All"
+collapse = true
+
+[[params.advanced]]
+parallel = true
+cache = true
+cachedir = "."

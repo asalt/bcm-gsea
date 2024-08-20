@@ -7,9 +7,8 @@ suppressPackageStartupMessages(library(cmapR))
 suppressPackageStartupMessages(library(here))
 # suppressPackageStartupMessages(library(janitor))
 
-src_dir <- file.path(here("R"))
-source(file.path(src_dir, "utils.R"))
-
+# src_dir <- file.path(here("R"))
+# source(file.path(src_dir, "utils.R"))
 
 util_tools <- new.env()
 source(file.path(src_dir, "./utils.R"), local = util_tools)
@@ -279,4 +278,55 @@ write_to_cache <- function(object, filename, cache_dir = NULL) {
   }
   target_file <- paste0(file.path(cache_dir, filename), ".rds")
   saveRDS(object, file = target_file)
+}
+
+
+load_and_process_ranks <- function(params) {
+  rankfiledir <- params$rankfiledir
+  volcanodir <- params$volcanodir
+  gct_path <- params$gct_path
+  ranks_from <- params$ranks_from
+
+  log_msg(msg = paste0("ranks from : ", ranks_from))
+  log_msg(msg = paste0("rankfiledir : ", rankfiledir))
+
+  if (!is.null(rankfiledir) && file.exists(rankfiledir)) { #
+    rnkfiles <- dir_ls(path = rankfiledir, regexp = ".*\\.rnk$", fail = FALSE)
+    log_msg(msg = paste0("looking for rank files in ", rankfiledir))
+    if (length(rnkfiles) > 0) {
+      log_msg(msg = paste0("found ", length(rnkfiles), " rankfiles"))
+      rnkdfs <- rnkfiles %>% io_tools$load_rnkfiles()
+      names(rnkdfs) <- names(rnkdfs) %>%
+        fs::path_file() %>%
+        fs::path_ext_remove()
+      ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
+      return(ranks_list)
+    } # exit and we're done
+    log_msg(msg = "couldn't find any rnkfiles")
+    if (ranks_from == "volcano") {
+      if (is.null(volcanodir) || !file.exists(volcanodir)) {
+        stop("improper volcanodir specification")
+      }
+      log_msg(msg = "saving rankfiles from volcano output. using signedlogp as value")
+      rnkdfs <- io_tools$create_rnkfiles_from_volcano(volcanodir, value_col = "signedlogP")
+      rnkdfs %>% io_tools$write_rnkfiles(dir = rankfiledir) # and save
+      names(rnkdfs) <- names(rnkdfs) %>%
+        fs::path_file() %>%
+        fs::path_ext_remove()
+      log_msg(paste0("length of retrieved rankfiles: ", length(rnkdfs)))
+      ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
+      return(ranks_list)
+    }
+    if (ranks_from == "gct" && !is.null(gct_path)) {
+      rnkdfs <- io_tools$create_rnkfiles_from_emat(gct_path, apply_z_score = TRUE)
+      names(rnkdfs) <- names(rnkdfs) %>%
+        fs::path_file() %>%
+        fs::path_ext_remove()
+      log_msg(msg = paste0("length of retrieved rankfiles: ", length(rnkdfs)))
+      ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
+    }
+    # not sure if this level of flow is relevant, refactor later
+    rnkdfs %>% io_tools$write_rnkfiles(dir = rankfiledir)
+    return(ranks_list)
+  }
 }

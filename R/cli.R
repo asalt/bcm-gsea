@@ -1,0 +1,35 @@
+suppressPackageStartupMessages(library(argparser))
+suppressPackageStartupMessages(library(RcppTOML))
+suppressPackageStartupMessages(library(here))
+
+source(file.path(here("R"), "run.R")) #
+
+setClass("filetype")
+setMethod(
+  "coerce", c(from = "ANY", to = "filetype"),
+  function(from, to) {
+    if (!file.exists(from)) {
+      stop(paste0(from, " does not exist, exiting.."))
+    }
+    return(from)
+  }
+)
+
+get_parser <- function() {
+  parser <- arg_parser("bcm-gsea")
+  parser <- add_argument(parser, "config", help = "toml config file", type = "filetype")
+  return(parser)
+}
+
+main <- function() {
+  parser <- get_parser()
+  argv <- parse_args(parser)
+
+  params <- RcppTOML::parseTOML(params$config)
+
+  run(params$params) # named list with first order [params] and nested subsections
+}
+
+if (sys.nframe() == 0) { # if ran directly, not sourced, equivalent to python if __name__ == "__main__"
+  main()
+}
