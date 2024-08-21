@@ -59,14 +59,28 @@ run <- function(params) {
 
   # =======
   species <- params$species
-  genesets_array <- params$genesets
+
+  # == genesets 
+
+  browser()
+  if (is.null(params$genesets)) {
+    genesets_array <- list(list(category = "H", subcategory = "", collapse = FALSE))
+  } else {
+    genesets_array <- params$genesets
+  }
+  log_msg(msg = paste0("genesets: ", as.character(genesets_array)))
 
   genesets_of_interest <- geneset_tools$geneset_array_to_df(genesets_array)
+  list_of_geneset_dfs <- geneset_tools$get_collections(genesets_of_interest)
+  genesets_list_of_lists <- list_of_geneset_dfs %>% purrr::map(geneset_tools$genesets_df_to_list)
+
+  # =======
 
   rankfiledir <- params$rankfiledir
   volcanodir <- params$volcanodir
   gct_path <- params$gct_path
   ranks_from <- params$ranks_from
+
 
   log_msg(paste0("rankfiledir: ", rankfiledir))
   log_msg(paste0("volcanodir: ", volcanodir))
@@ -75,5 +89,38 @@ run <- function(params) {
 
   # ==
   ranks_list <- io_tools$load_and_process_ranks(params)
-  # more here..
+  # ======= 
+
+  # == run fgsea
+
+  parallel <- params$parallel %>% ifelse(!is.null(.), ., FALSE)
+
+  # this part is challenging to pass everything in the right format 
+  results_list <- fgsea_tools$run_all_pathways(genesets_list_of_lists,
+    ranks_list,
+    parallel = parallel,
+    genesets_additional_info = genesets_of_interest
+  )
+
+  log_msg(msg = "names gsea results list: ")
+  log_msg(msg = str_c(names(results_list), sep = "\n"))
+  
+  log_msg(msg = "comparison  names gsea results list: ")
+  log_msg(msg = str_c(names(results_list[[1]]), sep = "\n"))
+
+
+
+  # ======= 
+
+
+  # =======  load gct 
+
+  if (!is.null(gct_path) && file.exists(gct_path)) {
+    log_msg(msg = paste0("reading gct file: ", gct_path))
+    gct <- cmapR::parse_gctx(gct_path)
+  } else {
+    gct <- NULL
+  }
+
+
 }
