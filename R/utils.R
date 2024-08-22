@@ -35,14 +35,14 @@ dist_no_na <- function(mat) {
   return(edist)
 }
 
-scale_gct <- function(gct, subset = NULL) {
-  # Start the pipe with the initial gct object
+scale_gct <- function(gct, group_by = NULL) {
+  if (!is.null(group_by) && group_by == FALSE) group_by <- NULL
   res <- gct %>%
     melt_gct() %>%
     {
       # Conditionally add group_by
-      if (!is.null(subset)) {
-        group_by(., id.x, !!sym(subset))
+      if (!is.null(group_by) && group_by != FALSE) {
+        group_by(., id.x, !!sym(group_by))
       } else {
         group_by(., id.x)
       }
@@ -177,7 +177,7 @@ make_partial <- function(.f, ...) {
 
 
 
-log_msg <- function(msg = NULL, info = NULL, debug = NULL, filename = "run.log", end = "\n") {
+log_msg <- function(msg = NULL, info = NULL, debug = NULL, filename = NULL, end = "\n", shell = T) {
   level <- case_when(
     !is.null(msg) ~ "INFO",
     !is.null(info) ~ "INFO",
@@ -186,5 +186,21 @@ log_msg <- function(msg = NULL, info = NULL, debug = NULL, filename = "run.log",
   )
   if (is.null(msg) && (!is.null(debug))) msg <- debug
   prefix <- paste0(format(Sys.time(), "[%Y-%m-%d %H:%M:%S] "), level, ": ")
+
+  maybe_filename <- options("bcm_gsea_log_msg_filename")
+  if (!is.null(maybe_filename)) {
+    filename <- maybe_filename[[1]]
+  }
+  if (is.null(filename)) {
+    filename <- "run.log"
+  }
+
+  dir_path <- fs::path_dir(filename)
+  if (!dir_exists(dir_path)) {
+    dir_create(dir_path, recurse = TRUE)
+  }
   cat(paste0(prefix, msg, end), file = filename, append = TRUE)
+  if (shell) {
+    cat(paste0(prefix, msg, end))
+  }
 }

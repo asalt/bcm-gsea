@@ -108,7 +108,7 @@ plot_biplot <- function(
     pca_object,
     top_pc = 3,
     showLoadings = T,
-    labSize = 2,
+    labSize = 1.8,
     pointSize = 3,
     sizeLoadingsNames = 2,
     colby = NULL, # or a string like 'group'
@@ -208,8 +208,8 @@ plot_all_biplots <- function(
     sizeLoadingsNames = 2,
     colby = "group",
     save_func = NULL,
-    fig_width = 7,
-    fig_height = 8,
+    fig_width = 11,
+    fig_height = 9,
     ...) {
   pca_objects %>%
     purrr::imap(
@@ -220,8 +220,8 @@ plot_all_biplots <- function(
         if (!is.null(save_func)) {
           save_func <- make_partial(save_func,
             filename = paste0("pca_biplot_", make.names(title)),
-            path = file.path(get_arg(save_func, "path"), collection_name, "pca"),
-            width=fig_width, height=fig_height
+            path = file.path(get_arg(save_func, "path"), make.names(collection_name), "pca"),
+            width = fig_width, height = fig_height
           )
         }
 

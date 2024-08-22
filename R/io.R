@@ -1,3 +1,4 @@
+suppressPackageStartupMessages(library(rlang))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(purrr))
 suppressPackageStartupMessages(library(fs))
@@ -51,15 +52,18 @@ make_random_gct <- function(nrow = 10, ncol = 4) {
 create_rnkfiles_from_emat <- function(
     emat,
     apply_z_score = FALSE,
+    zscore_groupby = FALSE,
     ...) {
   gct <- cmapR::parse_gctx(emat)
   if (apply_z_score) {
-    .new <- gct@mat %>%
-      apply(MARGIN = 1, FUN = .GlobalEnv$myzscore) %>%
-      t() %>%
-      as.matrix()
-    colnames(.new) <- colnames(mat(gct))
-    gct@mat <- .new
+    gct <- util_tools$scale_gct(gct, group_by = zscore_groupby)
+    # .new <- gct %>% cmapR::melt_gct()
+    # .new <- gct@mat %>%
+    #   apply(MARGIN = 1, FUN = .GlobalEnv$myzscore) %>%
+    #   t() %>%
+    #   as.matrix()
+    # colnames(.new) <- colnames(mat(gct))
+    # gct@mat <- .new
   }
   # gct@
 
@@ -67,7 +71,7 @@ create_rnkfiles_from_emat <- function(
   list_of_matrices <- list()
 
   # Loop through each column of the matrix
-  for (i in 1:ncol(gct@mat)) {
+  for (i in seq_len(ncol(gct@mat))) {
     # Create a new matrix for each column with row names and the column of interest
     new_mat <- cbind(id = rownames(gct@mat), value = gct@mat[, i])
 
@@ -133,6 +137,9 @@ create_rnkfiles_from_volcano <- function(
 write_rnkfiles <- function(
     lst,
     dir = "rnkfiles") {
+  if (is.null(dir)) {
+    dir <- "rnkfiles"
+  }
   if (!fs::dir_exists(dir)) {
     log_msg(msg = paste0("creating ", dir))
     fs::dir_create(dir)
@@ -226,7 +233,7 @@ load_genesets_from_json <- function(json_str) {
 # }
 
 
-write_results <- function(result, outf) {
+write_results <- function(result, outf, replace = FALSE) {
   if (!is.data.frame(result)) {
     log_msg(msg = "Invalid result, cannot write to file.")
     stop("Invalid result, cannot write to file.")
@@ -235,6 +242,11 @@ write_results <- function(result, outf) {
   if (!"leadingEdge" %in% colnames(result)) {
     log_msg(msg = "leadingEdge column not found in the input data")
     stop("leadingEdge column not found in the input data")
+  }
+
+  if (fs::file_exists(outf) && !replace) {
+    log_msg(msg = paste0("File ", outf, " already exists, skipping"))
+    return()
   }
 
   result %>%
@@ -276,6 +288,7 @@ write_to_cache <- function(object, filename, cache_dir = NULL) {
   if (is.null(cache_dir)) {
     cache_dir <- here("cache")
   }
+  if (!fs::dir_exists(cache_dir)) fs::dir_create(cache_dir)
   target_file <- paste0(file.path(cache_dir, filename), ".rds")
   log_msg(msg = paste0("saving ", target_file, " to cache"))
   saveRDS(object, file = target_file)
@@ -287,6 +300,8 @@ load_and_process_ranks <- function(params) {
   volcanodir <- params$volcanodir
   gct_path <- params$gct_path
   ranks_from <- params$ranks_from
+  zscore_emat <- params$zscore_emat %||% TRUE
+  zscore_emat_groupby <- params$zscore_emat_groupby %||% FALSE
 
   log_msg(msg = paste0("ranks from : ", ranks_from))
   log_msg(msg = paste0("rankfiledir : ", rankfiledir))
@@ -296,38 +311,44 @@ load_and_process_ranks <- function(params) {
     log_msg(msg = paste0("looking for rank files in ", rankfiledir))
     if (length(rnkfiles) > 0) {
       log_msg(msg = paste0("found ", length(rnkfiles), " rankfiles"))
-      rnkdfs <- rnkfiles %>% io_tools$load_rnkfiles()
+      rnkdfs <- rnkfiles %>% load_rnkfiles()
       names(rnkdfs) <- names(rnkdfs) %>%
         fs::path_file() %>%
         fs::path_ext_remove()
-      ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
+      ranks_list <- rnkdfs %>% ranks_dfs_to_lists()
       return(ranks_list)
     } # exit and we're done
     log_msg(msg = "couldn't find any rnkfiles")
-    if (ranks_from == "volcano") {
-      if (is.null(volcanodir) || !file.exists(volcanodir)) {
-        stop("improper volcanodir specification")
-      }
-      log_msg(msg = "saving rankfiles from volcano output. using signedlogp as value")
-      rnkdfs <- io_tools$create_rnkfiles_from_volcano(volcanodir, value_col = "signedlogP")
-      rnkdfs %>% io_tools$write_rnkfiles(dir = rankfiledir) # and save
-      names(rnkdfs) <- names(rnkdfs) %>%
-        fs::path_file() %>%
-        fs::path_ext_remove()
-      log_msg(paste0("length of retrieved rankfiles: ", length(rnkdfs)))
-      ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
-      return(ranks_list)
+  }
+  # ==
+  if (ranks_from == "volcano") {
+    if (is.null(volcanodir) || !file.exists(volcanodir)) {
+      stop("improper volcanodir specification")
     }
-    if (ranks_from == "gct" && !is.null(gct_path)) {
-      rnkdfs <- io_tools$create_rnkfiles_from_emat(gct_path, apply_z_score = TRUE)
-      names(rnkdfs) <- names(rnkdfs) %>%
-        fs::path_file() %>%
-        fs::path_ext_remove()
-      log_msg(msg = paste0("length of retrieved rankfiles: ", length(rnkdfs)))
-      ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
-    }
-    # not sure if this level of flow is relevant, refactor later
-    rnkdfs %>% io_tools$write_rnkfiles(dir = rankfiledir)
+    log_msg(msg = "saving rankfiles from volcano output. using signedlogp as value")
+    rnkdfs <- create_rnkfiles_from_volcano(volcanodir, value_col = "signedlogP")
+    rnkdfs %>% write_rnkfiles(dir = rankfiledir) # and save
+    names(rnkdfs) <- names(rnkdfs) %>%
+      fs::path_file() %>%
+      fs::path_ext_remove()
+    log_msg(paste0("length of retrieved rankfiles: ", length(rnkdfs)))
+    ranks_list <- rnkdfs %>% ranks_dfs_to_lists()
     return(ranks_list)
   }
+  if (ranks_from == "gct" && !is.null(gct_path)) {
+    apply_z_score <- zscore_emat
+    rnkdfs <- create_rnkfiles_from_emat(gct_path, apply_z_score = apply_z_score, zscore_groupby = zscore_emat_groupby)
+
+    names(rnkdfs) <- names(rnkdfs) %>%
+      fs::path_file() %>%
+      fs::path_ext_remove()
+    rnkdfs %>% write_rnkfiles(dir = rankfiledir)
+    log_msg(msg = paste0("length of retrieved rankfiles: ", length(rnkdfs)))
+    ranks_list <- rnkdfs %>% ranks_dfs_to_lists()
+  }
+  # not sure if this level of flow is relevant, refactor later
+  if (!exists("ranks_list")) {
+    stop("No rankfiles found, problem loading")
+  }
+  return(ranks_list)
 }

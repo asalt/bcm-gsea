@@ -6,6 +6,18 @@ cut_by = "none"
 ranks_from = ""  # choices are volcano and gct
 species = "Homo sapiens"
 savedir = ""
+logfile = ""
+edgeplot_limit = 10
+es_limit = 10
+zscore_emat = true
+zscore_emat_groupby = false # 
+do_individual_barplots = true
+do_combined_barplots = true
+do_heatmaps = true
+do_pca = true
+rankname_order = []
+samplename_order = []
+cut_by = "group"
 
 [[params.genesets]]
 category = "H"

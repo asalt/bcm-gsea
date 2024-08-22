@@ -78,7 +78,7 @@ plot_and_save <- function(
     type = "pdf",
     width = 8,
     height = 6,
-    ignore_exists = F,
+    replace = T,
     ...) {
   # Setup: Open the appropriate graphics device
 
@@ -90,7 +90,7 @@ plot_and_save <- function(
 
   if (!fs::dir_exists(path)) fs::dir_create(path)
 
-  if (file.exists(full_path) && ignore_exists == TRUE) {
+  if (file.exists(full_path) && replace == FALSE) {
     return()
   }
 

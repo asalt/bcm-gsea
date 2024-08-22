@@ -16,8 +16,10 @@ get_collection_raw <- function(
     category,
     subcategory,
     species = "Homo sapiens",
-    cache = TRUE) {
+    cache = TRUE,
+    logger = NULL) {
   #
+  if (is.null(logger)) logger <- log_msg
   collection_id <- paste(category, subcategory, make.names(species), sep = "_")
 
   cache_dir <- here("cache")
@@ -25,6 +27,7 @@ get_collection_raw <- function(
 
   if (cache && fs::file_exists(collection_id_path)) {
     cat(paste0("reading ", collection_id, " from ", cache_dir, "\n"))
+    logger(msg = paste0("reading ", collection_id, " from ", cache_dir, "\n"))
     log_msg(info = paste0("reading ", collection_id, " from ", cache_dir, "\n"))
     return(readr::read_tsv(collection_id_path, show_col_types = FALSE))
   }

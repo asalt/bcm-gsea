@@ -81,7 +81,6 @@ select_topn <- function(df,
                         limit = 120,
                         pstat_usetype = c("pval", "padj"),
                         ...) {
-
   pstat_usetype <- match.arg(pstat_usetype)
 
   if (!"data.frame" %in% class(df)) {
@@ -104,6 +103,7 @@ select_topn <- function(df,
 
   top_pathways <- df %>%
     arrange(-abs(NES)) %>%
+    distinct(pathway, .keep_all = TRUE) %>%
     filter(!!as.symbol(pstat_usetype) < pstat_cutoff) %>%
     slice_head(n = limit) %>%
     pull(pathway)
@@ -119,11 +119,16 @@ run_one <- function(
     minSize = 15,
     maxSize = 500,
     collapse = FALSE,
-    cache = TRUE) {
+    cache = TRUE,
+    cache_dir = NULL,
+    logger = NULL,
+    ...) {
+  if (is.null(logger)) logger <- log_msg
+  logger(msg = paste0("starting run_one"))
   get_hash_val <- function() {
     rlang::hash(
       c(
-        rankobj,
+        as.character(rankobj),
         as.character(geneset),
         minSize,
         maxSize,
@@ -134,9 +139,9 @@ run_one <- function(
 
   if (cache == TRUE) {
     hashval <- get_hash_val()
-    cache_load <- io_tools$load_from_cache(hashval)
+    cache_load <- io_tools$load_from_cache(hashval, cache_dir = cache_dir)
     if (!is.null(cache_load)) {
-      log_msg(msg = paste0("cache hit: ", hashval))
+      logger(msg = paste0("cache hit: ", hashval))
       return(cache_load)
     }
   }
@@ -165,6 +170,7 @@ run_one <- function(
   fgseaRes$mainpathway <- TRUE
   if (!is.null(collapse) && (collapse == TRUE || collapse == "TRUE")) {
     cat("finding main pathways")
+    logger(msg = "finding main pathways")
     collapse_results <- fgseaRes %>%
       fgsea::collapsePathways(
         pathways = geneset,
@@ -180,7 +186,7 @@ run_one <- function(
   }
 
   if (cache == TRUE) {
-    io_tools$write_to_cache(object = fgseaRes, filename = hashval)
+    io_tools$write_to_cache(object = fgseaRes, filename = hashval, cache_dir = cache_dir)
   }
 
   return(fgseaRes)
@@ -192,16 +198,28 @@ run_all_rankobjs <- function(
     parallel = F,
     minSize = 15,
     maxSize = 500,
-    collapse = FALSE) {
+    collapse = FALSE,
+    cache = TRUE,
+    cache_dir = NULL,
+    logger = NULL,
+    ...) {
+  if (is.null(logger)) logger <- log_msg
+  logger(msg = paste0("starting run_all_rankobjs"))
+  logger(msg = paste0("parallel is ", parallel))
   # rankobjs %>% furrr::future_map( # maybe later
-  if (parallel) {
-    future::plan(future::multisession, workers = future::availableCores() - 1)
+  if (parallel == TRUE) {
+    workers <- future::availableCores() - 1
+    logger(msg = paste0("using ", workers, " workers"))
+    # future::plan(future::multisession, workers = workers)
     rankobjs %>% furrr::future_map(
       ~ run_one(.,
         geneset = pathway,
         minSize = minSize,
         maxSize = maxSize,
-        collapse = collapse
+        collapse = collapse,
+        cache = cache,
+        cache_dir = cache_dir,
+        logger = logger
       )
     )
   } else {
@@ -210,7 +228,10 @@ run_all_rankobjs <- function(
         geneset = pathway,
         minSize = minSize,
         maxSize = maxSize,
-        collapse = collapse
+        collapse = collapse,
+        cache = cache,
+        cache_dir = cache_dir,
+        logger = logger
       )
     )
   }
@@ -227,7 +248,11 @@ run_all_pathways <- function(
     minSize = 15,
     maxSize = 500,
     genesets_additional_info = NULL,
-    collapse = FALSE) {
+    collapse = FALSE,
+    cache = TRUE,
+    cache_dir = NULL,
+    logger = NULL,
+    ...) {
   if (any(is.null(names(geneset_lists)))) {
     stop(
       cat(
@@ -238,6 +263,8 @@ run_all_pathways <- function(
     )
   }
 
+  if (is.null(logger)) logger <- log_msg
+
   if (any(is.null(names(ranks)))) {
     stop(
       cat(
@@ -247,8 +274,6 @@ run_all_pathways <- function(
       call. = FALSE
     )
   }
-
-
 
   out <- geneset_lists %>% purrr::imap(
     ~ {
@@ -279,19 +304,22 @@ run_all_pathways <- function(
         if (nrow(geneset_additional_info) > 0) {
           current_collapse <- geneset_additional_info$collapse
         } else {
-          log_msg(paste0("No matching geneset info found for pathway: ", geneset_name))
+          logger(msg = paste0("No matching geneset info found for pathway: ", geneset_name))
           warning("No matching geneset info found for pathway: ", geneset_name)
         }
       }
-      # browser()
 
+      logger(msg = paste0("starting ", geneset_name))
       # Pass the potentially updated collapse value to the next function
       geneset_list %>% run_all_rankobjs(.,
         rankobjs = ranks,
         parallel = parallel,
         minSize = minSize,
         maxSize = maxSize,
-        collapse = current_collapse
+        collapse = current_collapse,
+        cache = cache,
+        cache_dir = cache_dir,
+        logger = logger
       )
     }
   )
@@ -364,7 +392,7 @@ get_rankorder_across <- function(
     stop("rankname not in fgesa_longdf")
   }
 
-  df <- filter_on_mainpathway(df, main_pathway_ratio = main_pathway_ratio)
+  df <- filter_on_mainpathway(df, main_pathway_ratio >= main_pathway_ratio)
   df <- df %>%
     filter(!!as.symbol(pstat_usetype) < pstat_cutoff) %>%
     arrange(pval) %>%
