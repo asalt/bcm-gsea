@@ -81,6 +81,9 @@ select_topn <- function(df,
                         limit = 120,
                         pstat_usetype = c("pval", "padj"),
                         ...) {
+
+  pstat_usetype <- match.arg(pstat_usetype)
+
   if (!"data.frame" %in% class(df)) {
     stop(
       cat("df should be a data frame")
@@ -133,6 +136,7 @@ run_one <- function(
     hashval <- get_hash_val()
     cache_load <- io_tools$load_from_cache(hashval)
     if (!is.null(cache_load)) {
+      log_msg(msg = paste0("cache hit: ", hashval))
       return(cache_load)
     }
   }
@@ -345,7 +349,7 @@ get_rankorder <- function(
 }
 
 get_rankorder_across <- function(
-    df, # long form data frame with var col
+    df, # long form data frame with rankname col
     ranks_list,
     geneset_lists,
     collection_name = "",
@@ -356,8 +360,8 @@ get_rankorder_across <- function(
     pstat_usetype = "padj",
     main_pathway_ratio = 0.1,
     ...) {
-  if (!"var" %in% colnames(df)) {
-    stop("var not in fgesa_longdf")
+  if (!"rankname" %in% colnames(df)) {
+    stop("rankname not in fgesa_longdf")
   }
 
   df <- filter_on_mainpathway(df, main_pathway_ratio = main_pathway_ratio)

@@ -245,7 +245,7 @@ concat_results_one_collection <- function(list_of_dfs) {
   res <- list_of_dfs %>%
     purrr::imap(
       .f = ~ {
-        .x %>% dplyr::mutate(var = .y)
+        .x %>% dplyr::mutate(rankname = .y)
       }
     ) %>%
     dplyr::bind_rows()
@@ -285,12 +285,12 @@ xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, l
     stop("NES column not found")
   }
 
-  if (!is.null(metadata) && !all(rownames(metadata) %in% df$var)) {
+  if (!is.null(metadata) && !all(rownames(metadata) %in% df$rankname)) {
     stop("metadata not aligned with df")
   }
 
   if (is.null(metadata)) {
-    metadata <- data.frame(id = unique(df$var))
+    metadata <- data.frame(id = unique(df$rankname))
   }
 
   if (!is.null(cut_by) && !cut_by %in% colnames(metadata)) {
@@ -317,13 +317,13 @@ xx_plot_results_one_collection <- function(df, metadata = NULL, cut_by = NULL, l
 
 
   dfp <- df %>%
-    pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
+    pivot_wider(id_cols = pathway, values_from = NES, names_from = rankname) %>%
     as.data.frame()
   rownames(dfp) <- dfp$pathway
   dfp["pathway"] <- NULL
   dfp <- dfp[, metadata$id]
   dfp_padj <- df %>%
-    pivot_wider(id_cols = pathway, values_from = padj, names_from = var) %>%
+    pivot_wider(id_cols = pathway, values_from = padj, names_from = rankname) %>%
     dplyr::select(-pathway) %>%
     dplyr::select(all_of(metadata$id))
   logical_matrix <- dfp_padj < 0.05
@@ -387,11 +387,11 @@ plot_results_one_collection <- function(
 
   # Align metadata with dataframe
   if (!is.null(metadata)) {
-    if (!all(rownames(metadata) %in% df$var)) {
+    if (!all(rownames(metadata) %in% df$rankname)) {
       stop("Metadata not aligned with df")
     }
   } else {
-    metadata <- data.frame(id = unique(df$var))
+    metadata <- data.frame(id = unique(df$rankname))
   }
 
   # Handling cut_by parameter

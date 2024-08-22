@@ -47,7 +47,7 @@ scale_gct <- function(gct, subset = NULL) {
         group_by(., id.x)
       }
     } %>%
-    dplyr::mutate(zscore = util_tools$myzscore(value)) %>%
+    dplyr::mutate(zscore = myzscore(value)) %>%
     dplyr::ungroup()
 
   # make a new gct and return

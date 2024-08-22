@@ -11,7 +11,7 @@ suppressPackageStartupMessages(library(here))
 # source(file.path(src_dir, "utils.R"))
 
 util_tools <- new.env()
-source(file.path(src_dir, "./utils.R"), local = util_tools)
+source(file.path(here("R"), "./utils.R"), local = util_tools)
 
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
@@ -277,6 +277,7 @@ write_to_cache <- function(object, filename, cache_dir = NULL) {
     cache_dir <- here("cache")
   }
   target_file <- paste0(file.path(cache_dir, filename), ".rds")
+  log_msg(msg = paste0("saving ", target_file, " to cache"))
   saveRDS(object, file = target_file)
 }
 

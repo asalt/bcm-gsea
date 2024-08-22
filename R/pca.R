@@ -1,9 +1,9 @@
 # pca.R
-library(PCAtools)
-library(magrittr)
-library(stringr)
-library(dplyr)
-library(tidyr)
+suppressPackageStartupMessages(library(PCAtools))
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
 
 src_dir <- file.path(here("R"))
 
@@ -23,6 +23,7 @@ source(file.path(src_dir, "./utils.R"), local = util_tools)
 
 make_partial <- util_tools$make_partial
 get_args <- util_tools$get_args
+get_arg <- util_tools$get_arg
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 # ==
@@ -30,8 +31,8 @@ log_msg <- util_tools$make_partial(util_tools$log_msg)
 #' handle 1 long form gsea result table
 #'
 #' This function runs PCA on a single GSEA result table
-#' with columns "pathway", "pval", "padj", "ES", "NES", size, leadingEdge, mainpathway (logical), and var
-#' pivot on var, using NES as the value
+#' with columns "pathway", "pval", "padj", "ES", "NES", size, leadingEdge, mainpathway (logical), and rankname
+#' pivot on rankname, using NES as the value
 #'
 #' @param gsea_object
 #' @param metadata The metadata to use for the PCA
@@ -55,7 +56,7 @@ do_one <- function(
 
   log_msg(msg = "plotting one pca biplot collection")
 
-  required_cols <- c("pathway", "NES", "var")
+  required_cols <- c("pathway", "NES", "rankname")
   for (col in required_cols) {
     if (!(col %in% colnames(gsea_object))) {
       stop(paste0(col, " column not found in the input data"))
@@ -64,7 +65,7 @@ do_one <- function(
 
   if (is.null(metadata)) {
     log_msg(msg = "metadata is null, making standin")
-    metadata <- data.frame(id = unique(gsea_object$var))
+    metadata <- data.frame(id = unique(gsea_object$rankname))
     rownames(metadata) <- metadata$id
     metadata$dummy <- "a" ## ?
     log_msg(msg = paste0("metadata is \n", metadata))
@@ -82,7 +83,7 @@ do_one <- function(
     dplyr::mutate(pathway = str_remove(pathway, "REACTOME_"))
 
   wide_df <- gsea_object %>%
-    pivot_wider(id_cols = pathway, values_from = NES, names_from = var) %>%
+    pivot_wider(id_cols = pathway, values_from = NES, names_from = rankname) %>%
     as.data.frame()
   # set pathway as rowname, remove from columns
   rownames(wide_df) <- wide_df$pathway
@@ -207,15 +208,20 @@ plot_all_biplots <- function(
     sizeLoadingsNames = 2,
     colby = "group",
     save_func = NULL,
+    fig_width = 7,
+    fig_height = 8,
     ...) {
   pca_objects %>%
     purrr::imap(
       ~ {
         title <- .y
+        collection_name <- .y
 
         if (!is.null(save_func)) {
           save_func <- make_partial(save_func,
-            filename = paste0("pca_biplot_", make.names(title))
+            filename = paste0("pca_biplot_", make.names(title)),
+            path = file.path(get_arg(save_func, "path"), collection_name, "pca"),
+            width=fig_width, height=fig_height
           )
         }
 

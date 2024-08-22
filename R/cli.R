@@ -25,7 +25,7 @@ main <- function() {
   parser <- get_parser()
   argv <- parse_args(parser)
 
-  params <- RcppTOML::parseTOML(params$config)
+  params <- RcppTOML::parseTOML(argv$config)
 
   run(params$params) # named list with first order [params] and nested subsections
 }

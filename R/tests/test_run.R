@@ -1,8 +1,9 @@
-options(error = function() { 
-            # print(dump.frames())
-            traceback(1)
-            cat("\n")
-})
+# options(error = function() { 
+#             # print(dump.frames())
+#             traceback(1)
+#             cat("\n")
+# })
+options(error = NULL)  # or recover
 
 suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(magrittr))
@@ -27,6 +28,7 @@ source(file.path(here("R"), "./run.R"), local = run_env)
 # ==================================
 data_dir <- "test_data" %>% fs::path_abs()
 output_dir <- "test_output" %>% fs::path_abs()
+test_gct_path <- file.path(data_dir, "test.gct") %>% fs::path_abs()
 
 # ==================================
 
@@ -59,18 +61,23 @@ setup <- function() {
     )
 
   names(datas) <- c(
-    paste0("group_A_vs_B_dirB ", seq_along(datas1)),
-    paste0("group_C_vs_D_dirB ", seq_along(datas2)),
-    paste0("group_E_vs_F_dirB ", seq_along(datas3))
+    paste0("group_A_vs_B_dirB_", seq_along(datas1)),
+    paste0("group_C_vs_D_dirB_", seq_along(datas2)),
+    paste0("group_E_vs_F_dirB_", seq_along(datas3))
   )
 
-  ._ <- datas %>% purrr::imap(~ write_tsv(.x, file.path(data_dir, paste0(.y, ".tsv"))))
+  ._ <- datas %>% purrr::imap(~ {
+                                  # if (!file.exists(
+                                  write_tsv(.x, file.path(data_dir, paste0(.y, ".tsv")))
+  }
+  )
 
   .mat <- base::Reduce(
     accumulate = F,
     f = function(...) full_join(..., by = "id"),
     x = datas
   ) %>% as.data.frame()
+  colnames(.mat) <- c("id", names(datas)) # lost the names
 
   rownames(.mat) <- .mat$id
   .mat$id <- NULL
@@ -86,7 +93,9 @@ setup <- function() {
     cdesc = .meta,
     rdesc = .rdesc
   )
-  cmapR::write_gctx(gct, file.path(data_dir, "test.gct"))
+  # test_gct_path <- file.path(data_dir, "test.gct")
+  if (!file.exists(test_gct_path)) cmapR::write_gct(gct, test_gct_path, appenddim=F)
+   #return(test_gct_path)
 }
 
 teardown <- function() {
@@ -105,6 +114,7 @@ testthat::test_that("test main function with valid parameters", {
     rankfiledir = data_dir,
     volcanodir = data_dir,
     savedir = output_dir,
+    gct_path = test_gct_path,
     ranks_from = "volcano",
     genesets = list( list(category="H", subcategory="", collapse=FALSE) )
   )

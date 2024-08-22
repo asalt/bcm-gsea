@@ -34,14 +34,14 @@ log_msg <- util_tools$make_partial(util_tools$log_msg)
 make_heatmap_fromgct <- function(
     gct,
     row_note = "",
+    save_func = NULL,
     # scale = T
     ...) {
   # gct <- subgct
   # gct@cdesc$treat <-
   #   factor(.gct@cdesc$treat , levels = c("untreated", "carboplatin", "IMT", "carboplatin_IMT"), ordered = T)
 
-  cat("make_heatmap\n")
-
+  # cat("make_heatmap\n")
   ca <- NULL
   if ("group" %in% colnames(gct@cdesc)) {
     ca <- ComplexHeatmap::columnAnnotation(
@@ -56,11 +56,11 @@ make_heatmap_fromgct <- function(
     )
   }
 
-  .legend_width <- unit(2.5, "cm")
+  .legend_width = unit(6, "cm")
   .cbar_title <- "zscore"
   heatmap_legend_param <- list(
     title = .cbar_title,
-    direction = "vertical",
+    direction = "horizontal",
     just = "bottom",
     legend_width = .legend_width
   )
@@ -99,6 +99,36 @@ make_heatmap_fromgct <- function(
     column_names_side = "top",
     cluster_columns = F,
   )
+
+
+
+  log_msg(msg = paste0("defining draw func"))
+  do_draw <- function() {
+    draw(ht,
+      heatmap_legend_side = "bottom",
+      padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
+    )
+  }
+
+  log_msg(debug = paste0("save func: ", class(save_func) %>% as.character()))
+  log_msg(debug = paste0("is null save func: ", is.null(save_func)))
+
+  height <- 4 + (nrow(.mat) * .20)
+  width <- 8 + (ncol(.mat) * .26)
+
+  if (!is.null(save_func)) {
+    log_msg(msg = paste0("save func attrs before: "))
+    log_msg(msg = paste0(names(get_args(save_func)), "-", get_args(save_func)))
+
+    save_func <- make_partial(save_func, height = height, width = width)
+
+    log_msg(msg = paste0("save func attrs after: "))
+    log_msg(msg = paste0(names(get_args(save_func)), "-", get_args(save_func)))
+
+    save_func(plot_code = do_draw)
+  }
+
+
   return(ht)
 }
 
@@ -108,6 +138,7 @@ plot_heatmap_of_edges <- function(
     scale = T,
     scale_subset = NULL,
     save_func = NULL,
+    limit = 20,
     ...) {
   hts <- names(results_list) %>%
     purrr::map(
@@ -118,33 +149,41 @@ plot_heatmap_of_edges <- function(
             ~ {
               comparison_name <- .x
               result <- results_list[[collection_name]][[comparison_name]]
-              print(collection_name)
-              print(comparison_name)
-              forplot <- result %>%
-                arrange(pval) %>%
-                head(10) %>%
-                mutate(leadingedgelist = stringr::str_split(leadingEdge, ","))
+              # print(collection_name)
+              # print(comparison_name)
+              forplot <- result %>% fgsea_tools$select_topn(limit = limit)
+              # forplot <- result %>%
+              #   arrange(pval) %>%
+              #   head(10) %>%
+              #   mutate(leadingedgelist = stringr::str_split(leadingEdge, ","))
               # for (i in 1:nrow(forplot)) {
-              for (i in 1:seq_len(nrow(forplot))) {
+              for (i in seq_len(nrow(forplot))) {
                 row <- forplot[i, ]
                 .id <- row$pathway
-                .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', "", x)))
                 .row_title <- row$pval
+                # .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', "", x)))
+                .gct <- gct
+                if (scale == T) .gct <- util_tools$scale_gct(gct, subset = scale_subset)
+                subgct <- .gct %>% cmapR::subset_gct(row$leadingEdge[[1]])
 
-                print(.id)
-                print(paste0("pval: ", row$pval))
-                print(paste0("padj: ", row$padj))
-                print(paste0("NES: ", row$NES))
+                # print(.id)
+                # print(paste0("pval: ", row$pval))
+                # print(paste0("padj: ", row$padj))
+                # print(paste0("NES: ", row$NES))
+                log_msg(msg = paste0('plotting gene heatmap for ', .id, ' ', comparison_name))
+
 
                 ht <- NULL
-                if (scale == T) gct <- util_tools$scale_gct(gct, subset = scale_subset)
-
                 tryCatch(
                   {
                     #
-                    subgct <- cmapR::subset_gct(gct, rid = .leading_edge)
-                    ht <- make_heatmap_fromgct(subgct)
-                    print(ht)
+                    path <- get_arg(save_func, "path")
+                    newpath <- file.path(path, paste0(make.names(collection_name)), make.names("heatmaps_gene"))
+                    filename <- paste0(get_arg(save_func, "filename"), make.names(row$pathway), make.names(comparison_name))
+                    save_func <- make_partial(save_func, filename = filename, path=newpath)
+                    # save_func <- make_partial(save_func, filename = filename)
+                    ht <- make_heatmap_fromgct(subgct, save_func=save_func)
+                    # print(ht)
                   },
                   error = function(e) print(sprintf("failed to produce heatmap, %s", e$message))
                 )
@@ -157,6 +196,7 @@ plot_heatmap_of_edges <- function(
     )
   return(hts)
 }
+
 
 
 do_plot_edge_heatmaps_onecollection <- function(
@@ -191,6 +231,7 @@ do_plot_edge_heatmaps_allcollections <- function(results_list, ...) {
   # names are collection names
   # values are gsea dataframe results, long form
   # with comparison/sample names inside
+  log_msg(msg = 'starting all edge plots')
   kwargs <- list(...)
   collections <- names(results_list)
   # if is null then exit
@@ -344,7 +385,7 @@ all_barplots_with_numbers <- function(
 
   plts <- results_list %>% purrr::imap(
     ~ {
-      pathway <- .y
+      collection_name <- .y
       list_of_comparisons <- .x
       plts <- list_of_comparisons %>% imap(
         ~ {
@@ -356,10 +397,13 @@ all_barplots_with_numbers <- function(
           if (!is.null(save_func)) {
             filename <- paste0(
               get_arg(save_func, "filename"),
-              make.names(pathway), "_", make.names(comparison_name)
+              make.names(collection_name), "_", make.names(comparison_name)
             )
-            save_func <- make_partial(save_func, filename = filename)
+            path <- file.path(get_arg(save_func, "path"), make.names(collection_name), "barplots")
+            save_func <- make_partial(save_func, filename = filename, path=path)
           }
+          log_msg(msg = paste0('plotting barplot target ', path, ' ', collection_name))
+
           p <- barplot_with_numbers(sel, title = .title, save_func = save_func, ...)
           return(p)
         }
@@ -404,8 +448,9 @@ process_results_across_rnks <- function(
     # pathway_df <- get_pathway_info(geneset_name)
     # .merge <- left_join(res , pathway_df, by= )
     if (!is.null(save_func)) {
-      filename <- paste0(get_arg(save_func, "filename"), "_barplot_", make.names(geneset_name))
-      save_func <- make_partial(save_func, filename = filename)
+      filename <- paste0("barplot_", make.names(geneset_name), "_all")
+      path <- file.path(get_arg(save_func, "path"), make.names(geneset_name), "barplots")
+      save_func <- make_partial(save_func, filename = filename, path=path)
     }
     p <- res %>% barplot_with_numbers(
       title = geneset_name,
@@ -481,7 +526,8 @@ plot_results_all_collections <- function(
     ~ {
       if (!is.null(save_func)) {
         filename <- paste0(get_arg(save_func, "filename"), "gsea_heatmap_", make.names(.y))
-        save_func <- make_partial(save_func, filename = filename)
+        path <- file.path(get_arg(save_func, "path"), make.names(.y), "heatmaps_gsea") 
+        save_func <- make_partial(save_func, filename = filename, path=path)
       }
 
       plot_results_one_collection(.x,
@@ -609,7 +655,7 @@ plot_results_one_collection <- function(
     title = "NES",
     direction = "horizontal",
     just = "bottom",
-    legend_width = unit(8, "cm"),
+    legend_width = unit(6, "cm"),
     at = break_points %>% round(1)
   )
 
@@ -822,9 +868,9 @@ plot_top_ES_across <- function(gsea_results, ranks_list, geneset_collections, li
 
       if (!is.null(save_func)) {
         path <- get_arg(save_func, "path")
-        newpath <- file.path(path, make.names(collection_name))
+        newpath <- file.path(path, make.names(collection_name), make.names("enrichplots"))
         filename <- make.names(collection_name)
-        save_func <- make_partial(save_func, path = newpath, filename = filename)
+        save_func <- make_partial(save_func, path = newpath, filename = filename, width = 6, height = 4.4)
       }
 
       plts <- plot_top_ES(df, ranks_list, geneset_collection, limit = limit, save_func = save_func)
