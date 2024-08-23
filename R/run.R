@@ -72,16 +72,20 @@ run <- function(params) {
     replace = T
   )
 
-  if (!is.null(params$rankname_order)) {
-    if (length(params$rankname_order) == 1 && params$rankname_order == "sample_order") {
-      params$rankname_order <- params$sample_order
+  if (!is.null(params$extra$rankname_order)) {
+    if (length(params$extra$rankname_order) == 1 && params$extra$rankname_order == "sample_order") {
+      params$extra$rankname_order <- params$extra$sample_order
     }
+  } else {
+    params$extra$rankname_order <- params$extra$sample_order
   }
 
-  if (!is.null(params$sample_order)) {
-    if (length(params$sample_order) == 1 && params$sample_order == "rankname_order") {
-      params$sample_order <- params$rankname_order
+  if (!is.null(params$extra$sample_order)) {
+    if (length(params$extra$sample_order) == 1 && params$extra$sample_order == "rankname_order") {
+      params$extra$sample_order <- params$extra$rankname_order
     }
+  } else {
+    params$extra$sample_order <- params$extra$rankname_order
   }
 
   logfile <- params$logfile %>% ifelse(!is.null(.), ., "run.log")
@@ -91,7 +95,7 @@ run <- function(params) {
   log_msg(msg = paste0("===\n*starting bcm gsea*\n==="))
 
   # =======
-  species <- params$species
+  species <- params$species %||% "Homo sapiens"
 
   # == genesets
 
@@ -216,59 +220,61 @@ run <- function(params) {
   hts <- all_gsea_results %>% plot_tools$plot_results_all_collections(
     # limit=20,
     metadata = metadata,
-    pstat_cutoff = 1,
-    limit = 40,
+    pstat_cutoff = .25,
+    limit = 120,
     cut_by = params$cut_by,
     save_func = save_func,
-    sample_order = params$rankname_order
+    sample_order = params$extra$rankname_order
   )
 
   # =============
 
   log_msg(msg = paste0("maybe plot edges"))
-  # gct@cdesc %<>% mutate(group = factor(group, levels = c("Pre_V", "Pre_A", "Control", "PCL", "PCL_Bi", "PCL_Bi_MSCs"), ordered = T))
-
-  if (is.null(params$edgeplot_limit)) {
-    edgeplot_limit <- 10
-  } else {
-    edgeplot_limit <- params$edgeplot_limit
-  }
 
   if (!is.null(gct)) {
     ht_edge_plots <- plot_tools$plot_heatmap_of_edges(gct, results_list,
       save_func = save_func,
-      limit = edgeplot_limit,
+      limit = params$edgeplot_limit %||% 10,
       sample_order = params$sample_order
       #  cut_by = params$cut_by,
     )
   }
-  # ===== plot es
 
-  if (is.null(params$es_limit)) {
-    es_limit <- 10
-  } else {
-    es_limit <- params$edgeplot_limit
+  # ===== plot es
+  combine_by <- params$es$combine_by %||% NULL
+  if (!is.null(combine_by) && !is.null(metadata)) {
+    if (!combine_by %in% colnames(metadata)) {
+      combine_by_df <- NULL
+    } else {
+      combine_by_df <- metadata %>%
+        select(!!sym(combine_by), id) %>%
+        rename(
+          facet = !!sym(combine_by),
+          rankname = id
+        )
+      if (!is.null(params$extra$facet_order)) {
+        combine_by_df <- combine_by_df %>%
+          mutate(facet = factor(facet, levels = params$extra$facet_order, ordered = T)) %>%
+          arrange(facet)
+      }
+    }
   }
 
   ._ <- plot_tools$plot_top_ES_across(all_gsea_results,
     ranks_list = ranks_list,
     genesets_list_of_lists,
-    limit = es_limit,
-    save_func = save_func
+    save_func = save_func,
+    limit = params$es$limit %||% 10,
+    do_individual = params$es$do_individual %||% TRUE,
+    do_combined = params$es$do_combined %||% TRUE,
+    combine_by = combine_by_df,
   )
 
 
-
-  if (exists("gct") && !is.null(gct) && (params$ranks_from == "gct")) {
-    metadata <- gct@cdesc
-  } else {
-    metadata <- NULL
-  }
-
-  # this is the pca chunk
+  # pca
   # =============
 
-  do_pca <- params$pca %>% ifelse(!is.null(.), ., TRUE)
+  do_pca <- params$do_pca %>% ifelse(!is.null(.), ., TRUE)
   if (do_pca) {
     pca_objects <- all_gsea_results %>% pca_tools$do_all(
       metadata = metadata
@@ -277,14 +283,17 @@ run <- function(params) {
     log_msg(msg = paste0("plot pca all biplots"))
     pca_objects %>% pca_tools$plot_all_biplots(
       save_func = save_func,
-      top_pc = 3,
+      top_pc = params$pca$top_pc %||% 3,
       showLoadings = T,
       labSize = 2,
       pointSize = 3,
       sizeLoadingsNames = 2,
-      fig_width = 11,
-      fig_height = 9,
-      # colby = NULL,
+      colby = params$col_by,
+      fig_width = params$pca$width,
+      fig_height = params$pca$height,
     )
   }
+  # todo plot more edge plots and es plots based on the pca results
+
+  # end
 }
