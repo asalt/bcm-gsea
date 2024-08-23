@@ -95,7 +95,8 @@ plot_and_save <- function(
   }
 
   if (type == "pdf") {
-    pdf(full_path, width = width, height = height)
+    # pdf(full_path, width = width, height = height)
+    cairo_pdf(full_path, width = width, height = height)
   } else if (type == "png") {
     png(full_path, width = width, height = height, units = "in", res = 300)
   } else {

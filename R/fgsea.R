@@ -159,16 +159,40 @@ run_one <- function(
 
   # set.seed(789)
 
-  fgseaRes <- fgsea(
-    pathways = geneset,
-    stats = rankobj,
-    minSize = minSize,
-    maxSize = maxSize,
-    # eps = 0.0
-  ) # , nperm=1000)
+  # fgseaRes <- fgsea(
+  #   pathways = geneset,
+  #   stats = rankobj,
+  #   minSize = minSize,
+  #   maxSize = maxSize,
+  #   # eps = 0.0
+  # ) # , nperm=1000)
+
+  fgseaRes <- tryCatch(
+    {
+      # Attempt to run fgsea
+      fgseaRes <- fgsea(
+        pathways = geneset,
+        stats = rankobj,
+        minSize = minSize,
+        maxSize = maxSize
+      )
+      # return(fgseaRes)  # Return the result if successful
+    },
+    error = function(e) {
+      # Handle errors: you can return NA, NULL, a custom message, or a more complex error handling logic
+      cat("Error in FGSEA: ", e$message, "\n")
+      return(NULL) # Returning NULL or alternatively you can log the error or handle it as needed
+    }
+  )
+
+  if (length(collapse) != 1) { # ??
+    # stop("Expected a single logical value for 'collapse'")
+    # browser()
+    collapse <- collapse[[1]]
+  }
 
   fgseaRes$mainpathway <- TRUE
-  if (!is.null(collapse) && (collapse == TRUE || collapse == "TRUE")) {
+  if (!is.null(collapse) && collapse) {
     cat("finding main pathways")
     logger(msg = "finding main pathways")
     collapse_results <- fgseaRes %>%
@@ -425,7 +449,61 @@ get_rankorder_across <- function(
   return(rankorders)
 }
 
+combine_rankorders_on_sample <- function(
+    rankorders,
+    metadata = NULL,
+    ...) {
+  if (!is.null(metadata)) {
+    if (!"rankname" %in% colnames(metadata)) {
+      warn("metadata must have a 'rankname' column")
+      metadata <- NULL
+    }
+  }
+  res_list <- rankorders %>%
+    purrr::imap(~ {
+      pw_name <- .y
+      list_of_rankorders <- .x # this is a list of the "rankorder" info
+      # names incldue:
+      # edge (df), curve (df), ticks, stats, posES, negES, spreadES, maxAbsStat
 
+      curves <- list_of_rankorders %>%
+        purrr::imap(~ {
+          .x$curve %>% mutate(pathway = pw_name, rankname = .y)
+        }) %>%
+        bind_rows()
+      if (!is.null(metadata)) curves %<>% left_join(metadata, by = "rankname") # by = "rankname"
+
+      edges <- list_of_rankorders %>%
+        purrr::imap(~ {
+          .x$edge %>% mutate(pathway = pw_name, rankname = .y)
+        }) %>%
+        bind_rows()
+      if (!is.null(metadata)) edges %<>% left_join(metadata, by = "rankname")
+
+      ticks <- list_of_rankorders %>%
+        purrr::imap(~ {
+          .x$ticks %>% mutate(pathway = pw_name, rankname = .y)
+        }) %>%
+        bind_rows()
+      if (!is.null(metadata)) ticks %<>% left_join(metadata, by = "rankname")
+
+      stats <- list_of_rankorders %>%
+        purrr::imap(~ {
+          .x$stats %>% mutate(pathway = pw_name, rankname = .y)
+        }) %>%
+        bind_rows()
+      if (!is.null(metadata)) ticks %<>% left_join(metadata, by = "rankname")
+
+      res <- list(
+        curve = curves,
+        edge = edges,
+        ticks = ticks,
+        stats = stats
+      )
+      return(res)
+    })
+  return(res_list)
+}
 
 
 

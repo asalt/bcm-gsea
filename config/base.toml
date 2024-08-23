@@ -8,16 +8,24 @@ species = "Homo sapiens"
 savedir = ""
 logfile = ""
 edgeplot_limit = 10
-es_limit = 10
+do_es = true
 zscore_emat = true
 zscore_emat_groupby = false # 
 do_individual_barplots = true
 do_combined_barplots = true
 do_heatmaps = true
 do_pca = true
+cut_by = "group"
+
+[params.es]
+limit = 10
+do_individual = true
+do_combined = true
+combine_by = none
+
+[params.extra]
 rankname_order = []
 samplename_order = []
-cut_by = "group"
 
 [[params.genesets]]
 category = "H"

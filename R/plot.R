@@ -577,27 +577,31 @@ plot_results_one_collection <- function(
   }
 
   if (is.null(sample_order)) {
-    sample_order <- colnames(df)[grepl("sample", colnames(df))]
+    sample_order <- unique(df$rankname)
+  } else {
+    sample_order <- union(sample_order, unique(df$rankname))
   }
 
   # Align metadata with dataframe
-  if (!is.null(metadata)) {
+  if (!is.null(metadata) && length(metadata) > 0) {
     if (!all(rownames(metadata) %in% df$rankname)) {
       cat("Metadata not aligned with df")
       log_msg(msg = "Metadata not aligned with df")
       metadata <- NULL
     }
-  } else {
-    metadata <- data.frame(id = unique(df$rankname))
   }
-  metadata <- metadata[sample_order, ]
+  if (is.null(metadata)) {
+    metadata <- data.frame(id = unique(df$rankname), dummy = "X") # necessary for some reason
+    rownames(metadata) <- metadata$id
+    metadata <- metadata[sample_order, ]
+  }
 
   # Handling cut_by parameter
   if (!is.null(cut_by) && cut_by %in% colnames(metadata)) {
     cut_by <- metadata[sample_order, cut_by]
     cut_by <- factor(cut_by, levels = unique(cut_by))
   } else {
-    warning("cut_by not found in metadata, using default")
+    warning("cut_by not found in metadata, skipping")
     cut_by <- NULL
   }
 
@@ -689,7 +693,7 @@ plot_results_one_collection <- function(
     if (!is.na(value) && value < 0.05) {
       # Draw asterisk
       grid::grid.text(
-        "\u2605",
+        "\u2B51",
         # "*",
         x, y,
         gp = grid::gpar(fontsize = 12, col = "black")
@@ -761,12 +765,12 @@ plot_results_one_collection <- function(
     decorate_heatmap_body("mat", {
       grid.text(
         paste0(
-          "<b> :  padj < .25",
+          "\u25A0  padj < .25",
           "\n",
-          "* :  padj < .05"
+          "\u2605  padj < .05"
         ),
-        unit(xunit, "cm"), unit(-5, "mm"),
-        gp = gpar(fontsize = 9)
+        unit(xunit, "cm"), unit(-2, "cm"),
+        gp = gpar(fontsize = 8)
       )
     })
     return(ht)
@@ -785,8 +789,9 @@ plot_results_one_collection <- function(
   if (!is.null(save_func)) {
     log_msg(msg = paste0("save func attrs before: "))
     log_msg(msg = paste0(names(get_args(save_func)), "-", get_args(save_func)))
+    filename <- paste0(get_arg(save_func, "filename"), nrow(dfp), "x", ncol(dfp))
 
-    save_func <- make_partial(save_func, height = height, width = width)
+    save_func <- make_partial(save_func, height = height, width = width, filename = filename)
 
     log_msg(msg = paste0("save func attrs after: "))
     log_msg(msg = paste0(names(get_args(save_func)), "-", get_args(save_func)))
@@ -832,42 +837,16 @@ edgeplot1 <- function(rankorder_object, ...) {
 }
 
 
-other2 <- function() {
-  posES <- enplot_data$posES
-  negES <- enplot_data$negES
-  rankorder_edge %>%
-    ggplot(aes(x = stat_tick, y = ES, col = rank)) +
-    geom_point() +
-    # scale_color_viridis_c(option = "magma") +
-    scale_color_continuous(type = "viridis", option = "H") +
-    # scale_color_continuous(type="viridis")+
-    geom_hline(yintercept = posES, colour = "red", linetype = "dashed") +
-    geom_hline(yintercept = negES, colour = "red", linetype = "dashed")
-}
-
-
-other3 <- function(enplot_data, ticksSize = 4) {
-  with(enplot_data, ggplot(data = stats) +
-    geom_line(aes(x = rank, y = stat),
-      color = "green"
-    ) +
-    geom_segment(data = ticks, mapping = aes(
-      x = rank,
-      y = -spreadES / 16, xend = rank, yend = spreadES / 16
-    ), linewidth = ticksSize) +
-    geom_hline(yintercept = posES, colour = "red", linetype = "dashed") +
-    geom_hline(yintercept = negES, colour = "red", linetype = "dashed") +
-    geom_hline(yintercept = maxAbsStat, colour = "red", linetype = "dashed") +
-    geom_hline(yintercept = -maxAbsStat, colour = "red", linetype = "dashed") +
-    geom_hline(yintercept = 0, colour = "black") +
-    theme(
-      panel.background = element_blank(),
-      panel.grid.major = element_line(color = "grey92")
-    ) +
-    labs(x = "rank", y = "enrichment score"))
-}
-
-plot_top_ES_across <- function(gsea_results, ranks_list, geneset_collections, limit = 30, save_func = NULL, ...) {
+plot_top_ES_across <- function(
+    gsea_results,
+    ranks_list,
+    geneset_collections,
+    limit = 30,
+    do_individual = TRUE,
+    do_combined = TRUE,
+    combine_by = NULL,
+    save_func = NULL,
+    ...) {
   if (!"list" %in% class(gsea_results)) {
     stop(cat("gsea_results should be a list of data frames"))
   }
@@ -889,21 +868,35 @@ plot_top_ES_across <- function(gsea_results, ranks_list, geneset_collections, li
       df <- .x
       collection_name <- .y
       geneset_collection <- geneset_collections[[collection_name]]
-
       if (!is.null(save_func)) {
         path <- get_arg(save_func, "path")
         newpath <- file.path(path, make.names(collection_name), make.names("enrichplots"))
         filename <- make.names(collection_name)
         save_func <- make_partial(save_func, path = newpath, filename = filename, width = 6, height = 4.4)
       }
-
-      plts <- plot_top_ES(df, ranks_list, geneset_collection, limit = limit, save_func = save_func)
+      plts <- plot_top_ES(df, ranks_list, geneset_collection,
+        limit = limit,
+        do_individual = do_individual,
+        do_combined = do_combined,
+        combine_by = combine_by,
+        save_func = save_func
+      )
       return(plts)
     })
   return(list_of_plts)
 }
 
-plot_top_ES <- function(df, ranks_list, geneset_collection, limit = 30, save_func = NULL) {
+plot_top_ES <- function(
+    df,
+    ranks_list,
+    geneset_collection,
+    limit = 30,
+    do_individual = T,
+    do_combined = T,
+    combine_by = NULL,
+    save_func = NULL,
+    ...) {
+  #
   subdf <- fgsea_tools$filter_on_mainpathway(df) %>%
     fgsea_tools$select_topn(limit = limit)
   pathways <- subdf$pathway %>% unique()
@@ -912,9 +905,45 @@ plot_top_ES <- function(df, ranks_list, geneset_collection, limit = 30, save_fun
     subdf,
     ranks_list,
     geneset_lists
-  )
+  ) # this yields a named list
+  # names are pathways
+  # values are named lists of rankorder for each sample
 
-  plts <- rankorder_by_pw %>%
+  plts <- list()
+
+  if (do_combined) {
+    rankorder_samplepathway <- fgsea_tools$combine_rankorders_on_sample(rankorder_by_pw, metadata = combine_by)
+    .plts <- rankorder_samplepathway %>% purrr::imap(~ {
+      rankorder <- .x
+      pathway_name <- .y
+      .plt <- plotES_combined(rankorder, title = pathway_name) # will be faceted if "facet" in .x
+      if (!is.null(save_func)) {
+        filename <- paste(get_arg(save_func, "filename"),
+          make.names(pathway_name),
+          make.names("combined"),
+          sep = "_"
+        )
+        # if ("facet" %in% names(rankorder)) {
+        #   num_panels <- length(unique($rankname))
+        #   ncol <- ceiling(sqrt(num_panels)) # ggplot2 default behavior if ncol is not specified
+        #   nrow <- ceiling(num_panels / ncol) # Calculate rows
+        # }
+        save_func <- make_partial(save_func, filename = filename, width = 7, height = 8)
+        # and now call it
+        save_func(plot_code = function() print(.plt))
+      }
+      return(.plt)
+    })
+    plts <- c(plts, .plts)
+  }
+
+
+  # invidual plots
+  if (!do_individual) {
+    return(plts)
+  }
+
+  .plts <- rankorder_by_pw %>%
     purrr::imap(~ {
       rankorders <- .x
       pathway_name <- .y
@@ -935,16 +964,55 @@ plot_top_ES <- function(df, ranks_list, geneset_collection, limit = 30, save_fun
           # and now call it
           save_func(plot_code = function() print(plt))
         }
-
         return(plt)
       })
     })
-
+  plts <- c(plts, .plts)
   return(plts)
+}
+
+plotES_combined <- function(enplot_data, ticksSize = 4, title = "") {
+  # plot ES for multiple samples/comparisons.
+  spreadES <- max(enplot_data$curve$ES, na.rm = T) - min(enplot_data$curve$ES, na.rm = T)
+  print(spreadES)
+  p <- with(
+    enplot_data,
+    ggplot(data = curve) +
+      geom_line(aes(x = rank, y = ES, color = rankname), show.legend = F) +
+      geom_hline(yintercept = 0, colour = "black") +
+      # geom_segment(
+      #   data = ticks,
+      #   mapping = aes(
+      #     x = rank, y = -spreadES / 32,
+      #     xend = rank, yend = spreadES / 32,
+      #     color = rankname,
+      #     alpha = .1
+      #   ),
+      #   alpha = .1,
+      #   show.legend = F,
+      # ) +
+      theme(
+        panel.background = element_blank(),
+        panel.grid.major = element_line(color = "grey92")
+      ) +
+      labs(x = "rank", y = "enrichment score", title = title, )
+  )
+  if ("facet" %in% names(enplot_data$curve)) {
+    p <- p + facet_wrap(~facet)
+  }
+  p
 }
 
 plotES <- function(enplot_data, ticksSize = 4, title = "") {
   # this is directly from the example in fgsea plotEnrichmentData
+
+  expected_names <- c("curve", "stats", "ticks", "maxAbsStat", "spreadES", "posES", "negES")
+  for (name in expected_names) {
+    if (!name %in% names(enplot_data)) {
+      stop(paste0("missing ", name, " in enplot_data"))
+    }
+  }
+
   maxAbsStat <- enplot_data$maxAbsStat
   spreadES <- enplot_data$spreadES
   posES <- enplot_data$posES
@@ -979,7 +1047,7 @@ plotES <- function(enplot_data, ticksSize = 4, title = "") {
       ) +
       labs(x = "rank", y = "enrichment score")
   )
-  p <- p + labs(title = title)
+  p <- p + labs(title = title) + theme(title = element_text(size = 10))
   return(p)
 }
 
