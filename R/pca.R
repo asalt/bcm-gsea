@@ -80,7 +80,9 @@ do_one <- function(
     dplyr::mutate(pathway = str_remove(pathway, "HALLMARK_")) %>%
     dplyr::mutate(pathway = str_remove(pathway, "KEGG_")) %>%
     dplyr::mutate(pathway = str_remove(pathway, "GOMF_")) %>%
-    dplyr::mutate(pathway = str_remove(pathway, "REACTOME_"))
+    dplyr::mutate(pathway = str_remove(pathway, "REACTOME_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "GOBP_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "GOCC_"))
 
   wide_df <- gsea_object %>%
     pivot_wider(id_cols = pathway, values_from = NES, names_from = rankname) %>%
@@ -208,8 +210,8 @@ plot_all_biplots <- function(
     sizeLoadingsNames = 2,
     colby = "group",
     save_func = NULL,
-    fig_width = 11,
-    fig_height = 9,
+    fig_width = 8.4,
+    fig_height = 7.6,
     ...) {
   pca_objects %>%
     purrr::imap(
