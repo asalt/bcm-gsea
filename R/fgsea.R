@@ -1,3 +1,5 @@
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(RColorBrewer))
 suppressPackageStartupMessages(library(fgsea))
 suppressPackageStartupMessages(library(msigdbr))
 suppressPackageStartupMessages(library(dplyr))
@@ -80,6 +82,7 @@ select_topn <- function(df,
                         pstat_cutoff = 1,
                         limit = 120,
                         pstat_usetype = c("pval", "padj"),
+                        to_include = NULL,
                         ...) {
   pstat_usetype <- match.arg(pstat_usetype)
 
@@ -107,6 +110,9 @@ select_topn <- function(df,
     filter(!!as.symbol(pstat_usetype) < pstat_cutoff) %>%
     slice_head(n = limit) %>%
     pull(pathway)
+  if (!is.null(to_include)) {
+    top_pathways <- intersect(top_pathways, to_include)
+  }
   subdf <- df %>% filter(pathway %in% top_pathways)
   return(subdf)
 }
@@ -372,9 +378,12 @@ get_rankorder <- function(
     stat = rankobj
   )
 
-  rankorder_edge <- rankorder_df %>% left_join(enplot_data$curve)
-  rankorder_edge %<>% left_join(rename(enplot_data$ticks, stat_tick = stat))
-  rankorder_edge %<>% left_join(rename(enplot_data$stats, stat_stat = stat))
+  rankorder_edge <- rankorder_df %>% left_join(enplot_data$curve, by = "rank")
+  rankorder_edge %<>% left_join(
+    rename(enplot_data$ticks, stat_tick = stat),
+    by = "rank"
+  )
+  # rankorder_edge %<>% left_join(rename(enplot_data$stats, stat_stat = stat, by = "rank"))
   rankorder_edge$stat == rankorder_edge$stat_tick
 
   if (!is.null(geneset_df)) {
@@ -449,6 +458,7 @@ get_rankorder_across <- function(
   return(rankorders)
 }
 
+
 combine_rankorders_on_sample <- function(
     rankorders,
     metadata = NULL,
@@ -458,6 +468,10 @@ combine_rankorders_on_sample <- function(
       warn("metadata must have a 'rankname' column")
       metadata <- NULL
     }
+  }
+  if (!"facet" %in% colnames(metadata)) {
+    warn("facet var not set in metadtaa")
+    metadata$facet = "X"
   }
   res_list <- rankorders %>%
     purrr::imap(~ {
@@ -492,7 +506,7 @@ combine_rankorders_on_sample <- function(
           .x$stats %>% mutate(pathway = pw_name, rankname = .y)
         }) %>%
         bind_rows()
-      if (!is.null(metadata)) ticks %<>% left_join(metadata, by = "rankname")
+      if (!is.null(metadata)) stats %<>% left_join(metadata, by = "rankname")
 
       res <- list(
         curve = curves,
@@ -500,6 +514,7 @@ combine_rankorders_on_sample <- function(
         ticks = ticks,
         stats = stats
       )
+
       return(res)
     })
   return(res_list)
