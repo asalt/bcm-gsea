@@ -105,7 +105,7 @@ run <- function(params) {
     genesets_array <- params$genesets
   }
   .msg <- paste0("genesets:\n", paste(sapply(genesets_array, function(gs) paste(gs$category, gs$subcategory, sep = ": ")), collapse = ", "))
-  log_msg(msg = .msg)
+  log_msg(msg = .msg[[1]])
 
 
   genesets_of_interest <- geneset_tools$geneset_array_to_df(genesets_array)
@@ -190,8 +190,6 @@ run <- function(params) {
     )
   }
 
-
-
   log_msg(msg = "plotting faceted barplots")
   do_combined_barplots <- params$do_combined_barplots %>% ifelse(!is.null(.), ., TRUE)
   if (do_combined_barplots) {
@@ -221,8 +219,8 @@ run <- function(params) {
     # limit=20,
     metadata = metadata,
     pstat_cutoff = .25,
-    limit = 120,
-    cut_by = params$cut_by,
+    limit = params$heatmap_gsea$limit %||% 20,
+    cut_by = params$heatmap_gsea$cut_by %||% params$cut_by %||% NULL,
     save_func = save_func,
     sample_order = params$extra$rankname_order
   )
@@ -232,16 +230,18 @@ run <- function(params) {
   log_msg(msg = paste0("maybe plot edges"))
 
   if (!is.null(gct)) {
-    ht_edge_plots <- plot_tools$plot_heatmap_of_edges(gct, results_list,
+    ht_edge_plots <- plot_tools$plot_heatmap_of_edges(
+      gct,
+      results_list,
       save_func = save_func,
-      limit = params$edgeplot_limit %||% 10,
-      sample_order = params$sample_order
+      limit = params$heatmap_gene$limit %||% 10,
+      sample_order = params$extra$sample_order
       #  cut_by = params$cut_by,
     )
   }
 
   # ===== plot es
-  combine_by <- params$es$combine_by %||% NULL
+  combine_by <- params$enplot$combine_by %||% NULL
   if (!is.null(combine_by) && !is.null(metadata)) {
     if (!combine_by %in% colnames(metadata)) {
       combine_by_df <- NULL
@@ -264,10 +264,12 @@ run <- function(params) {
     ranks_list = ranks_list,
     genesets_list_of_lists,
     save_func = save_func,
-    limit = params$es$limit %||% 10,
-    do_individual = params$es$do_individual %||% TRUE,
-    do_combined = params$es$do_combined %||% TRUE,
+    limit = params$enplot$limit %||% 10,
+    do_individual = params$enplot$do_individual %||% TRUE,
+    do_combined = params$enplot$do_combined %||% TRUE,
     combine_by = combine_by_df,
+    width = params$enplot$width %||% 3.4,
+    height = params$enplot$height %||% 4.0,
   )
 
 
@@ -275,6 +277,7 @@ run <- function(params) {
   # =============
 
   do_pca <- params$do_pca %>% ifelse(!is.null(.), ., TRUE)
+  browser()
   if (do_pca) {
     pca_objects <- all_gsea_results %>% pca_tools$do_all(
       metadata = metadata
@@ -289,8 +292,8 @@ run <- function(params) {
       pointSize = 3,
       sizeLoadingsNames = 2,
       colby = params$col_by,
-      fig_width = params$pca$width,
-      fig_height = params$pca$height,
+      fig_width = params$pca$width %||% 8.4,
+      fig_height = params$pca$height %||% 7.6,
     )
   }
   # todo plot more edge plots and es plots based on the pca results

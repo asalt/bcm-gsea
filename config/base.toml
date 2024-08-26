@@ -17,11 +17,17 @@ do_heatmaps = true
 do_pca = true
 cut_by = "group"
 
-[params.es]
+[params.enplot]
 limit = 10
 do_individual = true
 do_combined = true
 combine_by = none
+
+[params.heatmap_gsea]
+limit = 10
+
+[params.heatmap_gene]
+limit = 10
 
 [params.extra]
 rankname_order = []
