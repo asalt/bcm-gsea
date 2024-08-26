@@ -241,3 +241,52 @@ plot_all_biplots <- function(
       }
     )
 }
+
+get_top_loadings <- function(pcaobj,
+                             components = c("PC1", "PC2", "PC3", "PC4"),
+                             rangeRetain = 0.05) { # directly lifted from https://github.com/kevinblighe/PCAtools/blob/50f240ba76fe07e2a546998e76dc8aa1c3570693/R/plotloadings.R#L7
+  x <- pcaobj$loadings[, components, drop = FALSE]
+  membership <- list()
+  retain <- c()
+  # could this be rewritten with tidy group_by and arrange and slice top largest diff?
+  for (i in seq_along(components)) {
+    # for each PC, based on the loadings range, calculate the rangeRetain
+    # fraction of the range
+    offset <- (max(x[, i]) - min(x[, i])) * rangeRetain
+
+    # to obtain upper and lower cut-offs, offset max and min by the offset
+    uppercutoff <- max(x[, i]) - offset
+    lowercutoff <- min(x[, i]) + offset
+
+    # build a consensus list of variables that will be included
+    retain_vals <- c(
+      which(x[, i] >= uppercutoff),
+      which(x[, i] <= lowercutoff)
+    )
+    retain <- unique(c(
+      retain,
+      retain_vals
+    ))
+
+    membership[[paste0("PC", i, "_member")]] <- retain_vals
+    # this is what i want to do, and then have another indicator that indicates which PC each feature/loading came from
+    # retain[paste0('PC', as.character(i))] <-  c(which(x[,i] >= uppercutoff), which(x[,i] <= lowercutoff))
+  }
+  membership_df <- stack(membership)
+  membership_df[["var"]] <- rownames(x)[membership_df$values]
+  membership_df[["boolvalue"]] <- !is.na(membership_df$var)
+  membership_dfw <- membership_df %>% pivot_wider(id_cols = c("values", "var"), names_from = "ind", values_from = "boolvalue")
+  membership_dfw[is.na(membership_dfw)] <- FALSE
+
+  message("-- variables retained:")
+  message(paste0(rownames(x)[retain], collapse = ", "))
+  x_final <- x[retain, , drop = FALSE]
+  # create a plot object (2-col df) of PC names and
+  # explained variance of each
+  x_final <- data.frame(rownames(x_final), x_final[, components, drop = FALSE])
+  colnames(x_final)[1] <- "var"
+
+  x_final <- x_final %>% left_join(membership_dfw)
+  x_final$values <- NULL
+  return(x_final)
+}
