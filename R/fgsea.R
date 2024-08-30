@@ -82,7 +82,7 @@ select_topn <- function(df,
                         pstat_cutoff = 1,
                         limit = 120,
                         pstat_usetype = c("pval", "padj"),
-                        to_include = NULL,
+                        to_include = NULL, # extra pathways to expilcitly include
                         ...) {
   pstat_usetype <- match.arg(pstat_usetype)
 
@@ -111,15 +111,13 @@ select_topn <- function(df,
     slice_head(n = limit) %>%
     pull(pathway)
   if (!is.null(to_include)) {
-    top_pathways <- intersect(top_pathways, to_include)
+    top_pathways <- union(top_pathways, to_include)
   }
   subdf <- df %>% filter(pathway %in% top_pathways)
   return(subdf)
 }
 
-
-
-run_one <- function(
+fgsea_cache_manager <- function(
     rankobj,
     geneset,
     minSize = 15,
@@ -128,9 +126,11 @@ run_one <- function(
     cache = TRUE,
     cache_dir = NULL,
     logger = NULL,
+    final_result = NULL,
+    do_load = is.null(final_result),
+    save = !is.null(final_result),
     ...) {
   if (is.null(logger)) logger <- log_msg
-  logger(msg = paste0("starting run_one"))
   get_hash_val <- function() {
     rlang::hash(
       c(
@@ -142,15 +142,30 @@ run_one <- function(
       )
     )
   }
-
-  if (cache == TRUE) {
-    hashval <- get_hash_val()
+  hashval <- get_hash_val()
+  if (do_load) {
     cache_load <- io_tools$load_from_cache(hashval, cache_dir = cache_dir)
     if (!is.null(cache_load)) {
       logger(msg = paste0("cache hit: ", hashval))
       return(cache_load)
+    } else {
+      return(NULL)
     }
+  } else if (save) {
+    io_tools$write_to_cache(object = final_result, filename = hashval, cache_dir = cache_dir)
   }
+}
+
+run_one <- function(
+    rankobj = NULL,
+    geneset = NULL,
+    minSize = 15,
+    maxSize = 500,
+    collapse = FALSE,
+    logger = NULL,
+    ...) {
+  if (is.null(logger)) logger <- log_msg
+  logger(msg = paste0("starting run_one"))
 
   # to look for duplicate gene names
   # rankobj %>% names %>% table %>% as.data.frame %>% pull(Freq) %>% max
@@ -162,16 +177,7 @@ run_one <- function(
     max()
   assertthat::are_equal(.maxcounts, 1)
   # this doesn't actually error out??
-
   # set.seed(789)
-
-  # fgseaRes <- fgsea(
-  #   pathways = geneset,
-  #   stats = rankobj,
-  #   minSize = minSize,
-  #   maxSize = maxSize,
-  #   # eps = 0.0
-  # ) # , nperm=1000)
 
   fgseaRes <- tryCatch(
     {
@@ -185,15 +191,13 @@ run_one <- function(
       # return(fgseaRes)  # Return the result if successful
     },
     error = function(e) {
-      # Handle errors: you can return NA, NULL, a custom message, or a more complex error handling logic
       cat("Error in FGSEA: ", e$message, "\n")
-      return(NULL) # Returning NULL or alternatively you can log the error or handle it as needed
+      return(NULL)
     }
   )
 
   if (length(collapse) != 1) { # ??
     # stop("Expected a single logical value for 'collapse'")
-    # browser()
     collapse <- collapse[[1]]
   }
 
@@ -214,11 +218,6 @@ run_one <- function(
   } else {
     fgseaRes$mainpathway <- TRUE
   }
-
-  if (cache == TRUE) {
-    io_tools$write_to_cache(object = fgseaRes, filename = hashval, cache_dir = cache_dir)
-  }
-
   return(fgseaRes)
 }
 
@@ -240,36 +239,61 @@ run_all_rankobjs <- function(
   if (parallel == TRUE) {
     workers <- future::availableCores() - 1
     logger(msg = paste0("using ", workers, " workers"))
-    # future::plan(future::multisession, workers = workers)
-    rankobjs %>% furrr::future_map(
-      ~ run_one(.,
-        geneset = pathway,
-        minSize = minSize,
-        maxSize = maxSize,
-        collapse = collapse,
-        cache = cache,
-        cache_dir = cache_dir,
-        logger = logger
-      )
-    )
+    .map_func <- furrr::future_map
   } else {
-    rankobjs %>% purrr::map(
-      ~ run_one(.,
-        geneset = pathway,
-        minSize = minSize,
-        maxSize = maxSize,
-        collapse = collapse,
-        cache = cache,
-        cache_dir = cache_dir,
-        logger = logger
-      )
-    )
+    .map_func <- purrr::map
   }
-  # rankobjs %>% purrr::map(
-  #   ~ run_one(., geneset = pathway)
+
+  fgsea_args <- list(
+    geneset = pathway,
+    minSize = minSize,
+    maxSize = maxSize,
+    collapse = collapse,
+    cache = cache,
+    cache_dir = cache_dir,
+    logger = logger
+  )
+
+  if (!is.null(cache) && cache == TRUE) {
+    logger(msg = "caching is enabled")
+    cache_results <- rankobjs %>%
+      purrr::map(~ {
+        fgsea_cache_manager(.x, fgsea_args)
+      }) %>%
+      Filter(Negate(is.null), .)
+    .to_do <- setdiff(names(rankobjs), names(cache_results))
+    rankobjs <- rankobjs[.to_do]
+  } else {
+    cache_results <- NULL
+  }
+
+  results <- rankobjs %>% .map_func(~ do.call(run_one, c(list(rankobj = .), fgsea_args)))
+  # results <- rankobjs %>% .map_func(
+  #   ~ run_one(.,
+  #     fgsea_args
+  #     # geneset = pathway,
+  #     # minSize = minSize,
+  #     # maxSize = maxSize,
+  #     # collapse = collapse,
+  #     # cache = cache,
+  #     # cache_dir = cache_dir,
+  #     # logger = logger
+  #   )
   # )
+
+  if (!is.null(cache) && cache == TRUE) {
+    purrr::walk2(rankobjs, results, ~ {
+      fgsea_cache_manager(.x, fgsea_args, final_result = .y, save = TRUE)
+    })
+  }
+
+  final_results <- c(
+    Filter(function(x) !is.null(x), cache_results),
+    results
+  )
+
+  return(final_results)
 }
-# results_list <- run_all_pathways(pathways_list_of_lists, ranks_list)
 
 run_all_pathways <- function(
     geneset_lists,
@@ -294,6 +318,8 @@ run_all_pathways <- function(
   }
 
   if (is.null(logger)) logger <- log_msg
+
+  if (is.null(cache_dir)) cache_dir <- here("cache")
 
   if (any(is.null(names(ranks)))) {
     stop(
@@ -341,7 +367,8 @@ run_all_pathways <- function(
 
       logger(msg = paste0("starting ", geneset_name))
       # Pass the potentially updated collapse value to the next function
-      geneset_list %>% run_all_rankobjs(.,
+      # could add cache check here instead
+      results <- geneset_list %>% run_all_rankobjs(.,
         rankobjs = ranks,
         parallel = parallel,
         minSize = minSize,
@@ -351,6 +378,7 @@ run_all_pathways <- function(
         cache_dir = cache_dir,
         logger = logger
       )
+      return(results)
     }
   )
   return(out)
@@ -468,11 +496,18 @@ combine_rankorders_on_sample <- function(
       warn("metadata must have a 'rankname' column")
       metadata <- NULL
     }
+    if (!"facet" %in% colnames(metadata)) {
+      metadata$facet <- metadata$rankname
+    }
   }
-  if (!"facet" %in% colnames(metadata)) {
-    warn("facet var not set in metadtaa")
-    metadata$facet = "X"
-  }
+
+  # if (is.null(metadata)) {
+  #   warn("metadata is null, making standin")
+  #   metadata <- data.frame(id = unique(rankorders[[1]]$rankname))
+  #   rownames(metadata) <- metadata$id
+  #   metadata$dummy <- "a"
+  # }
+
   res_list <- rankorders %>%
     purrr::imap(~ {
       pw_name <- .y
