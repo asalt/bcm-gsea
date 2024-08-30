@@ -82,7 +82,9 @@ do_one <- function(
     dplyr::mutate(pathway = str_remove(pathway, "GOMF_")) %>%
     dplyr::mutate(pathway = str_remove(pathway, "REACTOME_")) %>%
     dplyr::mutate(pathway = str_remove(pathway, "GOBP_")) %>%
-    dplyr::mutate(pathway = str_remove(pathway, "GOCC_"))
+    dplyr::mutate(pathway = str_remove(pathway, "GOCC_")) %>%
+    dplyr::mutate(pathway = str_replace_all(pathway, "_", " ")) %>%
+    dplyr::mutate(pathway = str_wrap(pathway, 20))
 
   wide_df <- gsea_object %>%
     pivot_wider(id_cols = pathway, values_from = NES, names_from = rankname) %>%
@@ -172,6 +174,7 @@ plot_biplot <- function(
           showLoadings = showLoadings,
           labSize = labSize,
           pointSize = pointSize,
+          alphaLoadingsArrow = 0.5,
           sizeLoadingsNames = sizeLoadingsNames,
           colby = colby,
           shape = shape,
@@ -182,7 +185,14 @@ plot_biplot <- function(
           max.overlaps = Inf,
           maxoverlapsConnectors = Inf,
           ntopLoadings = 5,
-        ) #+      coord_equal()
+        ) +
+          coord_fixed(ratio = 1) +
+          geom_hline(yintercept = 0, color = "grey50", show.legend = NA) +
+          geom_vline(xintercept = 0, color = "grey50", show.legend = NA) +
+          theme(
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank()
+          )
 
         if (!is.null(save_func)) {
           current_args <- get_args(save_func)
@@ -205,9 +215,9 @@ plot_all_biplots <- function(
     pca_objects,
     top_pc = 3,
     showLoadings = T,
-    labSize = 2,
-    pointSize = 3,
-    sizeLoadingsNames = 2,
+    labSize = 3,
+    pointSize = 4,
+    sizeLoadingsNames = 1.75,
     colby = "group",
     save_func = NULL,
     fig_width = 8.4,
@@ -227,17 +237,23 @@ plot_all_biplots <- function(
           )
         }
 
-        plot_biplot(.x,
-          top_pc = top_pc,
-          showLoadings = showLoadings,
-          labSize = labSize,
-          pointSize = pointSize,
-          sizeLoadingsNames = sizeLoadingsNames,
-          colby = colby,
-          title = title,
-          save_func = save_func,
-          # ...
-        )
+      p <- tryCatch(
+        {
+            plot_biplot(.x,
+            top_pc = top_pc,
+            showLoadings = showLoadings,
+            labSize = labSize,
+            pointSize = pointSize,
+            sizeLoadingsNames = sizeLoadingsNames,
+            colby = colby,
+            title = title,
+            save_func = save_func,
+            # ...
+          )
+        }, error = function(e) {
+          log_msg(msg = paste0("error in plot_all_biplots: ", e))
+        })
+        return(p)
       }
     )
 }
