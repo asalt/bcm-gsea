@@ -309,13 +309,38 @@ load_and_process_ranks <- function(params) {
   if (!is.null(rankfiledir) && file.exists(rankfiledir)) { #
     rnkfiles <- dir_ls(path = rankfiledir, regexp = ".*\\.rnk$", fail = FALSE)
     log_msg(msg = paste0("looking for rank files in ", rankfiledir))
+
+
     if (length(rnkfiles) > 0) {
       log_msg(msg = paste0("found ", length(rnkfiles), " rankfiles"))
       rnkdfs <- rnkfiles %>% load_rnkfiles()
       names(rnkdfs) <- names(rnkdfs) %>%
         fs::path_file() %>%
         fs::path_ext_remove()
+
+      name_mapping_file <- file.path(rankfiledir, 'names.txt')
+      if (fs::file_exists(name_mapping_file)) {
+        log_msg(msg = paste0("found name mapping file: ", name_mapping_file))
+        name_mapping <- read_delim(name_mapping_file,
+          col_names = c("new", "old"),
+          delim = '=',
+           comment = '#',
+           show_col_types = F
+        ) %>% mutate(old = fs::path_ext_remove(old))
+
+        for (ix in seq_len(length(rnkdfs))) {
+          .new <- name_mapping[ix, ]$new
+          .old <- name_mapping[ix, ]$old
+          if (.old %in% names(rnkdfs)) {
+            rnkdfs[.new] <- rnkdfs[.old]
+            rnkdfs[.old] <- NULL
+          }
+        }
+
+      }
+
       ranks_list <- rnkdfs %>% ranks_dfs_to_lists()
+
       return(ranks_list)
     } # exit and we're done
     log_msg(msg = "couldn't find any rnkfiles")
