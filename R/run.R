@@ -41,6 +41,9 @@ run <- function(params) {
 
   pca_tools <- new.env()
   source(file.path(here("R"), "pca.R"), local = pca_tools)
+
+  voice_tools <- new.env()
+  source(file.path(here("R"), "voice.R"), local = voice_tools)
   # ===========================
 
 
@@ -69,9 +72,10 @@ run <- function(params) {
   save_func <- util_tools$make_partial(
     plot_utils$plot_and_save,
     path = savedir,
-    replace = T
+    replace = params$advanced$replace %||% TRUE
   )
 
+  #
   if (!is.null(params$extra$rankname_order)) {
     if (length(params$extra$rankname_order) == 1 && params$extra$rankname_order == "sample_order") {
       params$extra$rankname_order <- params$extra$sample_order
@@ -93,6 +97,9 @@ run <- function(params) {
   log_msg <- util_tools$make_partial(util_tools$log_msg, filename = logfile)
   # log_message <- make_partial(util_tools$log_message)
   log_msg(msg = paste0("===\n*starting bcm gsea*\n==="))
+  if (is.null(params$quiet) || params$quiet == FALSE) {
+    voice_tools$speak_text("starting bcm g s e a")
+  }
 
   # =======
   species <- params$species %||% "Homo sapiens"
@@ -118,7 +125,6 @@ run <- function(params) {
   volcanodir <- params$volcanodir
   gct_path <- params$gct_path
   ranks_from <- params$ranks_from
-
 
   log_msg(paste0("rankfiledir: ", rankfiledir))
   log_msg(paste0("volcanodir: ", volcanodir))
@@ -146,30 +152,6 @@ run <- function(params) {
   # q(status = 1)
 
 
-  # this part is challenging to pass everything in the right format
-  results_list <- fgsea_tools$run_all_pathways(genesets_list_of_lists,
-    ranks_list,
-    parallel = parallel,
-    genesets_additional_info = genesets_of_interest,
-    cache = TRUE,
-    cache_dir = cachedir,
-    logger = log_msg
-  )
-
-  log_msg(msg = "names gsea results list: ")
-  log_msg(msg = str_c(names(results_list), sep = "\n"))
-
-  log_msg(msg = "comparison  names gsea results list: ")
-  log_msg(msg = str_c(names(results_list[[1]]), sep = "\n"))
-
-
-
-  # =======
-  # save
-  ._ <- results_list %>%
-    io_tools$save_gsea_results(savedir = file.path(savedir, "gsea_tables"))
-
-
   # =======  load gct
 
   if (!is.null(gct_path) && file.exists(gct_path)) {
@@ -179,124 +161,168 @@ run <- function(params) {
     gct <- NULL
   }
 
+  # this part is challenging to pass everything in the right format
 
-  # =======  barplots
-  do_individual_barplots <- params$do_individual_barplots %>% ifelse(!is.null(.), ., TRUE)
-  if (do_individual_barplots) {
-    log_msg(msg = "plotting individual barplots")
-    plts <- results_list %>% plot_tools$all_barplots_with_numbers(
-      sample_order = params$rankname_order %||% params$sample_order,
-      save_func = save_func
+  genesets_for_iteration <- names(genesets_list_of_lists)
+
+  # we then iterate over the genesets one by one
+  # so all results for one get generated before moving to the next
+
+  genesets_for_iteration %>% purrr::walk(
+    ~{
+    .msg <- paste0("running gsea for: ", .x)
+    # if (is.null(params$quiet) || params$quiet == FALSE) {
+    #   voice_tools$speak_text(text = paste0('running g s e a for ', .x))
+    # }
+
+
+    log_msg(msg = .msg)
+    voice_tools$speak_text(.x)
+
+    genesets_list_of_lists <- genesets_list_of_lists[.x]
+    results_list <- fgsea_tools$run_all_pathways(genesets_list_of_lists,
+      ranks_list,
+      parallel = parallel,
+      genesets_additional_info = genesets_of_interest,
+      cache = TRUE,
+      cache_dir = cachedir,
+      logger = log_msg
     )
-  }
 
-  log_msg(msg = "plotting faceted barplots")
-  do_combined_barplots <- params$do_combined_barplots %>% ifelse(!is.null(.), ., TRUE)
-  if (do_combined_barplots) {
-    plts <- results_list %>%
-      plot_tools$do_combined_barplots(
+    log_msg(msg = "names gsea results list: ")
+    log_msg(msg = str_c(names(results_list), sep = "\n"))
+
+    log_msg(msg = "comparison  names gsea results list: ")
+    log_msg(msg = str_c(names(results_list[[1]]), sep = "\n"))
+
+    # ======= save
+    ._ <- results_list %>%
+      io_tools$save_gsea_results(savedir = file.path(savedir, "gsea_tables"))
+
+    # =======  barplots
+    do_individual_barplots <- params$do_individual_barplots %>% ifelse(!is.null(.), ., TRUE)
+    if (do_individual_barplots) {
+      log_msg(msg = "plotting individual barplots")
+      plts <- results_list %>% plot_tools$all_barplots_with_numbers(
         sample_order = params$rankname_order %||% params$sample_order,
         save_func = save_func
       )
-  }
+    }
 
-
-  # =======
-  log_msg(msg = "combining gsea marices")
-  all_gsea_results <- fgsea_tools$concat_results_all_collections(results_list)
-
-
-  log_msg(msg = "drawing all heatmaps. ")
-  # here is where changes to the save func are made (e.g. width, height, file format)
-
-  if (exists("gct") && !is.null(gct) && (params$ranks_from == "gct")) {
-    metadata <- gct@cdesc
-  } else {
-    metadata <- NULL
-  }
-
-  hts <- all_gsea_results %>% plot_tools$plot_results_all_collections(
-    # limit=20,
-    metadata = metadata,
-    pstat_cutoff = .25,
-    limit = params$heatmap_gsea$limit %||% 20,
-    cut_by = params$heatmap_gsea$cut_by %||% params$cut_by %||% NULL,
-    save_func = save_func,
-    sample_order = params$extra$rankname_order
-  )
-
-  # =============
-
-  log_msg(msg = paste0("maybe plot edges"))
-
-  if (!is.null(gct)) {
-    ht_edge_plots <- plot_tools$plot_heatmap_of_edges(
-      gct,
-      results_list,
-      save_func = save_func,
-      limit = params$heatmap_gene$limit %||% 10,
-      sample_order = params$extra$sample_order
-      #  cut_by = params$cut_by,
-    )
-  }
-
-  # ===== plot es
-  combine_by <- params$enplot$combine_by %||% NULL
-  if (!is.null(combine_by) && !is.null(metadata)) {
-    if (!combine_by %in% colnames(metadata)) {
-      combine_by_df <- NULL
-    } else {
-      combine_by_df <- metadata %>%
-        select(!!sym(combine_by), id) %>%
-        rename(
-          facet = !!sym(combine_by),
-          rankname = id
+    log_msg(msg = "plotting faceted barplots")
+    do_combined_barplots <- params$do_combined_barplots %>% ifelse(!is.null(.), ., TRUE)
+    if (do_combined_barplots) {
+      plts <- results_list %>%
+        plot_tools$do_combined_barplots(
+          sample_order = params$rankname_order %||% params$sample_order,
+          save_func = save_func
         )
-      if (!is.null(params$extra$facet_order)) {
-        combine_by_df <- combine_by_df %>%
-          mutate(facet = factor(facet, levels = params$extra$facet_order, ordered = T)) %>%
-          arrange(facet)
+    }
+
+    # =======
+    log_msg(msg = "combining gsea marices")
+    all_gsea_results <- fgsea_tools$concat_results_all_collections(results_list)
+
+    log_msg(msg = "drawing all heatmaps. ")
+
+    if (exists("gct") && !is.null(gct) && (params$ranks_from == "gct")) {
+      metadata <- gct@cdesc
+    } else {
+      metadata <- NULL
+    }
+
+    # ======= gsea level heatmap
+    if (params$heatmap_gsea$do %||% TRUE){
+      hts <- all_gsea_results %>% plot_tools$plot_results_all_collections(
+        # limit=20,
+        metadata = metadata,
+        pstat_cutoff = .25,
+        limit = params$heatmap_gsea$limit %||% 20,
+        cut_by = params$heatmap_gsea$cut_by %||% params$cut_by %||% NULL,
+        save_func = save_func,
+        sample_order = params$extra$rankname_order
+      )
+    }
+
+    # =============
+
+    log_msg(msg = paste0("maybe plot edges"))
+
+    if (!is.null(gct) && params$heatmap_gene$do %||% TRUE) {
+      ht_edge_plots <- plot_tools$plot_heatmap_of_edges(
+        gct,
+        results_list,
+        save_func = save_func,
+        limit = params$heatmap_gene$limit %||% 10,
+        sample_order = params$extra$sample_order,
+        cut_by = params$heatmap_gene$cut_by %||% params$cut_by %||% NULL,
+        pstat_cutoff = params$heatmap_gene$pstat_cutoff %||% 1
+      )
+    }
+
+    # ===== plot es
+    # this part is messy
+    # first is metadata organization to determine if and how to aggregate curves
+    combine_by <- params$enplot$combine_by %||% NULL
+    combine_by_df <- NULL
+    if (!is.null(combine_by) && !is.null(metadata)) {
+      if (!combine_by %in% colnames(metadata)) {
+        combine_by_df <- NULL
+      } else {
+        combine_by_df <- metadata %>%
+          select(!!sym(combine_by), id) %>%
+          rename(
+            facet = !!sym(combine_by),
+            rankname = id
+          )
+        if (!is.null(params$extra$facet_order)) {
+          combine_by_df <- combine_by_df %>%
+            mutate(facet = factor(facet, levels = params$extra$facet_order, ordered = T)) %>%
+            arrange(facet)
+        }
       }
     }
-  }
 
-  ._ <- plot_tools$plot_top_ES_across(all_gsea_results,
-    ranks_list = ranks_list,
-    genesets_list_of_lists,
-    save_func = save_func,
-    limit = params$enplot$limit %||% 10,
-    do_individual = params$enplot$do_individual %||% TRUE,
-    do_combined = params$enplot$do_combined %||% TRUE,
-    combine_by = combine_by_df,
-    width = params$enplot$width %||% 3.4,
-    height = params$enplot$height %||% 4.0,
-  )
-
-
-  # pca
-  # =============
-
-  do_pca <- params$do_pca %>% ifelse(!is.null(.), ., TRUE)
-  browser()
-  if (do_pca) {
-    pca_objects <- all_gsea_results %>% pca_tools$do_all(
-      metadata = metadata
-    )
-
-    log_msg(msg = paste0("plot pca all biplots"))
-    pca_objects %>% pca_tools$plot_all_biplots(
+    ._ <- plot_tools$plot_top_ES_across(all_gsea_results,
+      ranks_list = ranks_list,
+      genesets_list_of_lists,
       save_func = save_func,
-      top_pc = params$pca$top_pc %||% 3,
-      showLoadings = T,
-      labSize = 2,
-      pointSize = 3,
-      sizeLoadingsNames = 2,
-      colby = params$col_by,
-      fig_width = params$pca$width %||% 8.4,
-      fig_height = params$pca$height %||% 7.6,
+      limit = params$enplot$limit %||% 10,
+      do_individual = params$enplot$do_individual %||% TRUE,
+      do_combined = params$enplot$do_combined %||% TRUE,
+      combine_by = combine_by_df, # this is metadata table rankname and facet if exists
+      width = params$enplot$width %||% 5.4,
+      height = params$enplot$height %||% 4.0,
+      combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE,
     )
-  }
-  # todo plot more edge plots and es plots based on the pca results
+
+    # pca
+    # =============
+
+    do_pca <- params$pca$do %>% ifelse(!is.null(.), ., TRUE)
+    if (do_pca) {
+      pca_objects <- all_gsea_results %>% pca_tools$do_all(
+        metadata = metadata
+      )
+
+      log_msg(msg = paste0("plot pca all biplots"))
+      pca_objects %>% pca_tools$plot_all_biplots(
+        save_func = save_func,
+        top_pc = params$pca$top_pc %||% 4,
+        showLoadings = T,
+        labSize = params$pca$labSize %||% 1.8,
+        pointSize = params$pca$pointSize %||% 4,
+        sizeLoadingsNames = params$pca$sizeLoadingsNames %||% 1.4,
+        colby = params$col_by,
+        fig_width = params$pca$width %||% 8.4,
+        fig_height = params$pca$height %||% 7.6,
+      )
+    }
+    # todo plot more edge plots and es plots based on the pca results
+  }) # end of purrr::map loop for individual genesets
 
   # end
+  if (is.null(params$quiet) || params$quiet == FALSE) {
+    voice_tools$speak_text("bcm g s e a is finished")
+  }
 }
