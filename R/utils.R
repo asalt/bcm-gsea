@@ -1,3 +1,4 @@
+suppressPackageStartupMessages(library(fs))
 suppressPackageStartupMessages(library(cmapR))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(dplyr))
@@ -177,14 +178,17 @@ make_partial <- function(.f, ...) {
 
 
 
-log_msg <- function(msg = NULL, info = NULL, debug = NULL, filename = NULL, end = "\n", shell = T) {
+log_msg <- function(msg = NULL, info = NULL, debug = NULL, warn = NULL, error = NULL, filename = NULL, end = "\n", shell = T) {
   level <- case_when(
     !is.null(msg) ~ "INFO",
     !is.null(info) ~ "INFO",
+    !is.null(warn) ~ "WARNING",
     !is.null(debug) ~ "DEBUG",
+    !is.null(error) ~ "ERROR",
     TRUE ~ "INFO"
   )
-  if (is.null(msg) && (!is.null(debug))) msg <- debug
+  msg <- Filter(Negate(is.null), list(msg, info, debug, error))[[1]]
+
   prefix <- paste0(format(Sys.time(), "[%Y-%m-%d %H:%M:%S] "), level, ": ")
 
   maybe_filename <- options("bcm_gsea_log_msg_filename")
