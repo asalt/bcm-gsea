@@ -236,6 +236,7 @@ load_genesets_from_json <- function(json_str) {
 write_results <- function(result, outf, replace = FALSE) {
   if (!is.data.frame(result)) {
     log_msg(msg = "Invalid result, cannot write to file.")
+    log_msg(msg = as.character(result))
     stop("Invalid result, cannot write to file.")
   }
 
@@ -259,10 +260,18 @@ write_results <- function(result, outf, replace = FALSE) {
 save_gsea_results <- function(results_list, savedir = "gsea_tables") {
   fs::dir_create(savedir) # Ensures directory exists, no error if it already does
 
-  imap(results_list, function(collection, collection_name) {
-    imap(collection, function(result, comparison_name) {
+  results_list %>% purrr::imap(~{
+    results_list  <- .x
+    collection_name <- .y
+    results_list %>% purrr::imap(~{
+      result <- .x
+      comparison_name <- .y
       outf <- file.path(savedir, make.names(paste0(collection_name, "_", comparison_name, ".tsv")))
       log_msg(paste0("Writing: ", outf, "..."))
+      if (!"data.frame" %in% class(result)) {
+        log_msg(paste0("Invalid result, cannot write to file."))
+        return()
+      }
       write_results(result, outf)
     })
   })

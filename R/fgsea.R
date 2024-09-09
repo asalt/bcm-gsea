@@ -131,6 +131,8 @@ fgsea_cache_manager <- function(
     save = !is.null(final_result),
     ...) {
   if (is.null(logger)) logger <- log_msg
+  logger(msg=paste0("cache dir set to ", cache_dir))
+
   get_hash_val <- function() {
     rlang::hash(
       c(
@@ -142,6 +144,7 @@ fgsea_cache_manager <- function(
       )
     )
   }
+  # print(cache_dir)
   hashval <- get_hash_val()
   if (do_load) {
     cache_load <- io_tools$load_from_cache(hashval, cache_dir = cache_dir)
@@ -195,6 +198,9 @@ run_one <- function(
       return(NULL)
     }
   )
+  if (is.null(fgseaRes)) {
+    return(NULL)
+  }
 
   if (length(collapse) != 1) { # ??
     # stop("Expected a single logical value for 'collapse'")
@@ -238,6 +244,7 @@ run_all_rankobjs <- function(
   # rankobjs %>% furrr::future_map( # maybe later
   if (parallel == TRUE) {
     workers <- future::availableCores() - 1
+    options(future.globals.maxSize = 10000 * 1024^2)
     logger(msg = paste0("using ", workers, " workers"))
     .map_func <- furrr::future_map
   } else {
@@ -257,12 +264,12 @@ run_all_rankobjs <- function(
   if (!is.null(cache) && cache == TRUE) {
     logger(msg = "caching is enabled")
     cache_results <- rankobjs %>%
-      purrr::map(~ {
-        fgsea_cache_manager(.x, fgsea_args)
-      }) %>%
+      purrr::map(~ do.call(fgsea_cache_manager, c(list(rankobj = .x), fgsea_args)) ) %>%
       Filter(Negate(is.null), .)
+
     .to_do <- setdiff(names(rankobjs), names(cache_results))
     rankobjs <- rankobjs[.to_do]
+
   } else {
     cache_results <- NULL
   }
@@ -282,9 +289,10 @@ run_all_rankobjs <- function(
   # )
 
   if (!is.null(cache) && cache == TRUE) {
-    purrr::walk2(rankobjs, results, ~ {
-      fgsea_cache_manager(.x, fgsea_args, final_result = .y, save = TRUE)
-    })
+    purrr::walk2(rankobjs, results, ~  # do.call syntax in order to pass multiple args as a list
+      do.call(fgsea_cache_manager, c(list(rankobj = .x, final_result = .y), fgsea_args))
+      # fgsea_cache_manager(.x, fgsea_args,  final_result = .y, save = TRUE)
+    )
   }
 
   final_results <- c(
