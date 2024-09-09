@@ -57,9 +57,12 @@ run <- function(params) {
     if (cachedir == "savedir") {
       cachedir <- file.path(savedir, "cache")
     } else {
-      cachedir <- NULL # leave it empty
+      cachedir <- params$advanced$cachedir
     }
+  } else{
+    cachedir <- NULL
   }
+  print(cachedir)
 
   rankfiledir <- params$rankfiledir %||% file.path(savedir, "ranks")
   if (!is.null(rankfiledir)) {
@@ -111,8 +114,8 @@ run <- function(params) {
   } else {
     genesets_array <- params$genesets
   }
-  .msg <- paste0("genesets:\n", paste(sapply(genesets_array, function(gs) paste(gs$category, gs$subcategory, sep = ": ")), collapse = ", "))
-  log_msg(msg = .msg[[1]])
+  # .msg <- paste0("genesets:\n", paste(sapply(genesets_array, function(gs) paste(gs$category, gs$subcategory, sep = ": ")), collapse = ", "))
+  # log_msg(msg = .msg[[1]])
 
 
   genesets_of_interest <- geneset_tools$geneset_array_to_df(genesets_array)
@@ -199,6 +202,43 @@ run <- function(params) {
     ._ <- results_list %>%
       io_tools$save_gsea_results(savedir = file.path(savedir, "gsea_tables"))
 
+    # =======
+    log_msg(msg = "combining gsea marices")
+    all_gsea_results <- fgsea_tools$concat_results_all_collections(results_list)
+
+    # now we plot results
+
+    if (exists("gct") && !is.null(gct) && (params$ranks_from == "gct")) {
+      metadata <- gct@cdesc
+    } else {
+      metadata <- NULL
+    }
+
+    # pca
+    # =============
+
+    do_pca <- params$pca$do %>% ifelse(!is.null(.), ., TRUE)
+    if (do_pca) {
+      pca_objects <- all_gsea_results %>% pca_tools$do_all(
+        metadata = metadata
+      )
+
+      log_msg(msg = paste0("plot pca all biplots"))
+      pca_objects %>% pca_tools$plot_all_biplots(
+        save_func = save_func,
+        top_pc = params$pca$top_pc %||% 4,
+        showLoadings = T,
+        labSize = params$pca$labSize %||% 1.8,
+        pointSize = params$pca$pointSize %||% 4,
+        sizeLoadingsNames = params$pca$sizeLoadingsNames %||% 1.4,
+        colby = params$pca$col_by %||% params$col_by %||% NULL,
+        shape = params$pca$mark_by %||% params$mark_by %||% NULL,
+        fig_width = params$pca$width %||% 8.4,
+        fig_height = params$pca$height %||% 7.6,
+      )
+    } # todo plot more edge plots and es plots based on the pca results
+
+
     # =======  barplots
     do_individual_barplots <- params$do_individual_barplots %>% ifelse(!is.null(.), ., TRUE)
     if (do_individual_barplots) {
@@ -219,17 +259,9 @@ run <- function(params) {
         )
     }
 
-    # =======
-    log_msg(msg = "combining gsea marices")
-    all_gsea_results <- fgsea_tools$concat_results_all_collections(results_list)
 
     log_msg(msg = "drawing all heatmaps. ")
 
-    if (exists("gct") && !is.null(gct) && (params$ranks_from == "gct")) {
-      metadata <- gct@cdesc
-    } else {
-      metadata <- NULL
-    }
 
     # ======= gsea level heatmap
     if (params$heatmap_gsea$do %||% TRUE){
@@ -240,6 +272,8 @@ run <- function(params) {
         limit = params$heatmap_gsea$limit %||% 20,
         cut_by = params$heatmap_gsea$cut_by %||% params$cut_by %||% NULL,
         save_func = save_func,
+        cluster_rows = params$heatmap_gsea$cluster_rows %||% TRUE,
+        cluster_columns = params$heatmap_gsea$cluster_columns %||% FALSE,
         sample_order = params$extra$rankname_order
       )
     }
@@ -296,29 +330,7 @@ run <- function(params) {
       combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE,
     )
 
-    # pca
-    # =============
 
-    do_pca <- params$pca$do %>% ifelse(!is.null(.), ., TRUE)
-    if (do_pca) {
-      pca_objects <- all_gsea_results %>% pca_tools$do_all(
-        metadata = metadata
-      )
-
-      log_msg(msg = paste0("plot pca all biplots"))
-      pca_objects %>% pca_tools$plot_all_biplots(
-        save_func = save_func,
-        top_pc = params$pca$top_pc %||% 4,
-        showLoadings = T,
-        labSize = params$pca$labSize %||% 1.8,
-        pointSize = params$pca$pointSize %||% 4,
-        sizeLoadingsNames = params$pca$sizeLoadingsNames %||% 1.4,
-        colby = params$col_by,
-        fig_width = params$pca$width %||% 8.4,
-        fig_height = params$pca$height %||% 7.6,
-      )
-    }
-    # todo plot more edge plots and es plots based on the pca results
   }) # end of purrr::map loop for individual genesets
 
   # end

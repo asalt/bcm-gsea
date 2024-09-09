@@ -219,6 +219,7 @@ plot_all_biplots <- function(
     pointSize = 4,
     sizeLoadingsNames = 1.75,
     colby = "group",
+    shape = NULL,
     save_func = NULL,
     fig_width = 8.4,
     fig_height = 7.6,
@@ -246,8 +247,9 @@ plot_all_biplots <- function(
             pointSize = pointSize,
             sizeLoadingsNames = sizeLoadingsNames,
             colby = colby,
+            shape = shape,
             title = title,
-            save_func = save_func,
+            save_func = save_func
             # ...
           )
         }, error = function(e) {
@@ -260,7 +262,7 @@ plot_all_biplots <- function(
 
 get_top_loadings <- function(pcaobj,
                              components = c("PC1", "PC2", "PC3", "PC4"),
-                             rangeRetain = 0.05) { # directly lifted from https://github.com/kevinblighe/PCAtools/blob/50f240ba76fe07e2a546998e76dc8aa1c3570693/R/plotloadings.R#L7
+                             rangeRetain = 0.05) { # directly lifted from https://github.com/kevinblighe/PCAtools/blob/50f240ba76fe07e2a546998e76dc8aa1c3570693/R/plotloadings.R#L7 and edited
   x <- pcaobj$loadings[, components, drop = FALSE]
   membership <- list()
   retain <- c()
@@ -285,8 +287,6 @@ get_top_loadings <- function(pcaobj,
     ))
 
     membership[[paste0("PC", i, "_member")]] <- retain_vals
-    # this is what i want to do, and then have another indicator that indicates which PC each feature/loading came from
-    # retain[paste0('PC', as.character(i))] <-  c(which(x[,i] >= uppercutoff), which(x[,i] <= lowercutoff))
   }
   membership_df <- stack(membership)
   membership_df[["var"]] <- rownames(x)[membership_df$values]
