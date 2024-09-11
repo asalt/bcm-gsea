@@ -53,9 +53,11 @@ make_heatmap_fromgct <- function(
 
   # cat("make_heatmap\n")
   ca <- NULL
+  .colors <- plot_utils$create_named_color_list(gct@cdesc, c("group"))
   if ("group" %in% colnames(gct@cdesc)) {
     ca <- ComplexHeatmap::columnAnnotation(
-      group = gct@cdesc$group # this needs to be dynamically set
+      group = gct@cdesc$group, # this needs to be dynamically set
+      col = .colors
       # col = list(
       #   group = c(
       #     `168EC` = "blue",
@@ -575,23 +577,28 @@ plot_results_all_collections <- function(
         save_func <- make_partial(save_func, filename = filename, path = path)
       }
 
-      for (limit_element in limit){
-        plot_results_one_collection(.x,
-          title = .y,
+       .data <- .x
+       .title <- .y
+      plts <- limit %>% purrr::map(
+        ~ plot_results_one_collection(.data,
+          title = .title,
           metadata = metadata,
           cut_by = cut_by,
-          limit = limit_element,
+          limit = .x,
           pstat_cutoff = pstat_cutoff,
           pstat_usetype = pstat_usetype,
           main_pathway_ratio = main_pathway_ratio,
           cluster_rows = cluster_rows,
           cluster_columns = cluster_columns,
           save_func = save_func,
-          sample_order = sample_order,
+          sample_order = sample_order
+          )
         )
-      }
+      return(plts)
 
     }
+
+
   )
   # res <- purrr::map(list_of_lists, function(item) {
   #   do.call("plot_results_one_collection", c(list(df = item), args))
@@ -653,7 +660,7 @@ plot_results_one_collection <- function(
 
   # Handling cut_by parameter
   if (!is.null(cut_by) && cut_by %in% colnames(metadata)) {
-    cut_by <- metadata[sample_order, cut_by]
+    cut_by <- metadata[rankname_order, cut_by]
     cut_by <- factor(cut_by, levels = unique(cut_by))
   } else {
     warning("cut_by not found in metadata, skipping")
@@ -803,7 +810,7 @@ plot_results_one_collection <- function(
     column_names_gp = grid::gpar(fontsize = .column_fontsizes, lineheight = .8),
     column_labels = colnames(dfp) %>%
       str_replace_all("_", " ") %>%
-      str_wrap(width = 28),
+      str_wrap(width = 36),
     row_names_side = "right",
     # row_names_rot=(pi/24)*180,
     column_title_gp = grid::gpar(fontsize = 12, hjust = 2),
@@ -965,8 +972,8 @@ plot_top_ES <- function(
     do_combined = T,
     combine_by = NULL,
     save_func = NULL,
-    panel_width = 5.4,
-    panel_height = 4,
+    panel_width = 4.6,
+    panel_height = 3.4,
     combined_show_ticks = FALSE,
     combined_label_size = 1.75,
     ...) {
