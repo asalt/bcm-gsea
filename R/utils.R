@@ -37,6 +37,8 @@ dist_no_na <- function(mat) {
 }
 
 scale_gct <- function(gct, group_by = NULL) {
+  log_msg(msg="zscoring gct file by row")
+  log_msg(msg=paste0("group_by is set to: ", group_by))
   if (!is.null(group_by) && group_by == FALSE) group_by <- NULL
   res <- gct %>%
     melt_gct() %>%
@@ -79,27 +81,6 @@ scale_gct <- function(gct, group_by = NULL) {
   )
 
   return(newgct)
-}
-
-
-
-make_random_gct <- function(nrow = 10, ncol = 4) {
-  set.seed(369)
-  nrow <- max(nrow, 1)
-  ncol <- max(ncol, 1)
-  .mat <- matrix(runif(nrow * ncol), nrow = nrow, ncol = ncol)
-  .rids <- seq(1, dim(.mat)[1]) %>% as.character()
-  .cids <- seq(1, dim(.mat)[2]) %>% as.character()
-  .cids <- paste0("X", .cids)
-  .cdesc <- data.frame(
-    metavar1 = sample(letters[1:5], ncol, replace = T),
-    metavar2 = sample(letters[1:5], ncol, replace = T)
-  )
-  .rdesc <- data.frame(
-    rdesc = paste0("gene", seq(1, nrow))
-  )
-  gct <- cmapR::GCT(mat = .mat, rid = .rids, cid = .cids, cdesc = .cdesc, rdesc = .rdesc)
-  gct
 }
 
 
@@ -191,7 +172,7 @@ log_msg <- function(msg = NULL, info = NULL, debug = NULL, warn = NULL, error = 
 
   prefix <- paste0(format(Sys.time(), "[%Y-%m-%d %H:%M:%S] "), level, ": ")
 
-  maybe_filename <- options("bcm_gsea_log_msg_filename")
+  maybe_filename <- options("bcm_gsea_log_msg_filename")[[1]]
   if (!is.null(maybe_filename)) {
     filename <- maybe_filename[[1]]
   }

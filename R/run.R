@@ -46,93 +46,43 @@ run <- function(params) {
   source(file.path(here("R"), "voice.R"), local = voice_tools)
   # ===========================
 
-
-  savedir <- params$savedir
-  if (is.null(savedir)) {
-    savedir <- file.path("./plots")
-  }
-
-  cachedir <- params$advanced$cachedir
-  if (!is.null(cachedir)) {
-    if (cachedir == "savedir") {
-      cachedir <- file.path(savedir, "cache")
-    } else {
-      cachedir <- params$advanced$cachedir
-    }
-  } else{
-    cachedir <- NULL
-  }
-  print(cachedir)
-
-  rankfiledir <- params$rankfiledir %||% file.path(savedir, "ranks")
-  if (!is.null(rankfiledir)) {
-    if (rankfiledir == "savedir") {
-      rankfiledir <- file.path(savedir, "ranks")
-    }
-  }
-  params$rankfiledir <- rankfiledir
-
   save_func <- util_tools$make_partial(
     plot_utils$plot_and_save,
     path = savedir,
     replace = params$advanced$replace %||% TRUE
   )
 
-  #
-  if (!is.null(params$extra$rankname_order)) {
-    if (length(params$extra$rankname_order) == 1 && params$extra$rankname_order == "sample_order") {
-      params$extra$rankname_order <- params$extra$sample_order
-    }
-  } else {
-    params$extra$rankname_order <- params$extra$sample_order
-  }
+  # ===========================
 
-  if (!is.null(params$extra$sample_order)) {
-    if (length(params$extra$sample_order) == 1 && params$extra$sample_order == "rankname_order") {
-      params$extra$sample_order <- params$extra$rankname_order
-    }
-  } else {
-    params$extra$sample_order <- params$extra$rankname_order
-  }
+  savedir <- params$savedir
+  cachedir <- params$advanced$cachedir
+  print(cachedir)
+  rankfiledir <- params$rankfiledir 
 
   logfile <- params$logfile %>% ifelse(!is.null(.), ., "run.log")
   options("bcm_gsea_log_msg_filename" = logfile)
   log_msg <- util_tools$make_partial(util_tools$log_msg, filename = logfile)
   # log_message <- make_partial(util_tools$log_message)
   log_msg(msg = paste0("===\n*starting bcm gsea*\n==="))
-  if (is.null(params$quiet) || params$quiet == FALSE) {
+  if (is.null(params$advanced$quiet) || params$advanced$quiet == FALSE) {
     voice_tools$speak_text("starting bcm g s e a")
   }
 
   # =======
-  species <- params$species %||% "Homo sapiens"
 
   # == genesets
 
-  if (is.null(params$genesets)) {
-    genesets_array <- list(list(category = "H", subcategory = "", collapse = FALSE))
-  } else {
-    genesets_array <- params$genesets
-  }
-  # .msg <- paste0("genesets:\n", paste(sapply(genesets_array, function(gs) paste(gs$category, gs$subcategory, sep = ": ")), collapse = ", "))
-  # log_msg(msg = .msg[[1]])
-
-
-  genesets_of_interest <- geneset_tools$geneset_array_to_df(genesets_array)
+  genesets_of_interest <- geneset_tools$geneset_array_to_df(params$genesets)
   list_of_geneset_dfs <- geneset_tools$get_collections(genesets_of_interest, species = species)
   genesets_list_of_lists <- list_of_geneset_dfs %>% purrr::map(geneset_tools$genesets_df_to_list)
 
   # =======
 
-  rankfiledir <- params$rankfiledir
-  volcanodir <- params$volcanodir
-  gct_path <- params$gct_path
-  ranks_from <- params$ranks_from
 
-  log_msg(paste0("rankfiledir: ", rankfiledir))
-  log_msg(paste0("volcanodir: ", volcanodir))
-  log_msg(paste0("gct_path: ", gct_path))
-  log_msg(paste0("ranks from: ", ranks_from))
+  # log_msg(paste0("rankfiledir: ", params$rankfiledir))
+  # log_msg(paste0("volcanodir: ", params$volcanodir))
+  # log_msg(paste0("gct_path: ", params$gct_path))
+  # log_msg(paste0("ranks from: ", params$ranks_from))
 
   # ==
   ranks_list <- io_tools$load_and_process_ranks(params)
@@ -140,7 +90,7 @@ run <- function(params) {
 
   # == run fgsea
 
-  parallel <- params$advanced$parallel %>% ifelse(!is.null(.), ., FALSE)
+  parallel <- params$advanced$parallel 
   if (parallel) {
     workers <- future::availableCores() - 1
     future::plan(future::multicore, workers = workers)
@@ -157,9 +107,9 @@ run <- function(params) {
 
   # =======  load gct
 
-  if (!is.null(gct_path) && file.exists(gct_path)) {
-    log_msg(msg = paste0("reading gct file: ", gct_path))
-    gct <- cmapR::parse_gctx(gct_path)
+  if (!is.null(params$gct_path) && file.exists(params$gct_path)) {
+    log_msg(msg = paste0("reading gct file: ", params$gct_path))
+    gct <- cmapR::parse_gctx(params$gct_path)
   } else {
     gct <- NULL
   }
@@ -178,9 +128,8 @@ run <- function(params) {
     #   voice_tools$speak_text(text = paste0('running g s e a for ', .x))
     # }
 
-
     log_msg(msg = .msg)
-    voice_tools$speak_text(.x)
+    if (params$advanced$quiet != TRUE) voice_tools$speak_text(.x)
 
     genesets_list_of_lists <- genesets_list_of_lists[.x]
     results_list <- fgsea_tools$run_all_pathways(genesets_list_of_lists,
@@ -207,7 +156,7 @@ run <- function(params) {
     all_gsea_results <- fgsea_tools$concat_results_all_collections(results_list)
 
     # now we plot results
-
+    # TODO better and earlier handle metadata loading
     if (exists("gct") && !is.null(gct) && (params$ranks_from == "gct")) {
       metadata <- gct@cdesc
     } else {
@@ -218,7 +167,7 @@ run <- function(params) {
     # =============
 
     do_pca <- params$pca$do %>% ifelse(!is.null(.), ., TRUE)
-    if (do_pca) {
+    if (params$pca$do == TRUE) {
       pca_objects <- all_gsea_results %>% pca_tools$do_all(
         metadata = metadata
       )
@@ -249,9 +198,9 @@ run <- function(params) {
       )
     }
 
-    log_msg(msg = "plotting faceted barplots")
     do_combined_barplots <- params$do_combined_barplots %>% ifelse(!is.null(.), ., TRUE)
     if (do_combined_barplots) {
+      log_msg(msg = "plotting faceted barplots")
       plts <- results_list %>%
         plot_tools$do_combined_barplots(
           sample_order = params$rankname_order %||% params$sample_order,
@@ -260,11 +209,9 @@ run <- function(params) {
     }
 
 
-    log_msg(msg = "drawing all heatmaps. ")
-
-
     # ======= gsea level heatmap
     if (params$heatmap_gsea$do %||% TRUE){
+      log_msg(msg = "drawing all heatmaps. ")
       hts <- all_gsea_results %>% plot_tools$plot_results_all_collections(
         # limit=20,
         metadata = metadata,
@@ -274,7 +221,8 @@ run <- function(params) {
         save_func = save_func,
         cluster_rows = params$heatmap_gsea$cluster_rows %||% TRUE,
         cluster_columns = params$heatmap_gsea$cluster_columns %||% FALSE,
-        sample_order = params$extra$rankname_order
+        sample_order = params$extra$rankname_order, # get rid of this one, pretty sure
+        rankname_order = params$extra$rankname_order
       )
     }
 
@@ -335,6 +283,6 @@ run <- function(params) {
 
   # end
   if (is.null(params$quiet) || params$quiet == FALSE) {
-    voice_tools$speak_text("bcm g s e a is finished")
+    if (params$advanced$quiet != TRUE) voice_tools$speak_text("bcm g s e a is finished")
   }
 }

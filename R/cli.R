@@ -1,3 +1,4 @@
+suppressPackageStartupMessages(library(rlang))
 suppressPackageStartupMessages(library(argparser))
 suppressPackageStartupMessages(library(RcppTOML))
 suppressPackageStartupMessages(library(here))
@@ -21,13 +22,84 @@ get_parser <- function() {
   return(parser)
 }
 
+clean_args <- function(params){
+
+  if (is.null(params$savedir)) {
+    params$savedir <- file.path("./plots")
+  }
+
+
+  params$gct_path <- (!is.null(params$gct_path) && file.exists(params$gct_path)) %||% NULL
+
+
+  cachedir <- params$advanced$cachedir
+  if (!is.null(cachedir)) {
+    if (cachedir == "savedir") {
+      cachedir <- file.path(savedir, "cache")
+    } else {
+      cachedir <- params$advanced$cachedir
+    }
+  } else{
+    cachedir <- NULL
+  }
+  params$advanced$cachedir <- cachedir
+
+
+  rankfiledir <- params$rankfiledir %||% file.path(savedir, "ranks")
+  if (!is.null(rankfiledir)) {
+    if (rankfiledir == "savedir") {
+      rankfiledir <- file.path(params$savedir, "ranks")
+    }
+  }
+  params$rankfiledir <- rankfiledir
+
+  #
+  if (!is.null(params$extra$rankname_order)) {
+    if (length(params$extra$rankname_order) == 1 && params$extra$rankname_order == "sample_order") {
+      params$extra$rankname_order <- params$extra$sample_order
+    }
+  } else {
+    params$extra$rankname_order <- params$extra$sample_order
+  }
+
+  if (!is.null(params$extra$sample_order)) {
+    if (length(params$extra$sample_order) == 1 && params$extra$sample_order == "rankname_order") {
+      params$extra$sample_order <- params$extra$rankname_order
+    }
+  } else {
+    params$extra$sample_order <- params$extra$rankname_order
+  }
+
+  params$species <- params$species %||% "Homo sapiens"
+
+  params$genesets <- params$genesets %||% list(list(category = "H", subcategory = "", collapse = FALSE))
+
+  params$advanced$quiet <- params$advanced$quiet %||% FALSE
+
+  params$advanced$parallel <- params$advanced$parallel %||% FALSE
+
+
+
+
+  logfile <- params$logfile %>% ifelse(!is.null(.), ., "run.log")
+  options("bcm_gsea_log_msg_filename" = logfile)
+
+  return(params)
+
+}
+
+
+
+
+
 main <- function() {
   parser <- get_parser()
   argv <- parse_args(parser)
 
   params <- RcppTOML::parseTOML(argv$config)
 
-  run(params$params) # named list with first order [params] and nested subsections
+  cleaned_params <- clean_args(params$params)
+  run(cleaned_params) # named list with first order [params] and nested subsections
 }
 
 if (sys.nframe() == 0) { # if ran directly, not sourced, equivalent to python if __name__ == "__main__"
