@@ -32,10 +32,15 @@ clean_args <- function(params){
   params$gct_path <- (!is.null(params$gct_path) && file.exists(params$gct_path)) %||% NULL
 
 
+  #print(params$enplot$combine_by)
+  params$enplot$combine_by <- params$enplot$combine_by %||% NULL
+  #print(params$enplot$combine_by)
+
+
   cachedir <- params$advanced$cachedir
   if (!is.null(cachedir)) {
     if (cachedir == "savedir") {
-      cachedir <- file.path(savedir, "cache")
+      cachedir <- file.path(params$savedir, "cache")
     } else {
       cachedir <- params$advanced$cachedir
     }
@@ -45,7 +50,7 @@ clean_args <- function(params){
   params$advanced$cachedir <- cachedir
 
 
-  rankfiledir <- params$rankfiledir %||% file.path(savedir, "ranks")
+  rankfiledir <- params$rankfiledir %||% file.path(params$savedir, "ranks")
   if (!is.null(rankfiledir)) {
     if (rankfiledir == "savedir") {
       rankfiledir <- file.path(params$savedir, "ranks")
@@ -78,18 +83,15 @@ clean_args <- function(params){
 
   params$advanced$parallel <- params$advanced$parallel %||% FALSE
 
-
-
-
-  logfile <- params$logfile %>% ifelse(!is.null(.), ., "run.log")
+  logfile <- params$advanced$logfile %||% "run.log" %>% ifelse(. == "savedir", params$savedir, .)
+  loglevel <- params$advanced$loglevel
   options("bcm_gsea_log_msg_filename" = logfile)
+  options("bcm_gsea_loglevel" =  loglevel)
+  params$advanced$logfile <- logfile
 
   return(params)
 
 }
-
-
-
 
 
 main <- function() {

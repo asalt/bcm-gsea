@@ -48,7 +48,7 @@ run <- function(params) {
 
   save_func <- util_tools$make_partial(
     plot_utils$plot_and_save,
-    path = savedir,
+    path = params$savedir,
     replace = params$advanced$replace %||% TRUE
   )
 
@@ -59,12 +59,12 @@ run <- function(params) {
   print(cachedir)
   rankfiledir <- params$rankfiledir 
 
-  logfile <- params$logfile %>% ifelse(!is.null(.), ., "run.log")
+  logfile <- params$advanced$logfile %>% ifelse(!is.null(.), ., "run.log")
   options("bcm_gsea_log_msg_filename" = logfile)
+
   log_msg <- util_tools$make_partial(util_tools$log_msg, filename = logfile)
-  # log_message <- make_partial(util_tools$log_message)
   log_msg(msg = paste0("===\n*starting bcm gsea*\n==="))
-  if (is.null(params$advanced$quiet) || params$advanced$quiet == FALSE) {
+  if (params$advanced$quiet == FALSE) {
     voice_tools$speak_text("starting bcm g s e a")
   }
 
@@ -189,8 +189,7 @@ run <- function(params) {
 
 
     # =======  barplots
-    do_individual_barplots <- params$do_individual_barplots %>% ifelse(!is.null(.), ., TRUE)
-    if (do_individual_barplots) {
+    if (params$barplot$do_individual == TRUE) {
       log_msg(msg = "plotting individual barplots")
       plts <- results_list %>% plot_tools$all_barplots_with_numbers(
         sample_order = params$rankname_order %||% params$sample_order,
@@ -198,8 +197,7 @@ run <- function(params) {
       )
     }
 
-    do_combined_barplots <- params$do_combined_barplots %>% ifelse(!is.null(.), ., TRUE)
-    if (do_combined_barplots) {
+    if (params$barplots$do_combined == TRUE) {
       log_msg(msg = "plotting faceted barplots")
       plts <- results_list %>%
         plot_tools$do_combined_barplots(
@@ -210,7 +208,7 @@ run <- function(params) {
 
 
     # ======= gsea level heatmap
-    if (params$heatmap_gsea$do %||% TRUE){
+    if (params$heatmap_gsea$do == TRUE){
       log_msg(msg = "drawing all heatmaps. ")
       hts <- all_gsea_results %>% plot_tools$plot_results_all_collections(
         # limit=20,
@@ -230,7 +228,7 @@ run <- function(params) {
 
     log_msg(msg = paste0("maybe plot edges"))
 
-    if (!is.null(gct) && params$heatmap_gene$do %||% TRUE) {
+    if (!is.null(gct) && params$heatmap_gene$do == TRUE) {
       ht_edge_plots <- plot_tools$plot_heatmap_of_edges(
         gct,
         results_list,
