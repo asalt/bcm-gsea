@@ -32,6 +32,12 @@ fgsea_tools_monkeypatch$run_one <- function(...) {
 plot_tools <- new.env()
 source(file.path(src_dir, "./plot.R"), local = plot_tools)
 
+util_tools <- new.env()
+source(file.path(src_dir, "./utils.R"), local = util_tools)
+
+sim_tools <- new.env()
+source(file.path(src_dir, "./simulate.R"), local = sim_tools)
+
 
 
 
@@ -40,7 +46,7 @@ testthat::test_that("test fgsea parse additional_info", {
   geneset <- geneset_tools$get_collection("H", "")
   geneset1 <- geneset_tools$get_collection("C5", "GO:MF")
 
-  data <- fgsea_tools$simulate_preranked_data()
+  data <- sim_tools$simulate_preranked_data()
   geneset_list <- geneset_tools$genesets_df_to_list(geneset)
   geneset_list1 <- geneset_tools$genesets_df_to_list(geneset1)
   geneset_lists <- list("H_" = geneset_list, "C5_GO:MF" = geneset_list1)
@@ -72,24 +78,10 @@ testthat::test_that("test fgsea parse additional_info", {
   #
 })
 
-testthat::test_that("test simulate", {
-  data <- fgsea_tools$simulate_preranked_data()
-  testthat::expect_true(
-    "data.frame" %in% class(data)
-  )
-
-  testthat::expect_true(
-    "id" %in% colnames(data)
-  )
-
-  testthat::expect_true(
-    "value" %in% colnames(data)
-  )
-})
 
 test_fgsea_runone <- function() {
   # data <- .GlobalEnv$simulate_preranked_data()
-  data <- fgsea_tools$simulate_preranked_data()
+  data <- sim_tools$simulate_preranked_data()
   geneset <- geneset_tools$get_collection("H", "")
   geneset_list <- geneset_tools$genesets_df_to_list(geneset)
   rankobjs <- io_tools$ranks_dfs_to_lists(list(data))
@@ -111,7 +103,7 @@ test_that("test run one collapse", {
   #
   geneset <- geneset_tools$get_collection("C5", "GO:BP")
   spike_terms <- c("CYCLE", "CHECKPOINT")
-  data <- fgsea_tools$simulate_preranked_data(geneset = geneset, sample_frac = .75)
+  data <- sim_tools$simulate_preranked_data(geneset = geneset, sample_frac = .75)
 
   #
   geneset_list <- geneset_tools$genesets_df_to_list(geneset)
@@ -149,40 +141,10 @@ test_that("test run one collapse", {
   )
 })
 
-# =====  this is only used for two specific tests and is somewhat redundant with previous
-generate_test_data <- function(collapse = FALSE) {
-  # this function relies on simulate preranked data from fgsea tools,
-  # which depends on test_fgsea.R for guaranteed* success
-  # *not guaranteed
-
-  # genesets_of_interest <- list(
-  #     list(category = "H", subcategory = ""),
-  #     list(category = "C5", subcategory = "GO:BP")
-  # )
-
-  genesets_of_interest <- tibble::tribble(
-    ~category, ~subcategory, ~collapse, ~collection_name,
-    "H", "", FALSE, "H_",
-    "C5", "GO:BP", FALSE, "C5_GO:BP",
-  )
-  genesets <- geneset_tools$get_collections(
-    genesets_of_interest
-  )
-
-  geneset_list <- genesets %>% purrr::imap(~ geneset_tools$genesets_df_to_list(.x))
-
-  # named_data = list(data=data)
-  data1 <- fgsea_tools$simulate_preranked_data(seed = 1234, sample_frac = .4)
-  data2 <- fgsea_tools$simulate_preranked_data(seed = 4321, sample_frac = .4)
-  data <- list(first = data1, second = data2)
-  rankobjs <- io_tools$ranks_dfs_to_lists(data)
-  # res <- fgsea_tools$run_all_pathways(geneset_list, rankobjs, collapse. = collapse)
-  res <- fgsea_tools$run_all_pathways(geneset_list, rankobjs, collapse = collapse)
-  return(res)
-}
 
 # ================================ test data ================================
-TEST_DATA <- generate_test_data()
+#
+TEST_DATA <- sim_tools$generate_test_data() # this uses from above like geneset_tools, io_tools, so if the above passed this should too
 
 test_that("test concat results one collection", {
   res <- TEST_DATA
@@ -221,7 +183,7 @@ test_that("test concat results all collections", {
 
 test_that("test run all geneset lists not named.", { # this will take a while. testing if can set collapse. var
   geneset <- geneset_tools$get_collection("C5", "GO:BP")
-  data <- fgsea_tools$simulate_preranked_data(geneset = geneset)
+  data <- sim_tools$simulate_preranked_data(geneset = geneset)
   data %<>% dplyr::sample_frac(size = .25)
 
   geneset_list <- geneset_tools$genesets_df_to_list(geneset)
@@ -242,7 +204,7 @@ test_that("test run all geneset lists not named.", { # this will take a while. t
 
 test_that("test run all ranks lists not named.", { # this will take a while. testing if can set collapse. var
   geneset <- geneset_tools$get_collection("C5", "GO:BP")
-  data <- fgsea_tools$simulate_preranked_data(geneset = geneset)
+  data <- sim_tools$simulate_preranked_data(geneset = geneset)
   data %<>% dplyr::sample_frac(size = .25)
 
   geneset_list <- geneset_tools$genesets_df_to_list(geneset)
@@ -266,7 +228,7 @@ test_that("test run all ranks lists not named.", { # this will take a while. tes
 test_that("test run all collapse.", { # this will take a while. testing if can set collapse. var
   geneset <- geneset_tools$get_collection("C5", "GO:BP")
   spike_terms <- c("CYCLE", "CHECKPOINT")
-  data <- fgsea_tools$simulate_preranked_data(geneset = geneset)
+  data <- sim_tools$simulate_preranked_data(geneset = geneset)
   data %<>% dplyr::sample_frac(size = .25)
 
   geneset_list <- geneset_tools$genesets_df_to_list(geneset)
@@ -309,7 +271,7 @@ test_that("test run all collapse.", { # this will take a while. testing if can s
 # ==
 
 test_get_edge <- function() {
-  data <- fgsea_tools$simulate_preranked_data()
+  data <- sim_tools$simulate_preranked_data()
   geneset <- geneset_tools$get_collection("H", "")
   geneset_list <- geneset_tools$genesets_df_to_list(geneset)
   rankobjs <- io_tools$ranks_dfs_to_lists(list(data))

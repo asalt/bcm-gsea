@@ -57,25 +57,24 @@ testthat::test_that("test scale gct", {
   )
 })
 
+# logging
 
-testthat::test_that("test log msg", 
-  {
-    .f <- "test.log"
-    testthat::expect_error(util_tools$log_msg('test', filename=.f), NA)
-    # This is the standard way to assert that a block of code should execute without any errors in testthat.
-    testthat::expect_true(
-                          fs::file_exists(.f)
-                          )
-    fs::file_delete(.f)
-
+testthat::test_that("test log msg", {
+  .f <- "test.log"
+  testthat::expect_error(util_tools$log_msg(info = "test", filename = .f), NA)
+  # This is the standard way to assert that a block of code should execute without any errors in testthat.
+  testthat::expect_true(fs::file_exists(.f))
+  testthat::expect_true(stringr::str_detect(readLines(.f), "INFO"))
+  fs::file_delete(.f)
 })
 
-testthat::test_that("test log msg levels", 
-  {
-    .f <- "test.log"
-    if (fs::file_exists(.f)) fs::file_delete(.f)
-    util_tools$log_msg(debug='test', filename=.f)
-    testthat::expect_true( 
-                          stringr::str_detect(readLines(.f), "DEBUG"))
-    fs::file_delete(.f)
+
+testthat::test_that("test log msg levels", {
+  .f <- "test.log"
+  if (fs::file_exists(.f)) fs::file_delete(.f)
+  util_tools$log_msg(debug = "test", filename = .f)
+  testthat::expect_true(
+    stringr::str_detect(readLines(.f), "DEBUG")
+  )
+  fs::file_delete(.f)
 })
