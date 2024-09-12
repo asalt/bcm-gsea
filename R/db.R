@@ -4,6 +4,11 @@ library(RSQLite)
 library(stringr)
 
 # Function to initialize the database from the SQL file
+get_con <- function(db_path = file.path(here("sql"), "rankorder_data.db")){
+  con <- dbConnect(RSQLite::SQLite(), db_path)
+  return(con)
+}
+
 initialize_db <- function(db_path = file.path(here("sql"), "rankorder_data.db"), sql_file = file.path(here("sql"), "init_db.sql")) {
   con <- dbConnect(RSQLite::SQLite(), db_path)
   # Read the SQL commands from the file
@@ -30,6 +35,69 @@ initialize_db <- function(db_path = file.path(here("sql"), "rankorder_data.db"),
 
 # # Initialize the database (run this once)
 # initialize_db()
+#returns collection_id
+insert_collection <- function(con, collection_name){
+    res <- dbGetQuery(con, 'select collection_id from Collections where name = ?', params = c(collection_name))
+    if (nrow(res) > 0) {
+      warning(paste0(collection_name, " already exists, skipping"))
+      return(res[1,])
+    }
+
+    dbExecute(con, "INSERT INTO Collections (name) VALUES (?)", params = collection_name)
+    # dbExecute(con, "COMMIT")
+    res <- dbGetQuery(con, 'select collection_id from Collections where name = ?', params = c(collection_name))
+    return(res[1,])
+}
+
+get_pathway_id <- function(con, pathway_name){
+    res <- dbGetQuery(con, 'select pathway_id from Pathways where name = ?', params = c(pathway_name))
+    if (nrow(res) == 0) return(NULL)
+    return(res[1,])
+}
+
+insert_pathway <- function(con, collection_id = NULL, collection_name = NULL, pathway_name = NULL, members = NULL){
+    # dbExecute(con, "INSERT INTO Collection (name) VALUES (?)", params = collection_name)
+
+    if (is.null(pathway_name)) pathway_name <- "empty"
+    if (is.null(members)) members <- ""
+
+    maybe_pathway_id <- get_pathway_id(con, pathway_name)
+
+    if (!is.null(maybe_pathway_id)) {
+        warning(paste0("pathway ", pathway_name, " already present in db"))
+        return()
+    }
+
+
+    .res <- dbGetQuery(con, 'select rankobj_id from RankObjects where name = ?', params = c('second'))
+
+    if (is.null(collection_id) && !is.null(collection_name)){
+      res <- dbGetQuery(con, 'select collection_id from Collections where name = ?', params = c(collection_name))
+      if (nrow(res) == 0){ # then create
+          collection_id <- insert_collection(con, connection_name)
+      } else{
+          collection_id <- insert_collection(con, 'empty')
+      }
+    }
+    
+    dbExecute(con, "INSERT INTO Pathways (name, ids, collection_id) VALUES (?, ?, ?)", params = c(pathway_name,
+                                                                                                  str_c(members, collapse='/'),
+                                                                                                  collection_id)
+    )
+
+}
+
+
+insert_rankobj <- function(con, rank_name){
+
+    res <- dbGetQuery(con, 'select rankobj_id from RankObjects where name = ?', params = c('second'))
+    if (nrow(res) > 0) {
+        warning(paste0("rankname ", rank_name, " already exists, cannot insert"))
+        return()
+    }
+    dbExecute(con, "INSERT INTO RankObjects (name) VALUES (?)", params = rank_name)
+    # dbExecute(con, "COMMIT")
+}
 
 insert_stats <- function(con, rankobj_id, stats_data) {
   # Assuming stats_data is a data frame with columns: rank, stat
@@ -39,10 +107,17 @@ insert_stats <- function(con, rankobj_id, stats_data) {
       c(rankobj_id, stats_data$rank[i], stats_data$stat[i])
     })
   )
+  # dbExecute(con, "COMMIT")
 }
-insert_stats_bulk <- function(con, rankobj_id, stats_data) {
+insert_stats_bulk <- function(con, rankobj_id=NULL, rankname=NULL, stats_data) {
   # Start a transaction
   dbExecute(con, "BEGIN TRANSACTION")
+
+  if (is.null(rankobj_id)) {
+      sql <- "SELECT * from RankObjects where name == ? LIMIT 1"
+      res <- dbExecute(con, sql, params = rankname)
+  }
+
   
   # Prepare SQL for inserting into the Stats table
   sql <- "INSERT INTO Stats (rankobj_id, rank, stat) VALUES (?, ?, ?)"
