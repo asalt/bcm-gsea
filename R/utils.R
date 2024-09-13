@@ -157,18 +157,47 @@ make_partial <- function(.f, ...) {
   return(inner)
 }
 
+# logging.getLevelNamesMapping() # py
+# {'CRITICAL': 50,
+#  'FATAL': 50,
+#  'ERROR': 40,
+#  'WARN': 30,
+#  'WARNING': 30,
+#  'INFO': 20,
+#  'DEBUG': 10,
+#  'NOTSET': 0}
+
+.log_levels <- list(
+                    "CRITICAL" = 50,
+                    "ERROR" = 40,
+                    "WARN" = 30,
+                    "WARNING" = 30,
+                    "INFO" = 20,
+                    "DEBUG" = 10,
+                    "NOTSET" = 0
+                    )
 
 
-log_msg <- function(msg = NULL, info = NULL, debug = NULL, warn = NULL, error = NULL, filename = NULL, end = "\n", shell = T) {
+
+globalloglevel <- options("bcm_gsea_loglevel")[[1]] %||% "INFO"
+
+log_msg <- function(msg = NULL, info = NULL, debug = NULL, warning = NULL, warn = NULL, error = NULL, filename = NULL, end = "\n", shell = T, loglevel = loglevel) {
+
+
   level <- case_when(
     !is.null(msg) ~ "INFO",
     !is.null(info) ~ "INFO",
+    !is.null(warning) ~ "WARNING",
     !is.null(warn) ~ "WARNING",
     !is.null(debug) ~ "DEBUG",
     !is.null(error) ~ "ERROR",
     TRUE ~ "INFO"
   )
-  msg <- Filter(Negate(is.null), list(msg, info, debug, error))[[1]]
+
+  is_lvl_too_low <- .log_levels[[level]] < .log_levels[[globalloglevel]]
+  if (is_lvl_too_low == TRUE) return()
+
+  msg <- Filter(Negate(is.null), list(msg, info, warning, warn, debug, error))[[1]]
 
   prefix <- paste0(format(Sys.time(), "[%Y-%m-%d %H:%M:%S] "), level, ": ")
 
@@ -177,7 +206,7 @@ log_msg <- function(msg = NULL, info = NULL, debug = NULL, warn = NULL, error = 
     filename <- maybe_filename[[1]]
   }
   if (is.null(filename)) {
-    filename <- "run.log"
+    filename <- "bcm_gsea.log"
   }
 
   dir_path <- fs::path_dir(filename)
