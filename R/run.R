@@ -57,7 +57,8 @@ run <- function(params) {
   savedir <- params$savedir
   cachedir <- params$advanced$cachedir
   print(cachedir)
-  rankfiledir <- params$rankfiledir 
+  rankfiledir <- params$rankfiledir
+  species <- params$species
 
   logfile <- params$advanced$logfile %>% ifelse(!is.null(.), ., "run.log")
   options("bcm_gsea_log_msg_filename" = logfile)
@@ -90,7 +91,7 @@ run <- function(params) {
 
   # == run fgsea
 
-  parallel <- params$advanced$parallel 
+  parallel <- params$advanced$parallel
   if (parallel) {
     workers <- future::availableCores() - 1
     future::plan(future::multicore, workers = workers)
@@ -107,6 +108,7 @@ run <- function(params) {
 
   # =======  load gct
 
+  log_msg(msg = params$gct_path)
   if (!is.null(params$gct_path) && file.exists(params$gct_path)) {
     log_msg(msg = paste0("reading gct file: ", params$gct_path))
     gct <- cmapR::parse_gctx(params$gct_path)
@@ -165,14 +167,14 @@ run <- function(params) {
 
     # pca
     # =============
-
-    do_pca <- params$pca$do %>% ifelse(!is.null(.), ., TRUE)
     if (params$pca$do == TRUE) {
       pca_objects <- all_gsea_results %>% pca_tools$do_all(
         metadata = metadata
       )
 
+      # log_msg(debug=paste0('pca colby is : ', params$pca$col_by))
       log_msg(msg = paste0("plot pca all biplots"))
+
       pca_objects %>% pca_tools$plot_all_biplots(
         save_func = save_func,
         top_pc = params$pca$top_pc %||% 4,
@@ -181,6 +183,7 @@ run <- function(params) {
         pointSize = params$pca$pointSize %||% 4,
         sizeLoadingsNames = params$pca$sizeLoadingsNames %||% 1.4,
         colby = params$pca$col_by %||% params$col_by %||% NULL,
+        # colby = params$pca$col_by, 
         shape = params$pca$mark_by %||% params$mark_by %||% NULL,
         fig_width = params$pca$width %||% 8.4,
         fig_height = params$pca$height %||% 7.6,
@@ -197,7 +200,7 @@ run <- function(params) {
       )
     }
 
-    if (params$barplots$do_combined == TRUE) {
+    if (params$barplot$do_combined == TRUE) {
       log_msg(msg = "plotting faceted barplots")
       plts <- results_list %>%
         plot_tools$do_combined_barplots(

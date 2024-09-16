@@ -28,8 +28,14 @@ clean_args <- function(params){
     params$savedir <- file.path("./plots")
   }
 
+  params$barplot$do_individual <- params$barplot$do_individual %||% TRUE
+  params$barplot$do_combined <- params$barplot$do_combined %||% TRUE
 
-  params$gct_path <- (!is.null(params$gct_path) && file.exists(params$gct_path)) %||% NULL
+  params$heatmap_gsea$do <- params$heatmap_gsea$do %||% TRUE
+  params$heatmap_gene$do <- params$heatmap_gene$do %||% TRUE
+  params$pca$do <- params$pca$do %||% TRUE
+
+  params$gct_path <- ifelse(!is.null(params$gct_path) && file.exists(params$gct_path), params$gct_path, NULL)
 
 
   #print(params$enplot$combine_by)

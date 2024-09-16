@@ -54,7 +54,7 @@ do_one <- function(
   #   gsea_object <- gsea_object %>% filter(mainpathway == TRUE)
   # }
 
-  log_msg(msg = "plotting one pca biplot collection")
+  log_msg(msg = "running pca")
 
   required_cols <- c("pathway", "NES", "rankname")
   for (col in required_cols) {
@@ -117,7 +117,7 @@ plot_biplot <- function(
     sizeLoadingsNames = 2,
     colby = NULL, # or a string like 'group'
     shape = NULL, # or a string like 'group'
-    encircle = ifelse(!is.null(colby), T, F),
+    encircle = !is.null(colby),
     title = "",
     ...) {
   args <- list(...)
@@ -125,6 +125,9 @@ plot_biplot <- function(
     save_func <- args$save_func
   } else {
     save_func <- NULL
+  }
+  if (!is.logical(encircle) || length(encircle) != 1 || is.na(encircle)) {
+    stop("`encircle` must be a single logical value (TRUE or FALSE). Received: ", encircle)
   }
 
   vec <- paste0("PC", 1:top_pc)
@@ -134,6 +137,8 @@ plot_biplot <- function(
     as.list()
   #
 
+    log_msg(info=paste0('colby is: ', colby))
+    log_msg(info=paste0('metadata is : ', pca_object$metadata))
   if (!is.null(colby) &&
     !is.null(pca_object$metadata) &&
     !colby %in% colnames(pca_object$metadata)) {
@@ -220,43 +225,57 @@ plot_all_biplots <- function(
     sizeLoadingsNames = 1.75,
     colby = "group",
     shape = NULL,
-    save_func = NULL,
     fig_width = 8.4,
     fig_height = 7.6,
+    save_func = NULL,
     ...) {
+   log_msg(msg=paste0('colby equal to : ', colby))
   pca_objects %>%
     purrr::imap(
       ~ {
+        pca_object <- .x
         title <- .y
         collection_name <- .y
 
-        if (!is.null(save_func)) {
-          save_func <- make_partial(save_func,
-            filename = paste0("pca_biplot_", make.names(title)),
-            path = file.path(get_arg(save_func, "path"), make.names(collection_name), "pca"),
-            width = fig_width, height = fig_height
-          )
-        }
+        plts <- colby %>% purrr::map(
+            ~{
+              .colby <- .x
 
-      p <- tryCatch(
-        {
-            plot_biplot(.x,
-            top_pc = top_pc,
-            showLoadings = showLoadings,
-            labSize = labSize,
-            pointSize = pointSize,
-            sizeLoadingsNames = sizeLoadingsNames,
-            colby = colby,
-            shape = shape,
-            title = title,
-            save_func = save_func
-            # ...
-          )
-        }, error = function(e) {
-          log_msg(msg = paste0("error in plot_all_biplots: ", e))
-        })
-        return(p)
-      }
+              # Additional validation
+              if (!is.character(.colby) || length(.colby) != 1) {
+                stop(paste0("Invalid .colby value: ", .colby))
+              }
+
+              log_msg(msg=paste0('.colby equal to : ', .colby))
+              if (!is.null(save_func)) {
+              save_func <- make_partial(save_func,
+                filename = paste0("pca_biplot_", make.names(title), "_col", make.names(.colby)),
+                path = file.path(get_arg(save_func, "path"), make.names(collection_name), "pca"),
+                width = fig_width, height = fig_height
+              )
+              }
+              p <- tryCatch(
+              {
+                  plot_biplot(
+                  pca_object,
+                  top_pc = top_pc,
+                  showLoadings = showLoadings,
+                  labSize = labSize,
+                  pointSize = pointSize,
+                  sizeLoadingsNames = sizeLoadingsNames,
+                  colby = .colby,
+                  shape = shape,
+                  title = title,
+                  save_func = save_func
+                  # ...
+                )
+              }, error = function(e) {
+                log_msg(msg = paste0("error in plot_all_biplots: ", e))
+              })
+              return(p)
+          })
+          return(plts)
+        }
     )
 }
 
