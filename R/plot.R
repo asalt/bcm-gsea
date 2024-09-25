@@ -7,6 +7,7 @@ suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(cmapR))
 suppressPackageStartupMessages(library(ComplexHeatmap))
 suppressPackageStartupMessages(library(circlize))
+suppressPackageStartupMessages(library(colorspace))
 
 suppressPackageStartupMessages(library(here))
 
@@ -30,6 +31,21 @@ util_tools <- new.env()
 source(file.path(src_dir, "./utils.R"), local = util_tools)
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
+handle_save_func <- function(save_func, path, filename, width = NULL, height = NULL) {
+  if (!is.null(save_func)) {
+    if (!is.null(path)) {
+      save_func <- make_partial(save_func, path = path)
+    }
+    if (!is.null(filename)) {
+      save_func <- make_partial(save_func, filename = filename)
+    }
+    if (!is.null(width) && !is.null(height)) {
+      save_func <- make_partial(save_func, width = width, height = height)
+    }
+  }
+  return(save_func)
+}
+
 
 make_heatmap_fromgct <- function(
     gct,
@@ -39,7 +55,7 @@ make_heatmap_fromgct <- function(
     cluster_rows = T,
     cluster_columns = F,
     color_mapper = NULL,
-    sample_order = NULL,
+    # sample_order = NULL,
     cut_by = NULL,
     # scale = T
     ...) {
@@ -130,7 +146,7 @@ make_heatmap_fromgct <- function(
 
 
 
-  log_msg(msg = paste0("defining draw func"))
+  # log_msg(debug = paste0("defining draw func"))
   do_draw <- function() {
     draw(ht,
       heatmap_legend_side = "bottom",
@@ -138,21 +154,21 @@ make_heatmap_fromgct <- function(
     )
   }
 
-  log_msg(debug = paste0("save func: ", class(save_func) %>% as.character()))
-  log_msg(debug = paste0("is null save func: ", is.null(save_func)))
+  # log_msg(debug = paste0("save func: ", class(save_func) %>% as.character()))
+  # log_msg(debug = paste0("is null save func: ", is.null(save_func)))
 
   height <- 4 + (nrow(.mat) * .20)
   width <- 8 + (ncol(.mat) * .26)
 
   if (!is.null(save_func)) {
 
-    # log_msg(msg = paste0("save func attrs before: "))
-    # log_msg(msg = paste0(names(get_args(save_func)), "-", get_args(save_func)))
+    # log_msg(debug = paste0("save func attrs before: "))
+    # log_msg(debug = paste0(names(get_args(save_func)), "-", get_args(save_func)))
 
     save_func <- make_partial(save_func, height = height, width = width)
 
-    # log_msg(msg = paste0("save func attrs after: "))
-    # log_msg(msg = paste0(names(get_args(save_func)), "-", get_args(save_func)))
+    # log_msg(debug = paste0("save func attrs after: "))
+    # log_msg(debug = paste0(names(get_args(save_func)), "-", get_args(save_func)))
 
     save_func(plot_code = do_draw)
   }
@@ -192,8 +208,8 @@ plot_heatmap_of_edges <- function(
                 to_include = to_include, # extra pathways to expilcitly include
                 pstat_cutoff = pstat_cutoff
               )
-              log_msg(msg = paste0("plotting heatmaps for ", collection_name, " ", comparison_name))
-              log_msg(msg = paste0("n forplot: ", forplot %>% nrow()))
+              log_msg(debug = paste0("plotting heatmaps for ", collection_name, " ", comparison_name))
+              log_msg(debug = paste0("n forplot: ", forplot %>% nrow()))
 
               # result %>%
               # forplot <- result %>%
@@ -214,7 +230,7 @@ plot_heatmap_of_edges <- function(
                   paste0("padj: ", row$padj %>% round(4) %>% as.character()),
                   paste0("NES: ", row$NES %>% round(4) %>% as.character()),
                   sep = "\n")
-                log_msg(msg = paste0("plotting gene heatmap for ", .id, " ", comparison_name))
+                log_msg(debug = paste0("plotting gene heatmap for ", .id, " ", comparison_name))
 
 
                 ht <- NULL
@@ -311,7 +327,9 @@ prepare_data_for_barplot <- function(df) {
     dplyr::mutate(pathway = stringr::str_remove(pathway, "HALLMARK_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "KEGG_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "GOMF_")) %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "REACTOME_"))
+    dplyr::mutate(pathway = stringr::str_remove(pathway, "REACTOME_")) %>%
+    dplyr::mutate(pathway = stringr::str_remove(pathway, "GOBP_")) %>%
+    dplyr::mutate(pathway = stringr::str_remove(pathway, "GOCC_"))
   df <- df_renamed
 
   # is across necessary?
@@ -335,7 +353,7 @@ prepare_data_for_barplot <- function(df) {
     mutate(leadingEdgeNum = length(leadingEdge)) %>%
     mutate(leadingEdgeFrac = paste0(leadingEdgeNum, "/", size)) %>%
     ungroup() %>%
-    mutate(outline_val = dplyr::if_else(padj < .25, "black", NA))
+    mutate(outline_val = dplyr::if_else(padj < .05, "black", NA))
 
   return(sel)
 }
@@ -368,7 +386,7 @@ barplot_with_numbers <- function(
     df,
     title = "",
     save_func = NULL,
-    sample_order = NULL,
+    facet_order = NULL,
     ...) {
   sel <- prepare_data_for_barplot(df)
 
@@ -383,9 +401,9 @@ barplot_with_numbers <- function(
   labeller_func <- custom_labeller
 
 
-  if (!is.null(sample_order)) {
+  if (!is.null(facet_order)) {
     sel <- sel %>%
-      mutate(rankname = factor(rankname, levels = sample_order, ordered = T)) %>%
+      mutate(rankname = factor(rankname, levels = facet_order, ordered = T)) %>%
       arrange(rankname)
   }
 
@@ -427,6 +445,7 @@ barplot_with_numbers <- function(
     ) +
     theme_bw() #+ theme(axis.text.y = element_text(size = map(sel$pathway, get_size)))
   if ("rankname" %in% colnames(df) && (length(unique(df$rankname)) > 1)) {
+    log_msg(info = "facet wrapping by rankname")
     p <- p + facet_wrap(~rankname, labeller = as_labeller(labeller_func))
     num_panels <- length(unique(df$rankname))
     ncol <- ceiling(sqrt(num_panels)) # ggplot2 default behavior if ncol is not specified
@@ -435,13 +454,13 @@ barplot_with_numbers <- function(
     ncol <- 1
     nrow <- 1
   }
-
-  panel_width_in <- 3.4
+  panel_width_in <- 3.8
   panel_height_in <- 4
 
   # Calculate total figure size
-  total_width_in <- panel_width_in * ncol
+  total_width_in <- 2 + panel_width_in * ncol
   total_height_in <- panel_height_in * nrow + (length(unique(sel$pathway)) / 8)
+  log_msg(msg = paste0("total width: ", total_width_in, " total height: ", total_height_in))
 
 
   if (!is.null(save_func)) {
@@ -459,7 +478,8 @@ barplot_with_numbers <- function(
 all_barplots_with_numbers <- function(
     results_list,
     save_func = NULL,
-    sample_order = NULL,
+    facet_order = NULL,
+    limit = 20,
     ...) {
   if (!is.null(save_func)) {
     filename <- paste0(get_arg(save_func, "filename"), "barplot_")
@@ -474,37 +494,47 @@ all_barplots_with_numbers <- function(
         ~ {
           dataframe <- .x
           comparison_name <- .y
-          sel <- fgsea_tools$select_topn(dataframe, limit = 20)
-          .title <- comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
+          .plts <- limit %>% purrr::map(
+            ~{
+              .limit <- .x
+              sel <- fgsea_tools$select_topn(dataframe, limit = .limit)
+              .title <- comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
 
-          if (!is.null(save_func)) {
-            filename <- paste0(
-              get_arg(save_func, "filename"),
-              make.names(collection_name), "_", make.names(comparison_name)
-            )
-            path <- file.path(get_arg(save_func, "path"), make.names(collection_name), "barplots")
-            save_func <- make_partial(save_func, filename = filename, path = path)
-          }
-          log_msg(msg = paste0("plotting barplot target ", path, " ", collection_name))
+              if (!is.null(save_func)) {
+                filename <- paste0(
+                  get_arg(save_func, "filename"),
+                  make.names(collection_name), "_", make.names(comparison_name),
+                  "_", nrow(sel)
+                )
+                path <- file.path(get_arg(save_func, "path"), make.names(collection_name), "barplots")
+                save_func <- make_partial(save_func, filename = filename, path = path)
+              }
+              log_msg(msg = paste0("plotting barplot target ", path, " ", collection_name))
 
-          p <- barplot_with_numbers(sel,
-            title = .title,
-            save_func = save_func,
-            sample_order = sample_order,
-            ...
+              p <- barplot_with_numbers(sel,
+                title = .title,
+                save_func = save_func,
+                facet_order = facet_order,
+                ...
+              )
+
+            return(p)
+            }
           )
-          return(p)
+          return(.plts)
         }
       )
     }
   )
+  return(plts)
 }
 
 
 do_combined_barplots <- function(
     results_list,
     save_func = NULL,
-    sample_order = NULL,
+    facet_order = NULL,
+    limit = 20,
     ...) {
   genesets <- names(results_list)
 
@@ -520,32 +550,29 @@ do_combined_barplots <- function(
     fgsea_res_list <- results_list[[geneset_name]]
     # geneset <- genesets_list[[geneset_name]]
 
-    res <- fgsea_res_list %>% bind_rows(.id = "rankname") # all comparisons 1 gene set
-    res <- res %>% mutate(rankname = rankname %>% fs::path_file() %>% fs::path_ext_remove())
-    # take topn
-    # .pathways_for_plot <- res %>%
-    #   arrange(pval) %>%
-    #   distinct(pathway) %>%
-    #   head(20) %>%
-    #   pull(pathway)
-    # res <- res %>% filter(pathway %in% .pathways_for_plot)
-    res <- fgsea_tools$select_topn(res, limit = 20)
-
-
-    # pathway_df <- get_pathway_info(geneset_name)
-    # .merge <- left_join(res , pathway_df, by= )
-    if (!is.null(save_func)) {
-      filename <- paste0("barplot_", make.names(geneset_name), "_all")
-      path <- file.path(get_arg(save_func, "path"), make.names(geneset_name), "barplots")
-      save_func <- make_partial(save_func, filename = filename, path = path)
-    }
-    p <- res %>% barplot_with_numbers(
-      title = geneset_name,
-      save_func = save_func,
-      sample_order = sample_order,
-      ...
-    )
-    return(p)
+    plts <- limit %>% purrr::map(~{
+      .limit <- .x
+      res <- fgsea_res_list %>% bind_rows(.id = "rankname") # all comparisons 1 gene set
+      # res <- res %>% mutate(rankname = rankname %>% fs::path_file() %>% fs::path_ext_remove())
+      res <- fgsea_tools$select_topn(res, limit = .limit)
+      n_sel <- res %>% distinct(pathway) %>% nrow()
+      # pathway_df <- get_pathway_info(geneset_name)
+      # .merge <- left_join(res , pathway_df, by= )
+      if (!is.null(save_func)) {
+        filename <- paste0("barplot_", make.names(geneset_name), "_", n_sel, "_all")
+        path <- file.path(get_arg(save_func, "path"), make.names(geneset_name), "barplots")
+        log_msg(msg = paste0("plotting barplot target ", path, " ", geneset_name, " "))
+        save_func <- make_partial(save_func, filename = filename, path = path)
+      }
+      p <- res %>% barplot_with_numbers(
+        title = geneset_name,
+        save_func = save_func,
+        facet_order = facet_order,
+        ...
+      )
+      return(p)
+    })
+    return(plts)
   })
 }
 
@@ -562,7 +589,8 @@ plot_results_all_collections <- function(
     cluster_columns = FALSE,
     main_pathway_ratio = 0.1,
     save_func = NULL,
-    sample_order = NULL,
+    rankname_order = NULL,
+    # sample_order = NULL,
     ...) {
   xtra_args <- list(...) # dunno what to do with these
   if (length(limit) == 1) {
@@ -587,11 +615,11 @@ plot_results_all_collections <- function(
           limit = .x,
           pstat_cutoff = pstat_cutoff,
           pstat_usetype = pstat_usetype,
-          main_pathway_ratio = main_pathway_ratio,
           cluster_rows = cluster_rows,
           cluster_columns = cluster_columns,
           save_func = save_func,
-          sample_order = sample_order
+          rankname_order = rankname_order,
+          ...
           )
         )
       return(plts)
@@ -609,19 +637,25 @@ plot_results_all_collections <- function(
 plot_results_one_collection <- function(
     df,
     metadata = NULL,
+    pathway_metadata = NULL,
     title = "",
     cut_by = NULL,
     limit = 120,
     pstat_cutoff = 1,
     pstat_usetype = "padj",
-    main_pathway_ratio = 0.1,
     cluster_rows = TRUE,
     cluster_columns = FALSE,
-    save_func = NULL,
     sample_order = NULL,
     rankname_order = NULL,
+    meta_exclude = c("recno", "runno", "searchno", "label"),
+    meta_exclude_extra = NULL,
+    row_annotation = NULL, # can be passed if made somewhere else
+    save_func = NULL,
     ...) {
   log_msg(msg = paste0("calling plot results one collection"))
+
+  meta_exclude <- c(meta_exclude, meta_exclude_extra)
+  log_msg(msg = paste0('rankname order is ', rankname_order))
 
   # Ensure necessary columns are present
   required_cols <- c("pathway", "NES")
@@ -638,7 +672,11 @@ plot_results_one_collection <- function(
   if (is.null(rankname_order)) {
     rankname_order <- unique(df$rankname)
   } else {
-    rankname_order <- union(rankname_order, unique(df$rankname))
+    rankname_order <- intersect(rankname_order, unique(df$rankname))
+    if (length(rankname_order) == 0) {
+      warning("rankname_order is empty, using default")
+      rankname_order <- unique(df$rankname) # default backup
+    }
   }
 
 
@@ -655,16 +693,22 @@ plot_results_one_collection <- function(
     metadata <- data.frame(id = unique(df$rankname), dummy = "X") # necessary for some reason
     rownames(metadata) <- metadata$id
   }
+  metadata <- metadata[rankname_order, ] # order metadata by rankname_order
 
-  metadata <- metadata[intersect(rankname_order, rownames(metadata)), ]
+
+  browser()
+  metadata %<>% dplyr::select(-any_of(meta_exclude)) # remove columns
+
 
   # Handling cut_by parameter
-  if (!is.null(cut_by) && cut_by %in% colnames(metadata)) {
-    cut_by <- metadata[rankname_order, cut_by]
-    cut_by <- factor(cut_by, levels = unique(cut_by))
-  } else {
-    warning("cut_by not found in metadata, skipping")
-    cut_by <- NULL
+  if (!is.null(cut_by)){
+    if (!is.null(cut_by) && cut_by %in% colnames(metadata)) {
+      cut_by <- metadata[, cut_by]
+      cut_by <- factor(cut_by, levels = unique(cut_by))
+    } else {
+      warning("cut_by not found in metadata")
+      cut_by <- NULL
+    }
   }
 
   df <- fgsea_tools$select_topn(
@@ -677,6 +721,13 @@ plot_results_one_collection <- function(
   if (nrow(df) == 0) {
     log_msg(msg = "No pathways to plot")
     return(NULL)
+  }
+
+  if (!is.null(row_annotation)) {
+    if (!"HeatmapAnnotation" %in% class(row_annotation)) {
+      warning("row_annotation is not a HeatmapAnnotation object")
+      row_annotation <- NULL
+    }
   }
 
 
@@ -726,6 +777,39 @@ plot_results_one_collection <- function(
   ))(num_colors)
   break_points <- seq(-q01, q01, length.out = num_colors)
   col <- colorRamp2(breaks = break_points, colors = my_colors)
+
+
+  # Prepare column annotation
+  log_msg(msg = paste0("metadata: ", head(metadata)))
+
+  # it isn't strictly necessary to exclude these colum s here,
+  # as they will be excluded upon creation of the column_annotation object
+  metadata_for_colors <- metadata %>% select(-any_of(c("id", "dummy")))
+  if (ncol(metadata_for_colors) > 0) {
+    colors_list <- metadata_for_colors %>% colnames() %>%
+      map(~{
+        # Extract unique values for the current column
+        .unique_vals <- unique(metadata[[.x]])
+
+        # Generate a qualitative color palette
+        .colors <- colorspace::qualitative_hcl(n = length(.unique_vals))
+
+        # Assign unique values as names to the colors
+        names(.colors) <- .unique_vals
+
+        # Return the named color vector
+        .colors
+      }) %>% set_names(colnames(metadata_for_colors))
+
+    log_msg(msg = paste0("color list ", as.character(colors_list)))
+
+    column_annotation <- ComplexHeatmap::columnAnnotation(
+        df = metadata %>% dplyr::select(-any_of(c("id", "dummy"))),
+        col = colors_list
+      )
+  } else {
+    column_annotation <- NULL
+  }
 
   # Construct heatmap
 
@@ -792,6 +876,8 @@ plot_results_one_collection <- function(
     dfp %>% as.matrix(),
     name = "mat",
     col = col,
+    top_annotation = column_annotation,
+    left_annotation = row_annotation,
     cluster_rows = cluster_rows,
     cluster_columns = cluster_columns,
     heatmap_legend_param = heatmap_legend_param,
@@ -856,14 +942,14 @@ plot_results_one_collection <- function(
   width <- 8 + (ncol(dfp) * .26)
 
   if (!is.null(save_func)) {
-    log_msg(msg = paste0("save func attrs before: "))
-    log_msg(msg = paste0(names(get_args(save_func)), "-", get_args(save_func)))
+    log_msg(debug = paste0("save func attrs before: "))
+    log_msg(debug = paste0(names(get_args(save_func)), "-", get_args(save_func)))
     filename <- paste0(get_arg(save_func, "filename"), nrow(dfp), "x", ncol(dfp))
 
     save_func <- make_partial(save_func, height = height, width = width, filename = filename)
 
-    log_msg(msg = paste0("save func attrs after: "))
-    log_msg(msg = paste0(names(get_args(save_func)), "-", get_args(save_func)))
+    log_msg(debug = paste0("save func attrs after: "))
+    log_msg(debug = paste0(names(get_args(save_func)), "-", get_args(save_func)))
 
     save_func(plot_code = do_draw)
   }
@@ -976,18 +1062,22 @@ plot_top_ES <- function(
     panel_height = 3.4,
     combined_show_ticks = FALSE,
     combined_label_size = 1.75,
+    filter_on_mainpathway = TRUE,
     ...) {
   #
-  subdf <- fgsea_tools$filter_on_mainpathway(df) %>%
-    fgsea_tools$select_topn(limit = limit)
-  if (nrow(subdf) == 0) {
+
+  if (filter_on_mainpathway == TRUE){
+    df <- fgsea_tools$filter_on_mainpathway(df)
+  }
+    df %<>% fgsea_tools$select_topn(limit = limit)
+  if (nrow(df) == 0) {
     return(NULL)
   }
-  pathways <- subdf$pathway %>% unique()
+  pathways <- df$pathway %>% unique()
   geneset_lists <- geneset_collection[pathways]
 
   rankorder_by_pw <- fgsea_tools$get_rankorder_across(
-    subdf,
+    df,
     ranks_list,
     geneset_lists
   ) # this yields a named list
@@ -1034,6 +1124,10 @@ plot_top_ES <- function(
           rankorder_samplepathway$facet <- 'x'
         }
         num_panels <- max(length(unique(rankorder$edge$facet)), 1)
+        if (num_panels > 1) {
+          panel_width <- panel_width * .68
+          panel_height <- panel_height * .75
+        }
         .ncol <- ceiling(sqrt(num_panels)) # ggplot2 default behavior if ncol is not specified
         .nrow <- ceiling(num_panels / .ncol) # Calculate rows
         .width <- panel_width * .ncol

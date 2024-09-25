@@ -4,6 +4,7 @@ suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(colorspace))
 
 src_dir <- file.path(here("R"))
 
@@ -11,8 +12,8 @@ fgsea_tools <- new.env()
 source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 
 
-# plot_tools <- new.env()
-# source(file.path(src_dir, "./plot.R"), local = plot_tools)
+plot_tools <- new.env()
+source(file.path(src_dir, "./plot.R"), local = plot_tools)
 
 
 plot_utils <- new.env()
@@ -25,6 +26,18 @@ make_partial <- util_tools$make_partial
 get_args <- util_tools$get_args
 get_arg <- util_tools$get_arg
 log_msg <- util_tools$make_partial(util_tools$log_msg)
+
+name_cleaner <- function(df){
+  df %>%
+    dplyr::mutate(pathway = str_remove(pathway, "HALLMARK_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "KEGG_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "GOMF_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "REACTOME_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "GOBP_")) %>%
+    dplyr::mutate(pathway = str_remove(pathway, "GOCC_")) %>%
+    dplyr::mutate(pathway = str_replace_all(pathway, "_", " ")) %>%
+    dplyr::mutate(pathway = str_wrap(pathway, 20))
+}
 
 # ==
 
@@ -76,15 +89,15 @@ do_one <- function(
   )
 
   # clean names
-  gsea_object <- gsea_object %>%
-    dplyr::mutate(pathway = str_remove(pathway, "HALLMARK_")) %>%
-    dplyr::mutate(pathway = str_remove(pathway, "KEGG_")) %>%
-    dplyr::mutate(pathway = str_remove(pathway, "GOMF_")) %>%
-    dplyr::mutate(pathway = str_remove(pathway, "REACTOME_")) %>%
-    dplyr::mutate(pathway = str_remove(pathway, "GOBP_")) %>%
-    dplyr::mutate(pathway = str_remove(pathway, "GOCC_")) %>%
-    dplyr::mutate(pathway = str_replace_all(pathway, "_", " ")) %>%
-    dplyr::mutate(pathway = str_wrap(pathway, 20))
+  gsea_object <- gsea_object %>% name_cleaner()
+    # dplyr::mutate(pathway = str_remove(pathway, "HALLMARK_")) %>%
+    # dplyr::mutate(pathway = str_remove(pathway, "KEGG_")) %>%
+    # dplyr::mutate(pathway = str_remove(pathway, "GOMF_")) %>%
+    # dplyr::mutate(pathway = str_remove(pathway, "REACTOME_")) %>%
+    # dplyr::mutate(pathway = str_remove(pathway, "GOBP_")) %>%
+    # dplyr::mutate(pathway = str_remove(pathway, "GOCC_")) %>%
+    # dplyr::mutate(pathway = str_replace_all(pathway, "_", " ")) %>%
+    # dplyr::mutate(pathway = str_wrap(pathway, 20))
 
   wide_df <- gsea_object %>%
     pivot_wider(id_cols = pathway, values_from = NES, names_from = rankname) %>%
@@ -92,7 +105,7 @@ do_one <- function(
   # set pathway as rowname, remove from columns
   rownames(wide_df) <- wide_df$pathway
   wide_df$pathway <- NULL
-  wide_df[is.na(wide_df)] <- 0
+  wide_df[is.na(wide_df)] <- min(wide_df, na.rm = TRUE)
 
   pca_res <- wide_df %>% PCAtools::pca(metadata = metadata[colnames(wide_df), ])
 
@@ -154,6 +167,9 @@ plot_biplot <- function(
     shape <- NULL
   }
 
+  n_features <- nrow(pca_object$loadings)
+  footnote <- paste0("n = ", as.character(n_features))
+
 
   plts <- pcs %>%
     purrr::map(
@@ -171,6 +187,12 @@ plot_biplot <- function(
           warning("not enough PCs")
           return()
         }
+
+        .max_x <- max(
+          pca_object$rotated[[.x1]] %>% abs(),
+          pca_object$rotated[[.x2]] %>% abs()
+        )
+        .max_y <- .max_x
 
         plt <- PCAtools::biplot(
           pca_object,
@@ -192,8 +214,14 @@ plot_biplot <- function(
           ntopLoadings = 5,
         ) +
           coord_fixed(ratio = 1) +
+          xlim(-.max_x, .max_x) +
+          ylim(-.max_y, .max_y) +
+          labs(caption = footnote) +
           geom_hline(yintercept = 0, color = "grey50", show.legend = NA) +
           geom_vline(xintercept = 0, color = "grey50", show.legend = NA) +
+          colorspace::scale_color_discrete_qualitative(palette = "Dynamic") +
+          colorspace::scale_fill_discrete_qualitative(palette = "Dynamic") +
+          scale_shape_manual(values = c(16, 17, 15, 7, 9, 12, 13, 14)) +
           theme(
             panel.grid.major = element_blank(),
             panel.grid.minor = element_blank()
@@ -229,7 +257,7 @@ plot_all_biplots <- function(
     fig_height = 7.6,
     save_func = NULL,
     ...) {
-   log_msg(msg=paste0('colby equal to : ', colby))
+  log_msg(debug=paste0('colby equal to : ', colby))
   pca_objects %>%
     purrr::imap(
       ~ {
@@ -281,7 +309,9 @@ plot_all_biplots <- function(
 
 get_top_loadings <- function(pcaobj,
                              components = c("PC1", "PC2", "PC3", "PC4"),
-                             rangeRetain = 0.05) { # directly lifted from https://github.com/kevinblighe/PCAtools/blob/50f240ba76fe07e2a546998e76dc8aa1c3570693/R/plotloadings.R#L7 and edited
+                             rangeRetain = 0.05,
+                             limit = Inf
+                             ) { # directly lifted from https://github.com/kevinblighe/PCAtools/blob/50f240ba76fe07e2a546998e76dc8aa1c3570693/R/plotloadings.R#L7 and edited
   x <- pcaobj$loadings[, components, drop = FALSE]
   membership <- list()
   retain <- c()
@@ -299,7 +329,11 @@ get_top_loadings <- function(pcaobj,
     retain_vals <- c(
       which(x[, i] >= uppercutoff),
       which(x[, i] <= lowercutoff)
-    )
+    ) %>% unique()
+    if (limit < Inf) {
+      retain_vals <- order(abs(x[retain_vals, i]), decreasing=T) %>% head(n=limit)
+    }
+
     retain <- unique(c(
       retain,
       retain_vals
@@ -323,5 +357,71 @@ get_top_loadings <- function(pcaobj,
 
   x_final <- x_final %>% left_join(membership_dfw)
   x_final$values <- NULL
+  x_final %<>% as.data.frame
+  rownames(x_final) <- x_final$var
   return(x_final)
+}
+
+
+make_enplots_from_loadings <- function(){
+  stop("not implemented")
+}
+
+make_heatmap_from_loadings <- function(
+    gsea_object,
+    pca_object,
+    components = c("PC1", "PC2", "PC3", "PC4"),
+    save_func = NULL,
+    ...){
+
+
+
+  top_loadings <- get_top_loadings(pca_object, components = components, rangeRetain = 0.05, limit = Inf)
+  submat <- gsea_object %>% name_cleaner() %>% filter(pathway %in% rownames(top_loadings))
+
+  ra <- ComplexHeatmap::rowAnnotation(
+    PC1 = top_loadings$PC1_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white")),
+    PC2 = top_loadings$PC2_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white")),
+    PC3 = top_loadings$PC3_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white")),
+    PC4 = top_loadings$PC4_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white"))
+  )
+
+  ht <- plot_tools$plot_results_one_collection(
+    df = submat,
+    metadata = pca_object$metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
+    # pathway_metadata = loadings,
+    row_annotation = ra,
+    limit = Inf,
+    pstat_cutoff = 1, # we want no filtering
+    save_func = save_func,
+    title = "Top 5% Loadings",
+    ...
+  )
+
+  top_loadings <- get_top_loadings(pca_object, components = components, rangeRetain = 1, limit = 5)
+  submat <- gsea_object %>% name_cleaner() %>% filter(pathway %in% rownames(top_loadings))
+  submat %<>% mutate(pathway = factor(pathway, levels = rownames(top_loadings), ordered=TRUE)) %>% arrange(pathway)
+
+  ra <- ComplexHeatmap::rowAnnotation(
+    PC1 = top_loadings$PC1_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white")),
+    PC2 = top_loadings$PC2_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white")),
+    PC3 = top_loadings$PC3_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white")),
+    PC4 = top_loadings$PC4_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white"))
+  )
+  maybe_metadata <- pca_object$metadata
+  if ("dummy" %in% colnames(maybe_metadata)) {
+    maybe_metadata <- NULL
+  }
+
+  ht <- plot_tools$plot_results_one_collection(
+    df = submat,
+    metadata = maybe_metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
+    # pathway_metadata = loadings,
+    row_annotation = ra,
+    limit = Inf,
+    pstat_cutoff = 1, # we want no filtering
+    save_func = save_func,
+    title = "Top 5 Loadings Per PC",
+    ...
+  )
 }

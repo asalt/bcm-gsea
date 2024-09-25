@@ -26,6 +26,9 @@ run <- function(params) {
 
   util_tools <- new.env()
   source(file.path(here("R"), "utils.R"), local = util_tools)
+  get_args <- util_tools$get_args
+  get_arg <- util_tools$get_arg
+  make_partial <- util_tools$make_partial
 
   geneset_tools <- new.env()
   source(file.path(here("R"), "geneset_utils.R"), local = geneset_tools)
@@ -160,14 +163,18 @@ run <- function(params) {
     # now we plot results
     # TODO better and earlier handle metadata loading
     if (exists("gct") && !is.null(gct) && (params$ranks_from == "gct")) {
-      metadata <- gct@cdesc
+        metadata <- gct@cdesc
+        possible_group_order <- params$extra$rankname_order %||% NULL
+        if ((!is.null(possible_group_order)) && ( "group" %in% colnames(metadata)) && all(possible_group_order %in% metadata$group)) {
+          metadata <- metadata %>% mutate(group = factor(group, levels = possible_group_order, ordered = T)) %>% arrange(group)
+        }
     } else {
       metadata <- NULL
     }
 
     # pca
     # =============
-    if (params$pca$do == TRUE) {
+    if (params$pca$do == TRUE) { # TODO: this fails if metadata not right and won't propagate rankname_order down
       pca_objects <- all_gsea_results %>% pca_tools$do_all(
         metadata = metadata
       )
@@ -183,19 +190,35 @@ run <- function(params) {
         pointSize = params$pca$pointSize %||% 4,
         sizeLoadingsNames = params$pca$sizeLoadingsNames %||% 1.4,
         colby = params$pca$col_by %||% params$col_by %||% NULL,
-        # colby = params$pca$col_by, 
         shape = params$pca$mark_by %||% params$mark_by %||% NULL,
         fig_width = params$pca$width %||% 8.4,
         fig_height = params$pca$height %||% 7.6,
+        # group_order = params$extra$facet_order %||% NULL
       )
-    } # todo plot more edge plots and es plots based on the pca results
 
+    all_gsea_results %>% purrr::imap(~{
+      collection_name <- .y
+      pca_object <- pca_objects[[.y]]
+      .savedir <- file.path(get_arg(save_func, "path"), make.names(collection_name), "pca")
+      .filename <- paste0(collection_name, "_top_loadings.png")
+      .save_func <- make_partial(save_func, path = .savedir, filename = .filename)
+      pca_tools$make_heatmap_from_loadings(
+        gsea_object = .x,
+        pca_object = pca_object,
+        save_func = .save_func,
+        rankname_order = params$extra$rankname_order,
+        cluster_rows = params$pca$cluster_rows %||% TRUE,
+        cluster_columns = params$pca$cluster_columns %||% FALSE,
+        cut_by = params$pca$cut_by %||%  params$heatma_gsea$cut_by %||%  params$cut_by %||% NULL,
+      )})
+
+    } # todo plot more edge plots and es plots based on the pca results
 
     # =======  barplots
     if (params$barplot$do_individual == TRUE) {
       log_msg(msg = "plotting individual barplots")
       plts <- results_list %>% plot_tools$all_barplots_with_numbers(
-        sample_order = params$rankname_order %||% params$sample_order,
+        # sample_order = params$rankname_order %||% params$sample_order, # no t necessary to pass this here
         save_func = save_func
       )
     }
@@ -204,8 +227,9 @@ run <- function(params) {
       log_msg(msg = "plotting faceted barplots")
       plts <- results_list %>%
         plot_tools$do_combined_barplots(
-          sample_order = params$rankname_order %||% params$sample_order,
-          save_func = save_func
+          facet_order = NULL, # this is n't working properly
+          save_func = save_func,
+          limit = params$barplot$limit %||% c(10, 20, 30, 50)
         )
     }
 
@@ -222,7 +246,7 @@ run <- function(params) {
         save_func = save_func,
         cluster_rows = params$heatmap_gsea$cluster_rows %||% TRUE,
         cluster_columns = params$heatmap_gsea$cluster_columns %||% FALSE,
-        sample_order = params$extra$rankname_order, # get rid of this one, pretty sure
+        # sample_order = params$extra$rankname_order, # get rid of this one, pretty sure
         rankname_order = params$extra$rankname_order
       )
     }
@@ -258,9 +282,9 @@ run <- function(params) {
             facet = !!sym(combine_by),
             rankname = id
           )
-        if (!is.null(params$extra$facet_order)) {
+        if (!is.null(params$extra$rankname_order)) {
           combine_by_df <- combine_by_df %>%
-            mutate(facet = factor(facet, levels = params$extra$facet_order, ordered = T)) %>%
+            mutate(facet = factor(facet, levels = params$extra$rankname_order, ordered = T)) %>%
             arrange(facet)
         }
       }
