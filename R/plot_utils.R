@@ -112,3 +112,29 @@ plot_and_save <- function(
 
   return(h)
 }
+
+
+
+create_named_color_list <- function(df, columns) {
+  # Matplotlib default colors
+  matplotlib_colors <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+                         "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+                         "#bcbd22", "#17becf")
+
+  # Initialize an empty list to store the result
+  color_list <- list()
+
+  # Iterate over each column
+  for (col_name in columns) {
+    unique_vals <- unique(df[[col_name]])
+    n_vals <- length(unique_vals)
+
+    # Assign colors based on the number of unique values, recycling matplotlib colors if needed
+    colors_assigned <- rep(matplotlib_colors, length.out = n_vals)
+
+    # Create a named vector for the unique values with corresponding colors
+    color_list[[col_name]] <- setNames(colors_assigned, unique_vals)
+  }
+
+  return(color_list)
+}
