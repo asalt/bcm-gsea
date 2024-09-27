@@ -35,7 +35,9 @@ clean_args <- function(params){
   params$heatmap_gene$do <- params$heatmap_gene$do %||% TRUE
   params$pca$do <- params$pca$do %||% TRUE
 
-  params$gct_path <- ifelse(!is.null(params$gct_path) && file.exists(params$gct_path), params$gct_path, NULL)
+  if (!is.null(params$gct_path) && !file.exists(params$gct_path)) {
+    stop(paste0(params$gct_path, " does not exist, exiting.."))
+  }
 
 
   #print(params$enplot$combine_by)
@@ -64,6 +66,7 @@ clean_args <- function(params){
   }
   params$rankfiledir <- rankfiledir
 
+  params$advanced$pivot_gsea_results = params$advanced$pivot_gsea_results %||% FALSE
   #
   if (!is.null(params$extra$rankname_order)) {
     if (length(params$extra$rankname_order) == 1 && params$extra$rankname_order == "sample_order") {

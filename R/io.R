@@ -14,6 +14,9 @@ suppressPackageStartupMessages(library(here))
 util_tools <- new.env()
 source(file.path(here("R"), "./utils.R"), local = util_tools)
 
+map_tools <- new.env()
+source(file.path(here("R"), "./map.R"), local = map_tools)
+
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 # ==
@@ -177,6 +180,9 @@ load_rnkfiles <- function(rnkfiles) {
 
 
 ranks_dfs_to_lists <- function(rnkdfs) {
+
+  if (!"list" %in% class(rnkdfs)) rnkdfs <- list(rnkdfs)
+
   ranks_list <- rnkdfs %>% purrr::map(
     ~ with(.x, setNames(value, id))
   )
@@ -257,12 +263,13 @@ write_results <- function(result, outf, replace = FALSE) {
 }
 
 # Main function to save GSEA results
-save_gsea_results <- function(results_list, savedir = "gsea_tables") {
+save_individual_gsea_results <- function(results_list, savedir = "gsea_tables", replace = FALSE) {
   fs::dir_create(savedir) # Ensures directory exists, no error if it already does
 
   results_list %>% purrr::imap(~{
-    results_list  <- .x
+    results_list  <- .x %>% map_tools$add_leadingedges_to_results_list()
     collection_name <- .y
+
     results_list %>% purrr::imap(~{
       result <- .x
       comparison_name <- .y
@@ -272,9 +279,47 @@ save_gsea_results <- function(results_list, savedir = "gsea_tables") {
         log_msg(paste0("Invalid result, cannot write to file."))
         return()
       }
-      write_results(result, outf)
+    if (fs::file_exists(outf) && !replace) {
+      log_msg(msg = paste0("File ", outf, " already exists, skipping"))
+      return()
+    }
+      result %>% write_tsv(outf)
     })
   })
+}
+
+save_pivoted_gsea_results <- function(results_list, savedir = "gsea_tables", replace = FALSE) {
+  # here results list is concatenated list. one level per collection
+  # names are the collection names
+  # values are the fgsea concatenated tables/comparisons for given collection
+
+  results_list %<>% map_tools$add_leadingedges_to_results_list()
+
+  results_list_pivoted <- results_list %>% purrr::imap(
+    ~{
+      result_collection  <- .x
+      collection_name <- .y
+
+      res_pivoted <- result_collection %>%
+        pivot_wider(
+          id_cols = c("pathway"),
+          names_from = rankname,
+          values_from = c(pval, padj, log2err, ES, NES, n_main, size, leadingEdge_genesymbol, leadingEdge_entrezid, mainpathway),
+          names_sep = "_"
+          # Alternatively, use names_glue for more complex naming
+          # names_glue = "{rankname}_{.value}"
+        )
+      outf <- file.path(savedir, make.names(paste0(collection_name, "_", 'all', ".tsv")))
+      if (fs::file_exists(outf) && !replace) {
+        log_msg(msg = paste0("File ", outf, " already exists, skipping"))
+        return(res_pivoted)
+      }
+      log_msg(msg=paste0("Writing: ", outf, "..."))
+      res_pivoted %>% write_tsv(outf)
+      return(res_pivoted)
+    }
+  )
+  return(results_list_pivoted)
 }
 
 

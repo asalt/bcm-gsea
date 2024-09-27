@@ -1,17 +1,11 @@
 # map.R
-# Install CRAN packages if not already installed
-required_cran <- c("dplyr", "tidyr", "stringr", "purrr", "writexl")
-installed_cran <- rownames(installed.packages())
-for (pkg in required_cran) {
-  if (!pkg %in% installed_cran) {
-    install.packages(pkg)
-  }
-}
-
-# Install Bioconductor packages if not already installed
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-  install.packages("BiocManager")
-}
+# Load libraries
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(purrr)
+# library(writexl)
+# library(org.Hs.eg.db) # For human gene annotations
 
 required_bioc <- c("org.Hs.eg.db", "org.Mm.eg.db", "org.Rn.eg.db") # Add more as needed
 installed_bioc <- rownames(installed.packages())
@@ -21,23 +15,16 @@ for (pkg in required_bioc) {
   }
 }
 
-# Load libraries
-library(dplyr)
-library(tidyr)
-library(stringr)
-library(purrr)
-library(writexl)
-library(org.Hs.eg.db) # For human gene annotations
+
 # in the future we will need to support others as well
-
-
 # Define the gene mapping function
-map_entrez_to_symbol <- function(entrez_list, species = "human") {
+map_entrez_to_symbol <- function(entrez_list, species = "Homo sapiens") {
+
   # Define species-specific annotation packages
   species_db <- list(
-    human = "org.Hs.eg.db",
-    mouse = "org.Mm.eg.db",
-    rat   = "org.Rn.eg.db"
+    "Homo sapiens" = "org.Hs.eg.db",
+    "Mus musculus" = "org.Mm.eg.db",
+    "Rattus novaris"   = "org.Rn.eg.db" # check name for this one
     # Add more species and their corresponding annotation packages here
   )
 
@@ -51,33 +38,70 @@ map_entrez_to_symbol <- function(entrez_list, species = "human") {
   if (!requireNamespace(db_package, quietly = TRUE)) {
     stop("Annotation package ", db_package, " not found. Please install it.")
   }
-  library(get(db_package), character.only = TRUE)
-
-  # Split, unlist, and get unique Entrez IDs
-  unique_entrez <- entrez_list %>%
-    str_split(pattern = "/") %>%
-    unlist() %>%
-    str_trim() %>%
-    unique()
-
-  # Remove any empty strings
-  unique_entrez <- unique_entrez[unique_entrez != ""]
+  library(db_package, character.only = TRUE)
 
   # Map Entrez IDs to Gene Symbols
   gene_symbols <- mapIds(
     get(db_package),
-    keys = unique_entrez,
+    keys = entrez_list,
     column = "SYMBOL",
     keytype = "ENTREZID",
     multiVals = "first" # Take the first symbol if multiple exist
   )
 
   # Create a named vector for mapping
-  mapping <- setNames(gene_symbols, unique_entrez)
+  mapping <- setNames(gene_symbols, entrez_list)
+  return(mapping)
+}
+
+extract_entrezids <- function(fgsea_res){
+
+  # print(head(fgsea_res))
+  # print(head(fgsea_res$leadingEdge))
+  # print(class(fgsea_res$leadingEdge))
+
+  if (!"data.frame" %in% class(fgsea_res)){
+    stop("leadingEdge not in df")
+  }
+
+  if (!"leadingEdge" %in% colnames(fgsea_res)){
+    stop("leadingEdge not in df")
+  }
+
+  if (class(fgsea_res$leadingEdge) == "character"){
+    unique_entrez <- fgsea_res %>%
+      ungroup()
+      pull(leadingEdge) %>%
+      str_split(pattern = "/") %>%
+      unlist() %>%
+      str_trim() %>%
+      unique()
+    # Remove any empty strings
+    unique_entrez <- unique_entrez[unique_entrez != ""]
+  } else if (class(fgsea_res$leadingEdge) == "list"){
+    unique_entrez <- fgsea_res %>%
+      ungroup() %>%
+      pull(leadingEdge) %>%
+      unlist() %>%
+      unique()
+    # do somethng else
+  } else{  #?
+    1+1
+    stop("??")
+  }
+  return(unique_entrez)
+}
+
+format_entrezids <- function(fgsea_res, mapping){
+
+  if (is.null(mapping)) stop("must provide mapping")
+  if (class(fgsea_res$leadingEdge) == "character")  {
+    fgsea_res <- fgsea_res %>% mutate( leadingEdge = str_split(leadingEdge, '/'))
+  }
 
   # Function to replace Entrez IDs with symbols or keep original if no mapping
-  replace_ids <- function(id_string) {
-    ids <- str_split(id_string, pattern = "/")[[1]] %>% str_trim()
+  replace_ids <- function(ids) {
+    ids <- Filter(Negate(is.na), ids) # Remove NAs
     symbols <- sapply(ids, function(id) {
       if (id %in% names(mapping)) {
         symbol <- mapping[[id]]
@@ -93,77 +117,33 @@ map_entrez_to_symbol <- function(entrez_list, species = "human") {
     paste(symbols, collapse = "/")
   }
 
-  # Apply the replacement to the entire list
-  symbol_mapped <- map_chr(entrez_list, replace_ids)
+  fgsea_res <- fgsea_res %>% mutate(
+    leadingEdge_entrezid = map_chr(leadingEdge, ~ paste(.x, collapse = "/")),
+    leadingEdge_genesymbol = map_chr(leadingEdge, ~replace_ids(.x))
+  )
 
-  return(symbol_mapped)
+  return(fgsea_res)
 }
 
+add_leadingedges_to_results_list <- function(fgsea_res_list, species = "Homo sapiens"){
 
-example_usage <- function() {
-  res_mapped <- res %>%
-    mutate(
-      leadingEdge_symbols = map(leadingEdge, map_entrez_to_symbol)
-    )
-
-  # res_pivoted <- res_mapped %>%
-  #   pivot_wider(
-  #     names_from = rankname,
-  #     values_from = c(pval, padj, log2err, ES, NES, size, leadingEdge, mainpathway, n_main, ratio_main, main_pathway_ratio),
-  #     names_sep = "_"
-  #   )
-
-  res_pivoted <- res_mapped %>%
-    pivot_wider(
-      names_from = rankname,
-      values_from = c(pval, padj, log2err, ES, NES, size, leadingEdge, mainpathway, n_main, ratio_main, main_pathway_ratio),
-      names_glue = "{rankname}_{.value}"
-    )
-
-
-
-  # Define parameters
-  species <- "human" # Change as needed: "human", "mouse", "rat", etc.
-  pivot_flag <- FALSE # Set to TRUE to enable pivoting
-  output_excel <- "processed_res.xlsx" # Output Excel file name
-
-  # Process the res table
-  res_processed <- res %>%
-    # Ensure 'rankname' is treated as a character
-    mutate(rankname = as.character(rankname)) %>%
-    # Create a new column with original leadingEdge Entrez IDs
-    mutate(le_entrez = map_chr(leadingEdge, ~ paste(.x, collapse = "/"))) %>%
-    # Create a new column with mapped gene symbols
-    mutate(le_symbol = map_entrez_to_symbol(le_entrez, species = species)) %>%
-    # Optionally, remove the original 'leadingEdge' list column
-    select(-leadingEdge)
-
-  # View the first few rows to verify
-  print(head(res_processed))
-
-  if (pivot_flag) {
-    res_pivoted <- res_processed %>%
-      pivot_wider(
-        names_from = rankname,
-        values_from = c(pval, padj, log2err, ES, NES, size, le_entrez, le_symbol, mainpathway, n_main, ratio_main, main_pathway_ratio),
-        names_sep = "_"
-        # Alternatively, use names_glue for more complex naming
-        # names_glue = "{rankname}_{.value}"
-      )
-
-    # Replace the processed data with the pivoted version
-    res_final <- res_pivoted
-  } else {
-    res_final <- res_processed
+  if (!"list" %in% class(fgsea_res_list)){
+    stop("fgsea_res_list should be a list")
   }
 
-  # Export the final table to Excel
-  # If pivoting is enabled, it's already handled in res_final
-  # Otherwise, res_final contains the processed table without pivoting
-  
-  # Write to Excel
-  write_xlsx(res_final, path = output_excel)
-  
-  cat("Processed data has been written to", output_excel, "\n")
+  entrez_ids <- fgsea_res_list %>%
+    purrr::map(~extract_entrezids(.x)) %>%
+    unlist()
+    print(entrez_ids)
+
+  entrez_ids <- unique(entrez_ids)
+
+  gene_symbol_mapping <- map_entrez_to_symbol(entrez_ids, species = species)
+  # now assign back
+  output <- fgsea_res_list %>% purrr::map(~{
+    format_entrezids(.x, mapping = gene_symbol_mapping)
+  })
+
+  return(output)
 
 }
