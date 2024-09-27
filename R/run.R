@@ -220,7 +220,7 @@ run <- function(params) {
       collection_name <- .y
       pca_object <- pca_objects[[.y]]
       .savedir <- file.path(get_arg(save_func, "path"), make.names(collection_name), "pca")
-      .filename <- paste0(collection_name, "_top_loadings")
+      .filename <- paste0(make.names(collection_name), "_top_loadings")
       .save_func <- make_partial(save_func, path = .savedir, filename = .filename)
       pca_tools$make_heatmap_from_loadings(
         gsea_object = .x,
@@ -297,8 +297,8 @@ run <- function(params) {
         combine_by_df <- NULL
       } else {
         combine_by_df <- metadata %>%
-          select(!!sym(combine_by), id) %>%
-          rename(
+          dplyr::select(!!sym(combine_by), id) %>%
+          dplyr::rename(
             facet = !!sym(combine_by),
             rankname = id
           )
@@ -322,6 +322,7 @@ run <- function(params) {
       do_individual = params$enplot$do_individual %||% TRUE,
       do_combined = params$enplot$do_combined %||% TRUE,
       combine_by = combine_by_df, # this is metadata table rankname and facet if exists
+      combine_by_name = combine_by,
       width = params$enplot$width %||% 5.4,
       height = params$enplot$height %||% 4.0,
       combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE

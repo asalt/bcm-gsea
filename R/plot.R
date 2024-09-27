@@ -31,6 +31,8 @@ util_tools <- new.env()
 source(file.path(src_dir, "./utils.R"), local = util_tools)
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
+select <- dplyr::select # always
+
 handle_save_func <- function(save_func, path, filename, width = NULL, height = NULL) {
   if (!is.null(save_func)) {
     if (!is.null(path)) {
@@ -784,7 +786,7 @@ plot_results_one_collection <- function(
 
   # it isn't strictly necessary to exclude these colum s here,
   # as they will be excluded upon creation of the column_annotation object
-  metadata_for_colors <- metadata %>% select(-any_of(c("id", "dummy")))
+  metadata_for_colors <- metadata %>% dplyr::select(-any_of(c("id", "dummy")))
   if (ncol(metadata_for_colors) > 0) {
     colors_list <- metadata_for_colors %>% colnames() %>%
       map(~{
@@ -1001,6 +1003,7 @@ plot_top_ES_across <- function(
     do_individual = TRUE,
     do_combined = TRUE,
     combine_by = NULL,
+    combine_by_name = NULL,
     save_func = NULL,
     combined_show_ticks = FALSE,
     width=3.4,
@@ -1038,10 +1041,11 @@ plot_top_ES_across <- function(
         do_individual = do_individual,
         do_combined = do_combined,
         combine_by = combine_by,
+        combine_by_name = combine_by_name,
         save_func = save_func,
         panel_width = width,
         panel_height = height,
-        combined_show_ticks = combined_show_ticks,
+        combined_show_ticks = combined_show_ticks
       )
       return(plts)
     })
@@ -1057,6 +1061,7 @@ plot_top_ES <- function(
     do_individual = T,
     do_combined = T,
     combine_by = NULL,
+    combine_by_name = NULL,
     save_func = NULL,
     panel_width = 4.6,
     panel_height = 3.4,
@@ -1075,6 +1080,14 @@ plot_top_ES <- function(
   }
   pathways <- df$pathway %>% unique()
   geneset_lists <- geneset_collection[pathways]
+
+
+  # print(paste0("limit: ", limit))
+  # print(nrow(df))
+  # print(paste0(" do individual: ", do_individual))
+  # print(paste0(" do combined: ", do_combined))
+  # print(paste0("pathways ", pathways))
+  # print(paste0("geneset lists ", geneset_lists))
 
   rankorder_by_pw <- fgsea_tools$get_rankorder_across(
     df,
@@ -1096,6 +1109,7 @@ plot_top_ES <- function(
       rankorder_by_pw,
       metadata = combine_by
     )
+    combine_by_name <- combine_by_name %||% ""
 
 
     .plts <- rankorder_samplepathway %>% purrr::imap(~ {
@@ -1117,6 +1131,7 @@ plot_top_ES <- function(
         filename <- paste(get_arg(save_func, "filename"),
           make.names(pathway_name),
           make.names("combined"),
+          make.names(combine_by_name),
           sep = "_"
         )
 
@@ -1141,7 +1156,6 @@ plot_top_ES <- function(
     })
     plts <- c(plts, .plts)
   }
-
 
   # invidual plots
   if (!do_individual) {
