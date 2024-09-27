@@ -16,6 +16,9 @@ source(file.path(src_dir, "./io.R"), local = io_tools)
 geneset_tools <- new.env()
 source(file.path(src_dir, "./geneset_utils.R"), local = geneset_tools)
 
+db_tools <- new.env()
+source(file.path(src_dir, "./db.R"), local = db_tools)
+
 util_tools <- new.env()
 source(file.path(src_dir, "utils.R"), local = util_tools)
 log_msg <- util_tools$make_partial(util_tools$log_msg)
@@ -244,7 +247,7 @@ run_all_rankobjs <- function(
   # rankobjs %>% furrr::future_map( # maybe later
   if (parallel == TRUE) {
     workers <- future::availableCores() - 1
-    options(future.globals.maxSize = 10000 * 1024^2)
+    options(future.globals.maxSize = 20000 * 1024^2)
     logger(msg = paste0("using ", workers, " workers"))
     .map_func <- furrr::future_map
   } else {
@@ -297,7 +300,7 @@ run_all_rankobjs <- function(
 
   final_results <- c(
     Filter(function(x) !is.null(x), cache_results),
-    results
+    Filter(function(x) !is.null(x), results)
   )
 
   return(final_results)
@@ -393,9 +396,56 @@ run_all_pathways <- function(
 }
 
 
-
+#' Get Rank Order Data for GSEA Pathways
+#'
+#' This function generates rank order data for a specified gene set and its
+#' corresponding rank object. The function computes the rank order of each gene
+#' in the `rankobj` and joins it with enrichment plot data (e.g., curve, ticks,
+#' statistics). Optionally, additional gene information from `geneset_df` can be
+#' joined to the result.
+#'
+#' @param geneset A character vector specifying the gene set of interest. It should
+#'   contain gene IDs or symbols. A warning is issued if the input is of the wrong
+#'   type.
+#' @param rankobj A named numeric vector representing the ranking values for the
+#'   genes. If a list is passed, the function will attempt to handle it but will
+#'   issue a warning if it contains more than one element.
+#' @param geneset_df Optional. A data frame that contains additional information
+#'   about the genes in the gene set. It must have an `entrez_gene` column, which
+#'   will be matched to the `id` column (the entrez ids of that pathway) in the rank order data.
+#'
+#' @details
+#' This function performs the following tasks:
+#' - Uses the `plotEnrichmentData()` function to generate enrichment data (curve,
+#'   ticks, and statistics) for the specified `geneset` and `rankobj`.
+#' - Computes rank order of genes by ranking the values in `rankobj`.
+#' - Merges the rank order with enrichment data (curve and ticks).
+#' - Optionally joins the resulting rank order data with `geneset_df` if provided,
+#'   adding additional gene-level information.
+#'
+#' The function returns a list containing the rank order (`edge`), the enrichment
+#' curve, ticks, and other GSEA statistics.
+#'
+#' @return A list containing the following elements:
+#' \describe{
+#'   \item{`edge`}{Data frame with the rank order of genes, enrichment curve, and
+#'     tick data.}
+#'   \item{`curve`}{Data frame representing the enrichment score curve.}
+#'   \item{`ticks`}{Data frame representing the tick marks on the enrichment curve.}
+#'   \item{`stats`}{Data frame with additional statistics for the enrichment analysis.}
+#'   \item{`posES`, `negES`, `spreadES`, `maxAbsStat`}{Various statistics for the
+#'     enrichment analysis (positive ES, negative ES, spread ES, and max absolute
+#'     statistic).}
+#' }
+#'
+#' @example
+#' # Example usage:
+#' rankorder <- get_rankorder(geneset = c("gene1", "gene2"), rankobj = named_vector)
+#'
+#' @seealso `fgsea::plotEnrichmentData`
+#'
 get_rankorder <- function(
-    geneset,
+    geneset_ids,
     rankobj,
     geneset_df = NULL) {
   # geneset_df has addl info
@@ -406,7 +456,21 @@ get_rankorder <- function(
   #   stop("rankobj must be a named numeric vector")
   # }
 
-  enplot_data <- plotEnrichmentData(geneset, rankobj)
+  # if (!"character" %in% class(geneset)){
+  #   warning("geneset may be of wrong type")
+  #   }
+  if ("data.frame" %in% class(geneset_ids)){
+    warning("geneset is of wrong type, should be the ids list")
+    }
+
+  # type checking
+  if ("list" %in% class(rankobj)) {
+   cat("rnkobj is a list")
+   if (length(rnkobj) == 1) rnkobj <- rnkobj[[1]]
+   else warning('should not be a list')
+ }
+
+  enplot_data <- plotEnrichmentData(geneset_ids, rankobj)
   rnkorder <- -rankobj %>% rank()
   rankorder_df <- data.frame(
     id = names(rnkorder),
@@ -416,7 +480,7 @@ get_rankorder <- function(
 
   rankorder_edge <- rankorder_df %>% left_join(enplot_data$curve, by = "rank")
   rankorder_edge %<>% left_join(
-    rename(enplot_data$ticks, stat_tick = stat),
+    dplyr::rename(enplot_data$ticks, stat_tick = stat),
     by = "rank"
   )
   # rankorder_edge %<>% left_join(rename(enplot_data$stats, stat_stat = stat, by = "rank"))
@@ -445,6 +509,29 @@ get_rankorder <- function(
   )
 }
 
+
+
+get_rankorder_db <- function(
+  ranobj_name = NULL,
+  pathway_name = NULL,
+  db = NULL,
+  ...
+){
+
+  if (is.null(db)) {
+    log_msg(warning="db must be provided")
+    return(NULL)
+  }
+
+  rankorder <- db$get_plot_enrichmentdata_by_pathway(
+    rankobj_name = ranobj_name,
+    pathway_name = pathway_name
+  )
+
+  return(rankorder)
+
+}
+
 get_rankorder_across <- function(
     df, # long form data frame with rankname col
     ranks_list,
@@ -456,7 +543,10 @@ get_rankorder_across <- function(
     pstat_cutoff = 1,
     pstat_usetype = "padj",
     main_pathway_ratio = 0.1,
+    db = NULL,
+    genesets_additional_info = NULL,
     ...) {
+
   if (!"rankname" %in% colnames(df)) {
     stop("rankname not in fgesa_longdf")
   }
@@ -468,9 +558,39 @@ get_rankorder_across <- function(
     distinct(pathway, .keep_all = TRUE) %>%
     head(n = limit)
 
-  pathways_to_plot <- df$pathway
 
+  pathways_to_plot <- df$pathway
   rank_ids <- names(ranks_list)
+
+  # if (!is.null(db)) {
+  #   con <-db_tools$get_con(db)
+  #   on.exit(db_tools$close_con(con), add = TRUE)
+  #   rankorders_cached <- pathways_to_plot %>% purrr::map(~{
+  #     pathway_name <- .x
+  #     rank_ids %>% purrr::map(~{
+  #       db_tools$insert_rankorder(
+  #         con = con,
+  #         rankobj_name = .x,
+  #         pathway_name = pathway_name,
+  #         rankorder = get_rankorder_db(
+  #           ranobj_name = .x,
+  #           pathway_name = pathway_name,
+  #           con = con
+  #         )
+  #       )
+  #     })
+  #   })
+  #    #%>%
+  #     #set_names(pathways_to_plot)
+  #   #rankorders
+  #   missing <- Filter(Negate(is.null), rankorders_cached)
+  # } # check which are missing for below
+
+  # print(paste0("missing: ", missing))
+  # print(paste0("pathways to plot: ", pathways_to_plot))
+  # print(paste0("rank ids ", rank_ids))
+
+
 
   rankorders <- pathways_to_plot %>%
     purrr::map(~ {
@@ -479,12 +599,12 @@ get_rankorder_across <- function(
         return()
       }
       geneset <- geneset_lists[[.x]]
-
       rank_ids %>%
         purrr::map(~ {
           fgsea_tools$get_rankorder(
             geneset,
             ranks_list[[.x]],
+            geneset_df = genesets_additional_info
           )
         }) %>%
         set_names(rank_ids)
@@ -495,87 +615,81 @@ get_rankorder_across <- function(
 }
 
 
-combine_rankorders_on_sample <- function(
-    rankorders,
-    metadata = NULL,
-    ...) {
-  if (!is.null(metadata)) {
-    if (!"rankname" %in% colnames(metadata)) {
-      warn("metadata must have a 'rankname' column")
-      metadata <- NULL
-    }
-    if (!"facet" %in% colnames(metadata)) {
-      metadata$facet <- metadata$rankname
-    }
-  }
-
-  # if (is.null(metadata)) {
-  #   warn("metadata is null, making standin")
-  #   metadata <- data.frame(id = unique(rankorders[[1]]$rankname))
-  #   rownames(metadata) <- metadata$id
-  #   metadata$dummy <- "a"
-  # }
-
-  res_list <- rankorders %>%
-    purrr::imap(~ {
-      pw_name <- .y
-      list_of_rankorders <- .x # this is a list of the "rankorder" info
-      # names incldue:
-      # edge (df), curve (df), ticks, stats, posES, negES, spreadES, maxAbsStat
-
-      curves <- list_of_rankorders %>%
-        purrr::imap(~ {
-          .x$curve %>% mutate(pathway = pw_name, rankname = .y)
-        }) %>%
-        bind_rows()
-      if (!is.null(metadata)) curves %<>% left_join(metadata, by = "rankname") # by = "rankname"
-
-      edges <- list_of_rankorders %>%
-        purrr::imap(~ {
-          .x$edge %>% mutate(pathway = pw_name, rankname = .y)
-        }) %>%
-        bind_rows()
-      if (!is.null(metadata)) edges %<>% left_join(metadata, by = "rankname")
-
-      ticks <- list_of_rankorders %>%
-        purrr::imap(~ {
-          .x$ticks %>% mutate(pathway = pw_name, rankname = .y)
-        }) %>%
-        bind_rows()
-      if (!is.null(metadata)) ticks %<>% left_join(metadata, by = "rankname")
-
-      stats <- list_of_rankorders %>%
-        purrr::imap(~ {
-          .x$stats %>% mutate(pathway = pw_name, rankname = .y)
-        }) %>%
-        bind_rows()
-      if (!is.null(metadata)) stats %<>% left_join(metadata, by = "rankname")
-
-      res <- list(
-        curve = curves,
-        edge = edges,
-        ticks = ticks,
-        stats = stats
-      )
-
-      return(res)
-    })
-  return(res_list)
-}
+# combine_rankorders_on_sample <- function(
+#     rankorders,
+#     metadata = NULL,
+#     ...) {
+#   if (!is.null(metadata)) {
+#     if (!"rankname" %in% colnames(metadata)) {
+#       warn("metadata must have a 'rankname' column")
+#       metadata <- NULL
+#     }
+#     if (!"facet" %in% colnames(metadata)) {
+#       metadata$facet <- metadata$rankname
+#     }
+#   }
+#
+#   res_list <- rankorders %>%
+#     purrr::imap(~ {
+#       pw_name <- .y
+#       list_of_rankorders <- .x # this is a list of the "rankorder" info
+#       # names incldue:
+#       # edge (df), curve (df), ticks, stats, posES, negES, spreadES, maxAbsStat
+#
+#       curves <- list_of_rankorders %>%
+#         purrr::imap(~ {
+#           .x$curve %>% mutate(pathway = pw_name, rankname = .y)
+#         }) %>%
+#         bind_rows()
+#       if (!is.null(metadata)) curves %<>% left_join(metadata, by = "rankname") # by = "rankname"
+#
+#       edges <- list_of_rankorders %>%
+#         purrr::imap(~ {
+#           .x$edge %>% mutate(pathway = pw_name, rankname = .y)
+#         }) %>%
+#         bind_rows()
+#       if (!is.null(metadata)) edges %<>% left_join(metadata, by = "rankname")
+#
+#       ticks <- list_of_rankorders %>%
+#         purrr::imap(~ {
+#           .x$ticks %>% mutate(pathway = pw_name, rankname = .y)
+#         }) %>%
+#         bind_rows()
+#       if (!is.null(metadata)) ticks %<>% left_join(metadata, by = "rankname")
+#
+#       stats <- list_of_rankorders %>%
+#         purrr::imap(~ {
+#           .x$stats %>% mutate(pathway = pw_name, rankname = .y)
+#         }) %>%
+#         bind_rows()
+#       if (!is.null(metadata)) stats %<>% left_join(metadata, by = "rankname")
+#
+#       res <- list(
+#         curve = curves,
+#         edge = edges,
+#         ticks = ticks,
+#         stats = stats
+#       )
+#
+#       return(res)
+#     })
+#   return(res_list)
+# }
 
 
-concat_results_one_collection <- function(list_of_dfs) {
+concat_results_one_collection <- function(list_of_dfs, main_pathway_ratio=0.1) {
   res <- list_of_dfs %>%
     purrr::imap(
       .f = ~ {
         .x %>% dplyr::mutate(rankname = .y)
       }
     ) %>%
-    dplyr::bind_rows()
+    dplyr::bind_rows() %>%
+    filter_on_mainpathway(main_pathway_ratio = main_pathway_ratio)
   return(res)
 }
 
-concat_results_all_collections <- function(list_of_lists, ...) {
+concat_results_all_collections <- function(list_of_lists, main_pathway_ratio = .1, ...) {
   .dotargs <- list(...) ## this is not used nor passed to inner func
 
   res <- list_of_lists %>%
@@ -586,3 +700,50 @@ concat_results_all_collections <- function(list_of_lists, ...) {
     )
   return(res)
 }
+
+
+
+# new test better refactor
+
+process_rankorder_list <- function(rankorders, pw_name, metadata = NULL, key) {
+  rankorders %>%
+    purrr::imap(~ {
+      .x[[key]] %>% mutate(pathway = pw_name, rankname = .y)
+    }) %>%
+    bind_rows() %>%
+    { if (!is.null(metadata)) left_join(., metadata, by = "rankname") else . }
+}
+
+
+combine_rankorders_on_sample <- function(rankorders, metadata = NULL, ...) {
+  if (!is.null(metadata)) {
+    if (!"rankname" %in% colnames(metadata)) {
+      warn("metadata must have a 'rankname' column")
+      metadata <- NULL
+    }
+    if (!"facet" %in% colnames(metadata)) {
+      metadata$facet <- metadata$rankname
+    }
+  }
+
+  res_list <- rankorders %>%
+    purrr::imap(~ {
+      pw_name <- .y
+      list_of_rankorders <- .x
+
+      curves <- process_rankorder_list(list_of_rankorders, pw_name, metadata, "curve")
+      edges <- process_rankorder_list(list_of_rankorders, pw_name, metadata, "edge")
+      ticks <- process_rankorder_list(list_of_rankorders, pw_name, metadata, "ticks")
+      stats <- process_rankorder_list(list_of_rankorders, pw_name, metadata, "stats")
+
+      list(
+        curve = curves,
+        edge = edges,
+        ticks = ticks,
+        stats = stats
+      )
+    })
+
+  return(res_list)
+}
+
