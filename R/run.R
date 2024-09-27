@@ -99,7 +99,7 @@ run <- function(params) {
     workers <- future::availableCores() - 1
     future::plan(future::multicore, workers = workers)
   }
-  cache <- params$advanced$cache %>% ifelse(!is.null(.), ., TRUE)
+  cache <- params$advanced$cache %||% TRUE
   log_msg(msg = paste0("parallel set to: ", parallel))
   log_msg(msg = paste0("cache set to: ", cache))
   log_msg(msg = paste0("cachedir set to: ", cachedir))
@@ -152,13 +152,33 @@ run <- function(params) {
     log_msg(msg = "comparison  names gsea results list: ")
     log_msg(msg = str_c(names(results_list[[1]]), sep = "\n"))
 
-    # ======= save
-    ._ <- results_list %>%
-      io_tools$save_gsea_results(savedir = file.path(savedir, "gsea_tables"))
 
     # =======
     log_msg(msg = "combining gsea marices")
     all_gsea_results <- fgsea_tools$concat_results_all_collections(results_list)
+    # all_gsea_results %>% saveRDS(file = file.path(savedir, 'allgsearesults.RDS'))
+
+
+    # ======= save
+
+    ._ <- results_list %>%
+      io_tools$save_individual_gsea_results(
+       savedir = file.path(savedir, "gsea_tables"),
+       replace = params$advanced$replace
+      )
+
+    # maybe save pivoted file. gets extremely big extremely quickly
+    if (params$advanced$pivot_gsea_results == TRUE) {
+      log_msg(msg = "pivoting gsea results")
+      all_gsea_results %>% io_tools$save_pivoted_gsea_results(
+       savedir = file.path(savedir, "gsea_tables"),
+       replace = params$advanced$replace
+     )
+    }
+
+
+
+
 
     # now we plot results
     # TODO better and earlier handle metadata loading
@@ -200,7 +220,7 @@ run <- function(params) {
       collection_name <- .y
       pca_object <- pca_objects[[.y]]
       .savedir <- file.path(get_arg(save_func, "path"), make.names(collection_name), "pca")
-      .filename <- paste0(collection_name, "_top_loadings.png")
+      .filename <- paste0(collection_name, "_top_loadings")
       .save_func <- make_partial(save_func, path = .savedir, filename = .filename)
       pca_tools$make_heatmap_from_loadings(
         gsea_object = .x,
@@ -290,6 +310,10 @@ run <- function(params) {
       }
     }
 
+    print(all_gsea_results)
+    print(ranks_list)
+    print(genesets_list_of_lists)
+    print(save_func)
     ._ <- plot_tools$plot_top_ES_across(all_gsea_results,
       ranks_list = ranks_list,
       genesets_list_of_lists,
@@ -300,7 +324,7 @@ run <- function(params) {
       combine_by = combine_by_df, # this is metadata table rankname and facet if exists
       width = params$enplot$width %||% 5.4,
       height = params$enplot$height %||% 4.0,
-      combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE,
+      combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE
     )
 
 
