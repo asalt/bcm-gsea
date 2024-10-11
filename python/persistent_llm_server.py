@@ -16,6 +16,11 @@ initial_prompt = (
 )
 conversation_context.append(initial_prompt)
 
+# Command constants
+COMMAND_RESPOND = "respond"
+COMMAND_SUMMARIZE = "summarize"
+
+
 # Function to summarize conversation context
 def summarize_context():
     total_figures = len([line for line in conversation_context if 'saving' in line])
@@ -55,10 +60,10 @@ async def handle_connection(websocket):
             # Check if the prompt is a command
             if prompt.startswith("COMMAND: "):
                 command = prompt[len("COMMAND: "):].strip().lower()
-                if command == "respond":
+                if command == COMMAND_RESPOND:
                     await handle_respond_command(websocket)
                     continue
-                if command == "summarize":
+                if command == COMMAND_SUMMARIZE:
                     await handle_summarize_command(websocket)
                     continue
                 await handle_unknown_command(websocket, command)
