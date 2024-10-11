@@ -5,15 +5,30 @@
 library(reticulate)
 library(websocket)
 
-# WebSocket integration for persistent LLM conversation
-
 # Function to establish a WebSocket connection to a Python server
-initialize_websocket <- function() {
-  ws <- WebSocket$new("ws://localhost:8765")
+initialize_websocket <- function(port=8765) {
+  ws <- WebSocket$new(paste0("ws://localhost:", port)
   return(ws)
 }
 
+# WebSocket client function to send messages to Python server
+# the "side effects" of this message send all occur on the Python side
+# we do not yet have a way to recieve messages back.
+# that is a planned feature
+send_to_websocket <- function(message, port=8765) {
+  ws <- initialize_websocket(port=port)
+  ws$onOpen(function(event) {
+    ws$send(message)
+  })
+  ws$onClose(function(event) {
+    message("WebSocket connection closed")
+  })
+}
+
+
+
 # Unified function to generate response using WebSocket connection
+# this would require running in a separate thread                      
 generate_response_websocket <- function(ws, prompt) {
   ws$send(prompt)
   response <- NULL
@@ -21,6 +36,7 @@ generate_response_websocket <- function(ws, prompt) {
   ws$onMessage(function(event) {
     response <<- event$data
     cat("Generated response: ", response, "\n")
+    # TODO call voice speak 
   })
 
   # Wait for response to be assigned (simplified example, consider timeout handling)
@@ -32,6 +48,7 @@ generate_response_websocket <- function(ws, prompt) {
 }
 
 # Example function to handle log streaming with WebSocket
+# this would require running in a separate thread
 generate_persistent_response <- function(log_file_path) {
   ws <- initialize_websocket()
   last_line_read <- 0
@@ -46,6 +63,7 @@ generate_persistent_response <- function(log_file_path) {
       response <- generate_response_websocket(ws, prompt)
       
       # Output response (to be integrated with a separate voice module)
+      speak_response
       cat("Generated response: ", response, "\n")
       
       # Update last line read
@@ -55,12 +73,3 @@ generate_persistent_response <- function(log_file_path) {
     Sys.sleep(5) # Adjust this interval as needed
   }
 }
-
-speak_response <- function(prompt) {
-  ws <- initialize_websocket()
-  response <- generate_response_websocket(ws, prompt)
-  cat("Generated response: ", response, "\n")
-}
-
-# Example usage: Feeding a custom prompt to the language model and outputting the response
-speak_response("Tell me about the progress of my calculations.")
