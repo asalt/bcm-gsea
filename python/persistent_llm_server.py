@@ -23,6 +23,10 @@ COMMAND_SUMMARIZE = "summarize"
 
 # Function to summarize conversation context
 def summarize_context():
+    # TODO rewrite this as sending to llm for interpretation.
+    # set options for different levels of llms. we can use smaller models for simpler summarization tasks.
+    # so we can summarize very quickly. We will have to fit all of these in memory though, or have to cycle through
+    # them if memory gets full. something to think about.
     total_figures = len([line for line in conversation_context if 'saving' in line])
     total_files = len([line for line in conversation_context if 'file' in line])
     recent_entries = '; '.join(list(conversation_context)[-5:])
