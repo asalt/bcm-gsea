@@ -149,4 +149,28 @@ To cite package ‘purrr’ in publications use:
 
 ```
 
+To cite package ‘ComplexHeatmap’ in publications use:
+
+```bibtex
+
+  @Article{,
+    title = {Complex heatmaps reveal patterns and correlations in multidimensional genomic data},
+    author = {Zuguang Gu and Roland Eils and Matthias Schlesner},
+    journal = {Bioinformatics},
+    doi = {10.1093/bioinformatics/btw313},
+    year = {2016},
+  }
+```
+
+```bibtex
+  @Article{,
+    title = {Complex Heatmap Visualization},
+    author = {Zuguang Gu},
+    doi = {10.1002/imt2.43},
+    journal = {iMeta},
+    year = {2022},
+  }
+
+
+```
 
