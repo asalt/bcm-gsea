@@ -11,11 +11,14 @@ suppressPackageStartupMessages(library(here))
 # src_dir <- file.path(here("R"))
 # source(file.path(src_dir, "utils.R"))
 
-util_tools <- new.env()
-source(file.path(here("R"), "./utils.R"), local = util_tools)
+# util_tools <- new.env()
+# source(file.path(here("R"), "./utils.R"), local = util_tools)
 
-map_tools <- new.env()
-source(file.path(here("R"), "./map.R"), local = map_tools)
+source(file.path(here("R", "lazyloader.R")))
+util_tools <- get_tool_env("utils")
+
+# map_tools <- new.env()
+# source(file.path(here("R"), "./map.R"), local = map_tools)
 
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
@@ -127,7 +130,7 @@ create_rnkfiles_from_volcano <- function(
   shorternames <- names(lst) %>%
     stringr::str_extract(., pattern = "(?<=group_)([^.*]*)$")
   log_msg(msg = paste0("shorter names are ", paste0(shorternames, "\n")))
-  if (!any(is.na(shorternames))) {
+  if (!all(is.na(shorternames)) && length(unique(shorternames)) == length(names(lst))) {
     names(lst) <- shorternames
   } else {
     log_msg(msg = "nas in shorter names, not reassigning")
@@ -263,29 +266,49 @@ write_results <- function(result, outf, replace = FALSE) {
 }
 
 # Main function to save GSEA results
-save_individual_gsea_results <- function(results_list, savedir = "gsea_tables", replace = FALSE) {
+save_individual_gsea_results <- function(
+  results_list,
+  savedir = "gsea_tables",
+  replace = FALSE,
+  species = "Homo sapiens") {
+
+log_msg(msg = "writing results")
+log_msg(msg = paste0("names results list :", names(results_list)))
+log_msg(msg = paste0("length results list :", length(results_list)))
+
   fs::dir_create(savedir) # Ensures directory exists, no error if it already does
-
-  results_list %>% purrr::imap(~{
-    results_list  <- .x %>% map_tools$add_leadingedges_to_results_list()
+  results_list_towrite <- results_list %>% purrr::imap(~{
+    result_list  <- .x #%>% map_tools$add_leadingedges_to_results_list()
     collection_name <- .y
-
-    results_list %>% purrr::imap(~{
+    result_list %>% purrr::imap(~{
       result <- .x
       comparison_name <- .y
       outf <- file.path(savedir, make.names(paste0(collection_name, "_", comparison_name, ".tsv")))
-      log_msg(paste0("Writing: ", outf, "..."))
       if (!"data.frame" %in% class(result)) {
         log_msg(paste0("Invalid result, cannot write to file."))
         return()
       }
-    if (fs::file_exists(outf) && !replace) {
-      log_msg(msg = paste0("File ", outf, " already exists, skipping"))
-      return()
-    }
-      result %>% write_tsv(outf)
+      if (fs::file_exists(outf) && !replace) {
+        log_msg(msg = paste0("File ", outf, " already exists, skipping"))
+        # return(result)
+      } else {
+        result %>% write_tsv(outf)
+      }
     })
   })
+
+
+  # results_list_towrite <- results_list %>% purrr::imap(~{
+  #   result_list  <- .x %>% map_tools$add_leadingedges_to_results_list()
+  #   collection_name <- .y
+  #   result_list %>% purrr::imap(~{
+  #     result <- .x
+  #     comparison_name <- .y
+  #     outf <- file.path(savedir, make.names(paste0(collection_name, "_", comparison_name, ".tsv")))
+  #     log_msg(paste0("Writing: ", outf, "..."))
+  #     result %>% write_tsv(outf)
+  #   })
+
 }
 
 save_pivoted_gsea_results <- function(results_list, savedir = "gsea_tables", replace = FALSE) {
