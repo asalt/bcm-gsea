@@ -126,7 +126,8 @@ create_named_color_list <- function(df, columns) {
 
   # Iterate over each column
   for (col_name in columns) {
-    unique_vals <- unique(df[[col_name]])
+    df[[col_name]][is.na(df[[col_name]])] <- "NA"
+    unique_vals <- sort(unique(df[[col_name]]))
     n_vals <- length(unique_vals)
 
     # Assign colors based on the number of unique values, recycling matplotlib colors if needed
@@ -138,3 +139,46 @@ create_named_color_list <- function(df, columns) {
 
   return(color_list)
 }
+
+
+
+process_cut_by <- function(cut_by, cdesc) {
+  print("***")
+  print(cut_by)
+  # Return NULL immediately if cut_by is NULL
+  if (is.null(cut_by)) {
+    return(NULL)
+  }
+
+  # If cut_by is a single string containing ':', split it into a vector
+  if (is.character(cut_by) && length(cut_by) == 1 && grepl(":", cut_by)) {
+    cut_by <- strsplit(cut_by, ":")[[1]]
+  }
+
+  # Ensure cut_by is now a character vector
+  if (!is.character(cut_by)) {
+    # warning("cut_by should be a character string or vector.")
+    # return(NULL)
+    # this is fine
+    cut_by <- as.character(cut_by)
+  }
+
+  # Check if all elements in cut_by are valid column names
+  invalid_cols <- setdiff(cut_by, colnames(cdesc))
+  if (length(invalid_cols) > 0) {
+    warning(
+      "The following cut_by elements are not column names in cdesc: ",
+      paste(invalid_cols, collapse = ", ")
+    )
+    return(NULL)
+  }
+
+  # Subset the relevant columns and create the interaction factor
+  cut_by_factor <- interaction(cdesc[, cut_by, drop = FALSE], drop = TRUE)
+
+  print("***")
+  print(cut_by_factor)
+
+  return(cut_by_factor)
+}
+

@@ -27,8 +27,6 @@ make_partial <- plot_utils$make_partial
 get_args <- plot_utils$get_args
 get_arg <- plot_utils$get_arg
 
-util_tools <- new.env()
-source(file.path(src_dir, "./utils.R"), local = util_tools)
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 select <- dplyr::select # always
@@ -57,34 +55,60 @@ make_heatmap_fromgct <- function(
     cluster_rows = T,
     cluster_columns = F,
     color_mapper = NULL,
-    # sample_order = NULL,
+    sample_order = NULL,
     cut_by = NULL,
+    autoscale = TRUE,
+    meta_to_include = NULL, # if NULL uses all
+    meta_to_exclude = NULL, # if NULL filters nothing out
     # scale = T
     ...) {
   # gct <- subgct
   # gct@cdesc$treat <-
   #   factor(.gct@cdesc$treat , levels = c("untreated", "carboplatin", "IMT", "carboplatin_IMT"), ordered = T)
 
+  print(paste0("nrow of gct in inner func: ", nrow(gct@mat)))
+  print(paste0("sample order is ", sample_order))
+  print(paste0("sample order is null? ", is.null(sample_order)))
+
   if (!is.null(sample_order)) {
     gct <- cmapR::subset_gct(gct, cid = sample_order)
   }
 
+  default_meta_to_exclude <- c("recno", "runno", "searchno", "label", "expr_col", "expr_file", "assay")
+  # If user specifies additional meta_to_exclude, merge with defaults
+  if (!is.null(meta_to_exclude)) {
+    meta_to_exclude <- union(default_meta_to_exclude, meta_to_exclude)
+  } else {
+    meta_to_exclude <- default_meta_to_exclude
+  }
+
   # cat("make_heatmap\n")
   ca <- NULL
-  .colors <- plot_utils$create_named_color_list(gct@cdesc, c("group"))
-  if ("group" %in% colnames(gct@cdesc)) {
-    ca <- ComplexHeatmap::columnAnnotation(
-      group = gct@cdesc$group, # this needs to be dynamically set
-      col = .colors
-      # col = list(
-      #   group = c(
-      #     `168EC` = "blue",
-      #     `Ox_hTERT` = "red",
-      #     `No_Ox` = "yellow"
-      #   )
-      # )
-    )
+
+  cdesc_for_annot <- gct@cdesc %>% select(-any_of(meta_to_exclude))
+
+  # would be better to do this earlier
+  for (col in colnames(cdesc_for_annot)) {
+    .col <- cdesc_for_annot[[col]]
+    .col <- replace(.col, is.na(.col), "NA")
+    if (!is.factor(.col)) {
+      .col <- util_tools$infer_ordered_factor(.col)
+    }
+    cdesc_for_annot[[col]] <- .col
   }
+
+
+  .colors <- plot_utils$create_named_color_list(cdesc_for_annot, colnames(cdesc_for_annot))
+  #if ("group" %in% colnames(gct@cdesc)) {
+  ca <- ComplexHeatmap::columnAnnotation(
+    df = cdesc_for_annot,
+    col = .colors
+    )
+  #}
+
+ 
+
+
 
   .legend_width <- unit(6, "cm")
   .cbar_title <- "zscore"
@@ -110,15 +134,24 @@ make_heatmap_fromgct <- function(
   .mat <- gct@mat
   # gct@mat %>% apply( 1, function(x) scale(x, center = T, scale = scale)) %>% t() %>% as.matrix()),
 
-  heatmap_matrix_width <- unit(ncol(.mat) * .2, "in")
-  heatmap_matrix_height <- unit(nrow(.mat) * .2, "in")
-
-  if (cut_by %in% colnames(gct@cdesc)) {
-    cut_by <- gct@cdesc[[cut_by]]
-    cut_by <- factor(cut_by, levels = unique(cut_by))
-  } else {
-    cut_by <- NULL
+  if (autoscale == TRUE){
+      heatmap_matrix_width <- unit(ncol(.mat) * .2, "in")
+      heatmap_matrix_height <- unit(nrow(.mat) * .2, "in")
+    } else {
+      heatmap_matrix_width <- NULL
+      heatmap_matrix_height <- unit(nrow(.mat) * .2, "in")
   }
+
+  cut_by <- plot_utils$process_cut_by(cut_by, cdesc_for_annot)
+  print(paste0("cutby : ", cut_by))
+  # if (!is.null(cut_by) && cut_by %in% colnames(gct@cdesc)) {
+  #   cut_by <- gct@cdesc[[cut_by]]
+  #   cut_by <- factor(cut_by, levels = unique(cut_by))
+  # } else {
+  #   cut_by <- NULL
+  # }
+
+  print(paste0("nrow of mat: ", nrow(.mat)))
 
   ht <- ComplexHeatmap::Heatmap(
     .mat,
@@ -210,8 +243,8 @@ plot_heatmap_of_edges <- function(
                 to_include = to_include, # extra pathways to expilcitly include
                 pstat_cutoff = pstat_cutoff
               )
-              log_msg(debug = paste0("plotting heatmaps for ", collection_name, " ", comparison_name))
-              log_msg(debug = paste0("n forplot: ", forplot %>% nrow()))
+              log_msg(info = paste0("plotting heatmaps for ", collection_name, " ", comparison_name))
+              log_msg(info = paste0("n forplot: ", forplot %>% nrow()))
 
               # result %>%
               # forplot <- result %>%
@@ -219,12 +252,15 @@ plot_heatmap_of_edges <- function(
               #   head(10) %>%
               #   mutate(leadingedgelist = stringr::str_split(leadingEdge, ","))
               # for (i in seq_len(nrow(forplot))) {
-              ht <- seq_len(nrow(forplot)) %>% purrr::map(~{
+              hts <- seq_len(nrow(forplot)) %>% purrr::map(~{
                 row <- forplot[.x, ]
                 .id <- row$pathway
                 .row_title <- row$pval
                 # .leading_edge <- unlist(lapply(row$leadingedgelist, function(x) gsub('[c\\(\\)" ]', "", x)))
+                print(paste0("length of leading edge: ", length(row$leadingEdge[[1]])))
+                print(paste0("head of leading edge: ", head(row$leadingEdge[[1]])))
                 subgct <- .gct %>% cmapR::subset_gct(row$leadingEdge[[1]])
+                print(paste0("nrow of subgct: ", nrow(subgct@mat)))
 
                 # print(.id)
                 .row_title <- paste(
@@ -234,15 +270,16 @@ plot_heatmap_of_edges <- function(
                   sep = "\n")
                 log_msg(debug = paste0("plotting gene heatmap for ", .id, " ", comparison_name))
 
+                path <- get_arg(save_func, "path")
+                newpath <- file.path(path, paste0(make.names(collection_name)), make.names("heatmaps_gene"))
+                filename <- paste0(get_arg(save_func, "filename"), make.names(row$pathway), make.names(comparison_name), nrow(subgct@mat))
+                save_func <- make_partial(save_func, filename = filename, path = newpath)
+
 
                 ht <- NULL
                 ht <- tryCatch(
                   {
                     #
-                    path <- get_arg(save_func, "path")
-                    newpath <- file.path(path, paste0(make.names(collection_name)), make.names("heatmaps_gene"))
-                    filename <- paste0(get_arg(save_func, "filename"), make.names(row$pathway), make.names(comparison_name), nrow(subgct@mat))
-                    save_func <- make_partial(save_func, filename = filename, path = newpath)
                     # save_func <- make_partial(save_func, filename = filename)
                     ht <- make_heatmap_fromgct(subgct,
                       save_func = save_func,
@@ -456,11 +493,11 @@ barplot_with_numbers <- function(
     ncol <- 1
     nrow <- 1
   }
-  panel_width_in <- 3.8
+  panel_width_in <- 4.0
   panel_height_in <- 4
 
   # Calculate total figure size
-  total_width_in <- 2 + panel_width_in * ncol
+  total_width_in <- 2.2 + (panel_width_in * ncol)
   total_height_in <- panel_height_in * nrow + (length(unique(sel$pathway)) / 8)
   log_msg(msg = paste0("total width: ", total_width_in, " total height: ", total_height_in))
 
@@ -649,14 +686,37 @@ plot_results_one_collection <- function(
     cluster_columns = FALSE,
     sample_order = NULL,
     rankname_order = NULL,
-    meta_exclude = c("recno", "runno", "searchno", "label"),
-    meta_exclude_extra = NULL,
+    meta_to_exclude = c("recno", "runno", "searchno", "label"),
+    meta_to_include = NULL,
     row_annotation = NULL, # can be passed if made somewhere else
     save_func = NULL,
     ...) {
   log_msg(msg = paste0("calling plot results one collection"))
 
-  meta_exclude <- c(meta_exclude, meta_exclude_extra)
+  default_meta_to_exclude <- c(
+    "recno", "runno", "searchno", "label", "expr_col", "expr_file",
+    "assay", "rec_run_search",
+    "SampleName",
+    "SampleName_old",
+    "RawSampleID",
+    "SampleID",
+    "SampleLabel",
+    "SampleTube",
+    "RNA_GARP_SampleID",
+    "upper_quartile",
+    "median_upper_quartile",
+    "Unnamed",
+    "QC_recno"
+  )
+  # If user specifies additional meta_to_exclude, merge with defaults
+  if (!is.null(meta_to_exclude)) {
+    meta_to_exclude <- union(default_meta_to_exclude, meta_to_exclude)
+  } else {
+    meta_to_exclude <- default_meta_to_exclude
+  }
+
+
+
   log_msg(msg = paste0('rankname order is ', rankname_order))
 
   # Ensure necessary columns are present
@@ -697,10 +757,7 @@ plot_results_one_collection <- function(
   }
   metadata <- metadata[rankname_order, ] # order metadata by rankname_order
 
-
-  browser()
-  metadata %<>% dplyr::select(-any_of(meta_exclude)) # remove columns
-
+  metadata %<>% dplyr::select(-any_of(meta_to_exclude)) # remove columns
 
   # Handling cut_by parameter
   if (!is.null(cut_by)){
@@ -708,10 +765,30 @@ plot_results_one_collection <- function(
       cut_by <- metadata[, cut_by]
       cut_by <- factor(cut_by, levels = unique(cut_by))
     } else {
-      warning("cut_by not found in metadata")
+      warning("cut_by not found in metadata, setting to NULL")
       cut_by <- NULL
     }
   }
+
+  # calculate quantile before selection
+  # Set up color scale
+  q01 <- quantile(abs(df$NES), 0.99, na.rm = TRUE)
+  q01 <- max(q01, 2.8)
+  print(paste0("q01 is ", q01))
+  num_colors <- 9
+  my_colors <- colorRampPalette(c(
+    "#0000eebb",
+    # "#0000bbbb",
+    # "#8888ffbb",
+    # "#ddddff77",
+    "#ffffff",
+    # "#ffdddd77",
+    #"#ff8888bb"
+    # "#bb0000bb",
+    "#ee0000bb"
+  ))(num_colors)
+  break_points <- seq(-q01, q01, length.out = num_colors)
+  col <- colorRamp2(breaks = break_points, colors = my_colors)
 
   df <- fgsea_tools$select_topn(
     df,
@@ -732,7 +809,6 @@ plot_results_one_collection <- function(
     }
   }
 
-
   # Prepare data for heatmap
   dfp <- df %>%
     pivot_wider(id_cols = pathway, values_from = NES, names_from = rankname) %>%
@@ -751,8 +827,6 @@ plot_results_one_collection <- function(
 
   # dfp["pathway"] <- NULL # now remove this column to exclude from heatmap
 
-
-
   dfp_padj <- df %>%
     pivot_wider(id_cols = pathway, values_from = padj, names_from = rankname) %>%
     as.data.frame()
@@ -765,21 +839,6 @@ plot_results_one_collection <- function(
   star_matrix <- star_matrix[, metadata$id] # shouldn't be necessary as comes from dfp_padj
   star_matrix[is.na(star_matrix)] <- ""
 
-  # Set up color scale
-  q01 <- quantile(abs(df$NES), 0.99, na.rm = TRUE)
-  num_colors <- 5
-  my_colors <- colorRampPalette(c(
-    "#0000ff",
-    "#8888ffbb",
-    "#ddddff77",
-    "#dddddd",
-    "#ffdddd77",
-    "#ff8888bb",
-    "#ff0000"
-  ))(num_colors)
-  break_points <- seq(-q01, q01, length.out = num_colors)
-  col <- colorRamp2(breaks = break_points, colors = my_colors)
-
 
   # Prepare column annotation
   log_msg(msg = paste0("metadata: ", head(metadata)))
@@ -788,22 +847,24 @@ plot_results_one_collection <- function(
   # as they will be excluded upon creation of the column_annotation object
   metadata_for_colors <- metadata %>% dplyr::select(-any_of(c("id", "dummy")))
   if (ncol(metadata_for_colors) > 0) {
-    colors_list <- metadata_for_colors %>% colnames() %>%
-      map(~{
-        # Extract unique values for the current column
-        .unique_vals <- unique(metadata[[.x]])
+    # colors_list <- metadata_for_colors %>% colnames() %>%
+    #   map(~{
+    #     # Extract unique values for the current column
+    #     .unique_vals <- unique(metadata[[.x]])
 
-        # Generate a qualitative color palette
-        .colors <- colorspace::qualitative_hcl(n = length(.unique_vals))
+    #     # Generate a qualitative color palette
+    #     .colors <- colorspace::qualitative_hcl(n = length(.unique_vals))
 
-        # Assign unique values as names to the colors
-        names(.colors) <- .unique_vals
+    #     # Assign unique values as names to the colors
+    #     names(.colors) <- .unique_vals
 
-        # Return the named color vector
-        .colors
-      }) %>% set_names(colnames(metadata_for_colors))
+    #     # Return the named color vector
+    #     .colors
+    #   }) %>% set_names(colnames(metadata_for_colors))
+    colors_list <- plot_utils$create_named_color_list(metadata_for_colors,
+      colnames(metadata_for_colors))
 
-    log_msg(msg = paste0("color list ", as.character(colors_list)))
+    # log_msg(msg = paste0("color list ", as.character(colors_list)))
 
     column_annotation <- ComplexHeatmap::columnAnnotation(
         df = metadata %>% dplyr::select(-any_of(c("id", "dummy"))),
@@ -878,6 +939,7 @@ plot_results_one_collection <- function(
     dfp %>% as.matrix(),
     name = "mat",
     col = col,
+    na_col = "#444444",
     top_annotation = column_annotation,
     left_annotation = row_annotation,
     cluster_rows = cluster_rows,
@@ -912,7 +974,7 @@ plot_results_one_collection <- function(
   )
 
 
-  log_msg(msg = paste0("defining draw func"))
+  # log_msg(msg = paste0("defining draw func"))
   do_draw <- function() {
     ht <- draw(ht,
       heatmap_legend_side = "bottom",
@@ -940,8 +1002,10 @@ plot_results_one_collection <- function(
   log_msg(debug = paste0("save func: ", class(save_func) %>% as.character()))
   log_msg(debug = paste0("is null save func: ", is.null(save_func)))
 
-  height <- 4 + (nrow(dfp) * .20)
+  height <- 4 + (nrow(dfp) * .20) + (ncol(metadata_for_colors)/3)
   width <- 8 + (ncol(dfp) * .26)
+
+  height <-
 
   if (!is.null(save_func)) {
     log_msg(debug = paste0("save func attrs before: "))
