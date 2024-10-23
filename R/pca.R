@@ -105,8 +105,10 @@ do_one <- function(
   # set pathway as rowname, remove from columns
   rownames(wide_df) <- wide_df$pathway
   wide_df$pathway <- NULL
-  wide_df[is.na(wide_df)] <- min(wide_df, na.rm = TRUE)
+  wide_df[is.na(wide_df)] <- 0 #min(wide_df, na.rm = TRUE) # zero because its an NES of zero, not down
 
+  print(colnames(wide_df))
+  print(rownames(metadata))
   pca_res <- wide_df %>% PCAtools::pca(metadata = metadata[colnames(wide_df), ])
 
   return(pca_res)
