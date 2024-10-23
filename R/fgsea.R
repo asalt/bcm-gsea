@@ -19,9 +19,13 @@ source(file.path(src_dir, "./geneset_utils.R"), local = geneset_tools)
 db_tools <- new.env()
 source(file.path(src_dir, "./db.R"), local = db_tools)
 
+map_tools <- new.env()
+source(file.path(here("R"), "./map.R"), local = map_tools)
+
 util_tools <- new.env()
 source(file.path(src_dir, "utils.R"), local = util_tools)
 log_msg <- util_tools$make_partial(util_tools$log_msg)
+
 
 
 filter_on_mainpathway <- function(
@@ -227,6 +231,7 @@ run_one <- function(
   } else {
     fgseaRes$mainpathway <- TRUE
   }
+
   return(fgseaRes)
 }
 
@@ -240,6 +245,7 @@ run_all_rankobjs <- function(
     cache = TRUE,
     cache_dir = NULL,
     logger = NULL,
+    species = "Homo sapiens",
     ...) {
   if (is.null(logger)) logger <- log_msg
   logger(msg = paste0("starting run_all_rankobjs"))
@@ -278,6 +284,20 @@ run_all_rankobjs <- function(
   }
 
   results <- rankobjs %>% .map_func(~ do.call(run_one, c(list(rankobj = .), fgsea_args)))
+  # print(paste0('length rankobjs : ', length(rankobjs)))
+  # print(paste0('length results : ', length(results)))
+
+  species <- species %||% "Homo sapiens"
+  if (length(results) > 0){ # only trigger for new results
+    tryCatch(
+      {results <- results %>% map_tools$add_leadingedges_to_results_list(., species=species)},
+      error = function(e){
+        print(paste0('error mapping names to genes, ', e))
+      }
+    )
+  }
+
+
   # results <- rankobjs %>% .map_func(
   #   ~ run_one(.,
   #     fgsea_args
@@ -317,6 +337,7 @@ run_all_pathways <- function(
     cache = TRUE,
     cache_dir = NULL,
     logger = NULL,
+    species = "Homo sapiens",
     ...) {
   if (any(is.null(names(geneset_lists)))) {
     stop(
@@ -387,7 +408,9 @@ run_all_pathways <- function(
         collapse = current_collapse,
         cache = cache,
         cache_dir = cache_dir,
-        logger = logger
+        logger = logger,
+        species = species,
+        ...
       )
       return(results)
     }
