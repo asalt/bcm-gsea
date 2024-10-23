@@ -1,19 +1,19 @@
 # map.R
 # Load libraries
-library(dplyr)
-library(tidyr)
-library(stringr)
-library(purrr)
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(purrr))
 # library(writexl)
 # library(org.Hs.eg.db) # For human gene annotations
 
-required_bioc <- c("org.Hs.eg.db", "org.Mm.eg.db", "org.Rn.eg.db") # Add more as needed
-installed_bioc <- rownames(installed.packages())
-for (pkg in required_bioc) {
-  if (!pkg %in% installed_bioc) {
-    BiocManager::install(pkg)
-  }
-}
+# required_bioc <- c("org.Hs.eg.db", "org.Mm.eg.db", "org.Rn.eg.db") # Add more as needed
+# installed_bioc <- rownames(installed.packages())
+# for (pkg in required_bioc) {
+#   if (!pkg %in% installed_bioc) {
+#     BiocManager::install(pkg)
+#   }
+# }
 
 
 # in the future we will need to support others as well
@@ -38,7 +38,7 @@ map_entrez_to_symbol <- function(entrez_list, species = "Homo sapiens") {
   if (!requireNamespace(db_package, quietly = TRUE)) {
     stop("Annotation package ", db_package, " not found. Please install it.")
   }
-  library(db_package, character.only = TRUE)
+  suppressPackageStartupMessages(library(db_package, character.only = TRUE))
 
   # Map Entrez IDs to Gene Symbols
   gene_symbols <- mapIds(
@@ -51,6 +51,8 @@ map_entrez_to_symbol <- function(entrez_list, species = "Homo sapiens") {
 
   # Create a named vector for mapping
   mapping <- setNames(gene_symbols, entrez_list)
+  # unloadNamespace("org.Hs.eg.db")
+  # unloadNamespace("AnnotationDbi")
   return(mapping)
 }
 
@@ -82,6 +84,7 @@ extract_entrezids <- function(fgsea_res){
     unique_entrez <- fgsea_res %>%
       ungroup() %>%
       pull(leadingEdge) %>%
+      #as.character() %>%
       unlist() %>%
       unique()
     # do somethng else
@@ -89,6 +92,7 @@ extract_entrezids <- function(fgsea_res){
     1+1
     stop("??")
   }
+  # print(head(unique_entrez))
   return(unique_entrez)
 }
 
@@ -127,15 +131,15 @@ format_entrezids <- function(fgsea_res, mapping){
 
 add_leadingedges_to_results_list <- function(fgsea_res_list, species = "Homo sapiens"){
 
+  print(paste0("mapping geneids to symbols for ", species))
+
   if (!"list" %in% class(fgsea_res_list)){
     stop("fgsea_res_list should be a list")
   }
 
   entrez_ids <- fgsea_res_list %>%
     purrr::map(~extract_entrezids(.x)) %>%
-    unlist()
-    print(entrez_ids)
-
+    purrr::flatten_chr()
   entrez_ids <- unique(entrez_ids)
 
   gene_symbol_mapping <- map_entrez_to_symbol(entrez_ids, species = species)
