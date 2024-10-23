@@ -22,8 +22,7 @@ get_parser <- function() {
   return(parser)
 }
 
-clean_args <- function(params){
-
+clean_args <- function(params) {
   if (is.null(params$savedir)) {
     params$savedir <- file.path("./plots")
   }
@@ -40,9 +39,9 @@ clean_args <- function(params){
   }
 
 
-  #print(params$enplot$combine_by)
+  # print(params$enplot$combine_by)
   params$enplot$combine_by <- params$enplot$combine_by %||% NULL
-  #print(params$enplot$combine_by)
+  # print(params$enplot$combine_by)
 
 
   cachedir <- params$advanced$cachedir
@@ -52,7 +51,7 @@ clean_args <- function(params){
     } else {
       cachedir <- params$advanced$cachedir
     }
-  } else{
+  } else {
     cachedir <- NULL
   }
   params$advanced$cachedir <- cachedir
@@ -66,7 +65,7 @@ clean_args <- function(params){
   }
   params$rankfiledir <- rankfiledir
 
-  params$advanced$pivot_gsea_results = params$advanced$pivot_gsea_results %||% FALSE
+  params$advanced$pivot_gsea_results <- params$advanced$pivot_gsea_results %||% FALSE
   #
   if (!is.null(params$extra$rankname_order)) {
     if (length(params$extra$rankname_order) == 1 && params$extra$rankname_order == "sample_order") {
@@ -95,11 +94,12 @@ clean_args <- function(params){
   logfile <- params$advanced$logfile %||% "run.log" %>% ifelse(. == "savedir", params$savedir, .)
   loglevel <- params$advanced$loglevel
   options("bcm_gsea_log_msg_filename" = logfile)
-  options("bcm_gsea_loglevel" =  loglevel)
+  options("bcm_gsea_loglevel" = loglevel)
   params$advanced$logfile <- logfile
 
-  return(params)
+  print(str(params))
 
+  return(params)
 }
 
 

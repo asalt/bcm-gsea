@@ -141,9 +141,10 @@ run <- function(params) {
       ranks_list,
       parallel = parallel,
       genesets_additional_info = genesets_of_interest,
-      cache = TRUE,
+      cache = params$advanced$cache %||% TRUE,
       cache_dir = cachedir,
-      logger = log_msg
+      logger = log_msg,
+      species = species
     )
 
     log_msg(msg = "names gsea results list: ")
@@ -164,7 +165,8 @@ run <- function(params) {
     ._ <- results_list %>%
       io_tools$save_individual_gsea_results(
        savedir = file.path(savedir, "gsea_tables"),
-       replace = params$advanced$replace
+       replace = params$advanced$replace,
+       species = species
       )
 
     # maybe save pivoted file. gets extremely big extremely quickly
@@ -204,7 +206,7 @@ run <- function(params) {
 
       pca_objects %>% pca_tools$plot_all_biplots(
         save_func = save_func,
-        top_pc = params$pca$top_pc %||% 4,
+        top_pc = params$pca$top_pc %||% params$pca$max_pc %||% 3,
         showLoadings = T,
         labSize = params$pca$labSize %||% 1.8,
         pointSize = params$pca$pointSize %||% 4,
@@ -283,6 +285,8 @@ run <- function(params) {
         limit = params$heatmap_gene$limit %||% 10,
         sample_order = params$extra$sample_order,
         cut_by = params$heatmap_gene$cut_by %||% params$cut_by %||% NULL,
+        cluster_rows = params$heatmap_gene$cluster_rows %||% TRUE,
+        cluster_columns = params$heatmap_gene$cluster_columns %||% FALSE,
         pstat_cutoff = params$heatmap_gene$pstat_cutoff %||% 1
       )
     }
@@ -310,10 +314,11 @@ run <- function(params) {
       }
     }
 
-    print(all_gsea_results)
-    print(ranks_list)
-    print(genesets_list_of_lists)
-    print(save_func)
+    # print(all_gsea_results)
+    # print(ranks_list)
+    # print(genesets_list_of_lists)
+    # print(save_func)
+
     ._ <- plot_tools$plot_top_ES_across(all_gsea_results,
       ranks_list = ranks_list,
       genesets_list_of_lists,
