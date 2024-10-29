@@ -20,8 +20,34 @@ Python Integration: Python manages the database, hosts APIs, and stores results.
 Testing: Comprehensive testing using pytest for Python and testthat for R.
 Visualization: Utilizes ggplot2 for high-quality plots.
 
-Entire analysis driven by run.Rmd
-` Rscript -e "rmarkdown::render('run.Rmd')"   `
+Script main entry points are driven by python command line parsing and variable dispatch.
+
+```
+## bcm-gsea example help
+
+~/t/bcm-gsea> bcm-gsea run --help
+Usage: bcm-gsea run [OPTIONS]
+
+Options:
+  -c, --config FILE               .toml file with additional parameters for
+                                  report
+  -i, --interactive               run in interactive session within python
+                                  rpy2
+  -v, --verbose                   verbose output
+  -l, --log_level [DEBUG|INFO|WARNING|ERROR|CRITICAL]
+                                  log level
+  --help                          Show this message and exit.
+
+```
+
+
+command line interface is here:
+
+```
+./python/cli.py
+
+```
+
 
 `R`:
   - data loading
