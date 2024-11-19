@@ -1,33 +1,39 @@
 [params]
+savedir = "" # this is the base directory all results will be saved within.
 volcanodir = '' # use single quote for specifying paths
-rankfiledir = ''
+rankfiledir = ''  # OK to leave blank
 gct_path = ""
-cut_by = "none"
 ranks_from = ""  # choices are volcano and gct
 species = "Homo sapiens"
-savedir = ""
-logfile = ""
-edgeplot_limit = 10
-do_es = true
 zscore_emat = true
-zscore_emat_groupby = false # 
-do_individual_barplots = true
-do_combined_barplots = true
-do_heatmaps = true
-do_pca = true
+zscore_emat_groupby = false #
 cut_by = "group"
 
+[params.barplot]
+limit = "auto"
+do_individual = true
+do_combined = true
+
 [params.enplot]
+do = true
 limit = 10
 do_individual = true
 do_combined = true
-combine_by = none
+combine_by = false
 
 [params.heatmap_gsea]
+do = true
 limit = 10
 
 [params.heatmap_gene]
+do = true
 limit = 10
+
+[params.pca]
+width = 7.8
+height = 7.4
+col_by = ""
+mark_by = ""
 
 [params.extra]
 rankname_order = []
@@ -68,7 +74,10 @@ category = "C5"
 subcategory = "All"
 collapse = true
 
-[[params.advanced]]
+[params.advanced]
 parallel = true
 cache = true
-cachedir = "."
+replace = true
+cachedir = "savedir"
+logfile = "savedir"
+loglevel = "INFO"
