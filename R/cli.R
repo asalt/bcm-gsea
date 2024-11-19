@@ -26,6 +26,7 @@ clean_args <- function(params) {
   if (is.null(params$savedir)) {
     params$savedir <- file.path("./plots")
   }
+  params$savedir <- params$savedir %||% file.path("./plots")
 
   params$barplot$do_individual <- params$barplot$do_individual %||% TRUE
   params$barplot$do_combined <- params$barplot$do_combined %||% TRUE
@@ -38,21 +39,15 @@ clean_args <- function(params) {
     stop(paste0(params$gct_path, " does not exist, exiting.."))
   }
 
-
   # print(params$enplot$combine_by)
   params$enplot$combine_by <- params$enplot$combine_by %||% NULL
   # print(params$enplot$combine_by)
 
-
-  cachedir <- params$advanced$cachedir
+  cachedir <- params$advanced$cachedir %||% file.path(params$savedir, "cache")
   if (!is.null(cachedir)) {
     if (cachedir == "savedir") {
       cachedir <- file.path(params$savedir, "cache")
-    } else {
-      cachedir <- params$advanced$cachedir
-    }
-  } else {
-    cachedir <- NULL
+    } 
   }
   params$advanced$cachedir <- cachedir
 
@@ -91,7 +86,8 @@ clean_args <- function(params) {
 
   params$advanced$parallel <- params$advanced$parallel %||% FALSE
 
-  logfile <- params$advanced$logfile %||% "run.log" %>% ifelse(. == "savedir", params$savedir, .)
+  logfile <- params$advanced$logfile %||% file.path(params$savedir, "run.log")
+  # browser()
   loglevel <- params$advanced$loglevel
   options("bcm_gsea_log_msg_filename" = logfile)
   options("bcm_gsea_loglevel" = loglevel)
