@@ -79,7 +79,8 @@ create_rnkfiles_from_emat <- function(
   # Loop through each column of the matrix
   for (i in seq_len(ncol(gct@mat))) {
     # Create a new matrix for each column with row names and the column of interest
-    new_mat <- cbind(id = rownames(gct@mat), value = gct@mat[, i])
+    # new_mat <- cbind(id = rownames(gct@mat), value = gct@mat[, i])
+    new_mat <- data.frame(id = rownames(gct@mat), value = gct@mat[, i])
 
     # Convert the matrix to data frame for more intuitive row and column handling (optional)
     new_df <- as.data.frame(new_mat)
@@ -378,7 +379,9 @@ load_and_process_ranks <- function(params) {
   gct_path <- params$gct_path
   ranks_from <- params$ranks_from
   zscore_emat <- params$zscore_emat %||% TRUE
-  zscore_emat_groupby <- params$zscore_emat_groupby %||% FALSE
+  zscore_emat_groupby <- (params$zscore_emat_groupby %||% FALSE) %>%
+    if_else(!is.na(.) && is.character(.), ., FALSE)
+
 
   log_msg(msg = paste0("ranks from : ", ranks_from))
   log_msg(msg = paste0("rankfiledir : ", rankfiledir))
@@ -420,7 +423,7 @@ load_and_process_ranks <- function(params) {
 
       return(ranks_list)
     } # exit and we're done
-    log_msg(msg = "couldn't find any rnkfiles")
+    log_msg(msg = "couldn't find any previously saved rnkfiles")
   }
   # ==
   if (ranks_from == "volcano") {
