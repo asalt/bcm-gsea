@@ -24,7 +24,7 @@ map_entrez_to_symbol <- function(entrez_list, species = "Homo sapiens") {
   species_db <- list(
     "Homo sapiens" = "org.Hs.eg.db",
     "Mus musculus" = "org.Mm.eg.db",
-    "Rattus novaris"   = "org.Rn.eg.db" # check name for this one
+    "Rattus norvegicus" = "org.Rn.eg.db"
     # Add more species and their corresponding annotation packages here
   )
 
