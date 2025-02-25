@@ -314,6 +314,7 @@ get_top_loadings <- function(pcaobj,
                              rangeRetain = 0.05,
                              limit = Inf
                              ) { # directly lifted from https://github.com/kevinblighe/PCAtools/blob/50f240ba76fe07e2a546998e76dc8aa1c3570693/R/plotloadings.R#L7 and edited
+  components <- intersect(components, pcaobj$components)
   x <- pcaobj$loadings[, components, drop = FALSE]
   membership <- list()
   retain <- c()
@@ -377,7 +378,7 @@ make_heatmap_from_loadings <- function(
     ...){
 
 
-
+  components <- intersect(components, pca_object$components) # there may be less than 4 components
   top_loadings <- get_top_loadings(pca_object, components = components, rangeRetain = 0.05, limit = Inf)
   submat <- gsea_object %>% name_cleaner() %>% filter(pathway %in% rownames(top_loadings))
 
