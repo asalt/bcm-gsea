@@ -1,7 +1,199 @@
+suppressPackageStartupMessages(library(here))
 suppressPackageStartupMessages(library(fs))
 suppressPackageStartupMessages(library(cmapR))
 suppressPackageStartupMessages(library(magrittr))
-suppressPackageStartupMessages(library(dplyr))
+# suppressPackageStartupMessages(library(dplyr))
+
+source(file.path(here("R"), "lazyloader.R"))
+# listen_tools <- get_tool_env("listen.R")
+# util_tools <- get_tool_env("utils")
+
+
+
+#
+# Helper function to prepend root_dir only to valid paths
+prepend_root_dir <- function(params, root_dir) {
+  # Function to prepend root_dir if the constructed path exists
+  modify_path <- function(x) {
+    if (is.character(x)) { # Check if it's a character string
+      potential_path <- file.path(root_dir, x)
+      if (file.exists(potential_path)) { # Check if the constructed path exists
+        return(potential_path) # Use the constructed path
+      }
+    }
+    return(x) # Return the value as is if it's not a valid path
+  }
+
+  # Apply the modify_path function to all elements in params
+  params <- lapply(params, function(param) {
+    if (is.list(param)) {
+      return(lapply(param, modify_path)) # Recursively apply for nested lists
+    } else {
+      return(modify_path(param)) # Apply to non-list items
+    }
+  })
+
+  return(params)
+}
+
+
+is_absolute_path <- function(path) {
+  grepl(paste0("^", normalizePath(root_dir)), normalizePath(path))
+}
+
+clean_args <- function(params, root_dir = "/") {
+  # would be best for root_dir to be explicitly specified, which it is elsewhere
+
+  # this doesn't work-
+  # params <- prepend_root_dir(params, root_dir)
+
+  if (is.null(params$savedir)) {
+    params$savedir <- file.path("./plots")
+  }
+  params$savedir <- file.path(root_dir, (params$savedir %||% file.path("./plots")))
+
+  # all top level params
+  params$advanced <- params$advanced %||% list()
+  params$barplot <- params$barplot %||% list()
+  params$heatmap_gsea <- params$heatmap_gsea %||% list()
+  params$heatmap_gene <- params$heatmap_gene %||% list()
+  params$enplot <- params$enplot %||% list()
+
+  params$barplot$do_individual <- params$barplot$do_individual %||% TRUE
+  params$barplot$do_combined <- params$barplot$do_combined %||% TRUE
+
+  params$heatmap_gsea$do <- params$heatmap_gsea$do %||% TRUE
+  params$heatmap_gene$do <- params$heatmap_gene$do %||% TRUE
+  params$pca$do <- params$pca$do %||% TRUE
+
+
+  if (!is.null(params$volcanodir)) {
+    params$volcanodir <- file.path(root_dir, params$volcanodir)
+  }
+
+  if (!is.null(params$gct_path)) {
+    params$gct_path <- file.path(root_dir, params$gct_path)
+  }
+
+  if (!is.null(params$gct_path) && !file.exists(params$gct_path)) {
+    stop(paste0(params$gct_path, " does not exist, exiting.."))
+  }
+
+  params$advanced$cache <- params$advanced$cache %||% TRUE
+
+  # print(params$enplot$combine_by)
+  params$enplot$combine_by <- params$enplot$combine_by %||% NULL
+  # print(params$enplot$combine_by)
+
+  cachedir <- params$advanced$cachedir %||% file.path(params$savedir, "cache")
+  if (!is.null(cachedir)) {
+    if (cachedir == "savedir") {
+      cachedir <- file.path(params$savedir, "cache")
+    }
+  }
+  params$advanced$cachedir <- cachedir
+
+
+  if (!is.null(params$rankfiledir)) {
+    if (params$rankfiledir == "savedir") {
+      params$rankfiledir <- file.path(params$savedir, "ranks")
+    } else {
+      params$rankfiledir <- file.path(root_dir, params$rankfiledir)
+    }
+  }
+
+  params$advanced$pivot_gsea_results <- params$advanced$pivot_gsea_results %||% FALSE
+  #
+  if (!is.null(params$extra$rankname_order)) {
+    if (length(params$extra$rankname_order) == 1 && params$extra$rankname_order == "sample_order") {
+      params$extra$rankname_order <- params$extra$sample_order
+    }
+  } else {
+    params$extra$rankname_order <- params$extra$sample_order
+  }
+
+  if (!is.null(params$extra$sample_order)) {
+    if (length(params$extra$sample_order) == 1 && params$extra$sample_order == "rankname_order") {
+      params$extra$sample_order <- params$extra$rankname_order
+    }
+  } else {
+    params$extra$sample_order <- params$extra$rankname_order
+  }
+
+  params$species <- params$species %||% "Homo sapiens"
+
+  params$genesets <- params$genesets %||% list(list(category = "H", subcategory = "", collapse = FALSE))
+
+  params$advanced$quiet <- params$advanced$quiet %||% FALSE
+
+  params$advanced$parallel <- params$advanced$parallel %||% FALSE
+
+  logfile <- params$advanced$logfile %||% file.path(params$savedir, "run.log")
+  # browser()
+  loglevel <- params$advanced$loglevel
+  options("bcm_gsea_log_msg_filename" = logfile)
+  options("bcm_gsea_loglevel" = loglevel)
+  params$advanced$logfile <- logfile
+
+  print(str(params))
+
+  return(params)
+}
+
+
+
+infer_ordered_factor <- function(column) { # this probably doesn't do what you want it to do
+  # Function to infer ordering for a given column vector
+
+  # Extract numeric values from strings
+  numeric_values <- as.numeric(gsub("[^0-9.-]+", "", column))
+
+  # Find the minimum numeric value
+  min_num <- min(numeric_values, na.rm = TRUE)
+  if (is.infinite(min_num)) {
+    min_num <- 0 # Default to 0 if no numeric values are found
+  }
+
+  # Initialize order values with numeric values
+  order_values <- numeric_values
+
+  # Indices of non-numeric values
+  non_numeric_indices <- which(is.na(order_values))
+
+  if (length(non_numeric_indices) > 0) {
+    non_numeric_values <- tolower(column[non_numeric_indices])
+
+    # Assign special order value for "veh" or "vehicle"
+    is_vehicle <- grepl("^veh$|^vehicle|^ctrl$", non_numeric_values, ignore.case = TRUE)
+    order_values[non_numeric_indices[is_vehicle]] <- min_num - 2 # Highest priority
+
+    # Assign next priority to other non-numeric values
+    order_values[non_numeric_indices[!is_vehicle]] <- min_num - 1
+  }
+
+  # Create a data frame for sorting
+  df <- data.frame(
+    original_value = column,
+    order_value = order_values,
+    stringsAsFactors = FALSE
+  )
+
+  # Remove duplicates while preserving order
+  df_unique <- df[!duplicated(df$original_value), ]
+
+  # Sort the data frame by order_value
+  df_ordered <- df_unique[order(df_unique$order_value), ]
+
+  # Create an ordered factor with levels in the sorted order
+  ordered_factor <- factor(
+    column,
+    levels = df_ordered$original_value,
+    ordered = TRUE
+  )
+  # browser()
+
+  return(ordered_factor)
+}
 
 
 myzscore <- function(value, minval = NA, remask = TRUE) {
@@ -37,19 +229,25 @@ dist_no_na <- function(mat) {
 }
 
 scale_gct <- function(gct, group_by = NULL) {
-  log_msg(msg="zscoring gct file by row")
-  log_msg(msg=paste0("group_by is set to: ", group_by))
-  if (!is.null(group_by) && group_by == FALSE) group_by <- NULL
+  log_msg(msg = "zscoring gct file by row")
+  log_msg(msg = paste0("group_by is set to: ", group_by))
+  if (!is.null(group_by) && length(group_by) == 1 && group_by == FALSE) group_by <- NULL
+  group_cols <- group_by # this is a hack to get around the fact that group_by is a dplyr function
   res <- gct %>%
-    melt_gct() %>%
-    {
-      # Conditionally add group_by
-      if (!is.null(group_by) && group_by != FALSE) {
-        group_by(., id.x, !!sym(group_by))
-      } else {
-        group_by(., id.x)
-      }
-    } %>%
+    melt_gct() # %>%
+  # Conditionally add group_by
+  if (!is.null(group_cols)) {
+    if (length(group_cols) == 1) {
+      res <- group_by(res, id.x, !!sym(group_cols))
+    }
+    if (length(group_cols) > 1) {
+      res <- group_by(res, id.x, across(all_of(group_cols)))
+    }
+  } else {
+    res <- group_by(res, id.x)
+  }
+
+  res <- res %>%
     dplyr::mutate(zscore = myzscore(value)) %>%
     dplyr::ungroup()
 
@@ -168,22 +366,20 @@ make_partial <- function(.f, ...) {
 #  'NOTSET': 0}
 
 .log_levels <- list(
-                    "CRITICAL" = 50,
-                    "ERROR" = 40,
-                    "WARN" = 30,
-                    "WARNING" = 30,
-                    "INFO" = 20,
-                    "DEBUG" = 10,
-                    "NOTSET" = 0
-                    )
+  "CRITICAL" = 50,
+  "ERROR" = 40,
+  "WARN" = 30,
+  "WARNING" = 30,
+  "INFO" = 20,
+  "DEBUG" = 10,
+  "NOTSET" = 0
+)
 
 
 
 globalloglevel <- options("bcm_gsea_loglevel")[[1]] %||% "INFO"
 
-log_msg <- function(msg = NULL, info = NULL, debug = NULL, warning = NULL, warn = NULL, error = NULL, filename = NULL, end = "\n", shell = T, loglevel = loglevel) {
-
-
+log_msg <- function(msg = NULL, info = NULL, debug = NULL, warning = NULL, warn = NULL, error = NULL, filename = NULL, end = "\n", shell = T, loglevel = loglevel, send_over_socket = TRUE, socket_port = 8765, ...) {
   level <- case_when(
     !is.null(msg) ~ "INFO",
     !is.null(info) ~ "INFO",
@@ -195,7 +391,9 @@ log_msg <- function(msg = NULL, info = NULL, debug = NULL, warning = NULL, warn 
   )
 
   is_lvl_too_low <- .log_levels[[level]] < .log_levels[[globalloglevel]]
-  if (is_lvl_too_low == TRUE) return()
+  if (is_lvl_too_low == TRUE) {
+    return()
+  }
 
   msg <- Filter(Negate(is.null), list(msg, info, warning, warn, debug, error))[[1]]
 
@@ -217,4 +415,49 @@ log_msg <- function(msg = NULL, info = NULL, debug = NULL, warning = NULL, warn 
   if (shell) {
     cat(paste0(prefix, msg, end))
   }
+
+  # if (send_to_websocket){
+  #   listen_tools$send_to_websocket(msg, port=socket_port)
+  # }
+}
+
+
+process_cut_by <- function(cut_by, cdesc) {
+  print("***")
+  print(cut_by)
+  # Return NULL immediately if cut_by is NULL
+  if (is.null(cut_by)) {
+    return(NULL)
+  }
+
+  # If cut_by is a single string containing ':', split it into a vector
+  if (is.character(cut_by) && length(cut_by) == 1 && grepl(":", cut_by)) {
+    cut_by <- strsplit(cut_by, ":")[[1]]
+  }
+
+  # Ensure cut_by is now a character vector
+  if (!is.character(cut_by)) {
+    # warning("cut_by should be a character string or vector.")
+    # return(NULL)
+    # this is fine
+    cut_by <- as.character(cut_by)
+  }
+
+  # Check if all elements in cut_by are valid column names
+  invalid_cols <- setdiff(cut_by, colnames(cdesc))
+  if (length(invalid_cols) > 0) {
+    warning(
+      "The following cut_by elements are not column names in cdesc: ",
+      paste(invalid_cols, collapse = ", ")
+    )
+    return(NULL)
+  }
+
+  # Subset the relevant columns and create the interaction factor
+  cut_by_factor <- interaction(cdesc[, cut_by, drop = FALSE], drop = TRUE)
+
+  print("***")
+  print(cut_by_factor)
+
+  return(cut_by_factor)
 }
