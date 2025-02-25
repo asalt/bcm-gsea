@@ -7,7 +7,6 @@ suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(cmapR))
 suppressPackageStartupMessages(library(here))
 # suppressPackageStartupMessages(library(janitor))
-
 # src_dir <- file.path(here("R"))
 # source(file.path(src_dir, "utils.R"))
 
@@ -107,7 +106,7 @@ create_rnkfiles_from_volcano <- function(
     stop("volcanodir does not exist")
   }
 
-  (volcanofiles <- fs::dir_ls(path = volcanodir, regexp = ".*tsv"))
+  (volcanofiles <- fs::dir_ls(path = volcanodir, regexp = ".*tsv", recurse = TRUE))
   log_msg(msg = paste0("Found ", length(volcanofiles), " tsv files"))
   log_msg(msg = paste(volcanofiles, collapse = "\n"))
 
@@ -244,6 +243,8 @@ load_genesets_from_json <- function(json_str) {
 
 
 write_results <- function(result, outf, replace = FALSE) {
+
+  if (is.null(replace)) replace <- FALSE
   if (!is.data.frame(result)) {
     log_msg(msg = "Invalid result, cannot write to file.")
     log_msg(msg = as.character(result))
@@ -272,6 +273,8 @@ save_individual_gsea_results <- function(
   savedir = "gsea_tables",
   replace = FALSE,
   species = "Homo sapiens") {
+
+if (is.null(replace)) replace <- FALSE
 
 log_msg(msg = "writing results")
 log_msg(msg = paste0("names results list :", names(results_list)))
@@ -313,6 +316,8 @@ log_msg(msg = paste0("length results list :", length(results_list)))
 }
 
 save_pivoted_gsea_results <- function(results_list, savedir = "gsea_tables", replace = FALSE) {
+
+  if (is.null(replace)) replace <- FALSE
   # here results list is concatenated list. one level per collection
   # names are the collection names
   # values are the fgsea concatenated tables/comparisons for given collection
@@ -379,9 +384,11 @@ load_and_process_ranks <- function(params) {
   gct_path <- params$gct_path
   ranks_from <- params$ranks_from
   zscore_emat <- params$zscore_emat %||% TRUE
-  zscore_emat_groupby <- (params$zscore_emat_groupby %||% FALSE) %>%
-    if_else(!is.na(.) && is.character(.), ., FALSE)
-
+  zscore_emat_groupby <- ifelse(
+    (!is.null(params$zscore_emat_groupby) && !is.na(params$zscore_emat_groupby ) && is.character(params$zscore_emat_groupby)),
+    params$zscore_emat_groupby,
+    FALSE
+  )
 
   log_msg(msg = paste0("ranks from : ", ranks_from))
   log_msg(msg = paste0("rankfiledir : ", rankfiledir))
@@ -428,7 +435,7 @@ load_and_process_ranks <- function(params) {
   # ==
   if (ranks_from == "volcano") {
     if (is.null(volcanodir) || !file.exists(volcanodir)) {
-      stop("improper volcanodir specification")
+      stop(paste0("improper volcanodir specification: ", volcanodir))
     }
     log_msg(msg = "saving rankfiles from volcano output. using signedlogp as value")
     rnkdfs <- create_rnkfiles_from_volcano(volcanodir, value_col = "signedlogP")
