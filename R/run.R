@@ -115,6 +115,7 @@ run <- function(params) {
   if (parallel) {
     workers <- future::availableCores() - 1
     future::plan(future::multicore, workers = workers)
+    # walk_func <- future::future_map
   }
   cache <- params$advanced$cache %||% TRUE
   log_msg(msg = paste0("parallel set to: ", parallel))
@@ -142,6 +143,7 @@ run <- function(params) {
   genesets_for_iteration <- names(genesets_list_of_lists)
   # we then iterate over the genesets one by one
   # so all results for one get generated before moving to the next
+
 
   genesets_for_iteration %>% purrr::walk(
     ~ {
@@ -302,6 +304,8 @@ run <- function(params) {
       # ===== plot edgse and es
       # this part is messy
       # first is metadata organization to determine if and how to aggregate curves
+      # this is nto used right now for heatmap_gene
+      # it is used for plot_top_ES_across
       combine_by <- params$enplot$combine_by %||% params$combine_by %||% NULL
       combine_by_df <- NULL
       if (!is.null(combine_by) && !is.null(metadata)) {
@@ -328,6 +332,8 @@ run <- function(params) {
         ht_edge_plots <- plot_tools$plot_heatmap_of_edges(
           gct,
           results_list,
+          scale = params$zscore_emat %||% params$heatmap_gene$scale %||% TRUE,
+          scale_by = params$zscore_emat_groupby %||% params$heatmap_gene$scale_by %||% NULL,
           limit = params$heatmap_gene$limit %||% 10,
           sample_order = params$extra$sample_order,
           cut_by = params$heatmap_gene$cut_by %||% params$cut_by %||% NA,
@@ -336,8 +342,11 @@ run <- function(params) {
           pstat_cutoff = params$heatmap_gene$pstat_cutoff %||% 1,
           save_func = save_func,
           replace = params$advanced$replace %||% TRUE,
-          combine_by = combine_by_df, # this is metadata table rankname and facet if exists
-          combine_by_name = combine_by,
+          #combine_by = combine_by_df, # this is metadata table rankname and facet if exists
+          #combine_by_name = combine_by,
+          meta_to_include = params$heatmap_gene$legend_include %||% NULL,
+          meta_to_exclude = params$heatmap_gene$legend_exclude %||% NULL
+
         )
       }
 
@@ -357,7 +366,8 @@ run <- function(params) {
         combine_by_name = combine_by,
         width = params$enplot$width %||% 5.4,
         height = params$enplot$height %||% 4.0,
-        combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE
+        combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE,
+        combined_label_size = params$enplot$combined_label_size %||% 2.05
       )
     }
   ) # end of purrr::map loop for individual genesets

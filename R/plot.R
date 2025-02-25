@@ -61,6 +61,7 @@ make_heatmap_fromgct <- function(
     autoscale = TRUE,
     meta_to_include = NULL, # if NULL uses all
     meta_to_exclude = NULL, # if NULL filters nothing out
+    colorbar_title = "zscore",
     # scale = T
     ...) {
   # gct <- subgct
@@ -75,7 +76,7 @@ make_heatmap_fromgct <- function(
     gct <- cmapR::subset_gct(gct, cid = sample_order)
   }
 
-  default_meta_to_exclude <- c("recno", "runno", "searchno", "label", "expr_col", "expr_file", "assay", "tube", "Tube", "TubeLabel")
+  default_meta_to_exclude <- c("recno", "runno", "searchno", "label", "expr_col", "expr_file", "assay", "tube", "Tube", "TubeLabel", "id")
   # If user specifies additional meta_to_exclude, merge with defaults
   if (!is.null(meta_to_exclude)) {
     meta_to_exclude <- union(default_meta_to_exclude, meta_to_exclude)
@@ -108,10 +109,20 @@ make_heatmap_fromgct <- function(
   # }
 
 
+
+  #.title <- ifelse(linear == TRUE, "iBAQ", "log(iBAQ)")
+  #if (is.null(z_score)) z_score <- FALSE
+  #if (z_score == TRUE | z_score == "0") .title <- paste0(.title, " zscore")
+  #if (!is.null(z_score_by)) .title <- paste0(.title, " by ", z_score_by)
+  # {
+  #   heatmap_legend_param$title <- paste0("zscore ", heatmap_legend_param$title)
+  # }
+  # if (!is.null(standard_scale) && standard_scale == TRUE) .title <- paste0(.title, " (standardized)")
+
   .legend_width <- unit(6, "cm")
-  .cbar_title <- "zscore"
+  #.cbar_title <- "zscore"
   heatmap_legend_param <- list(
-    title = .cbar_title,
+    title = colorbar_title,
     direction = "horizontal",
     just = "bottom",
     legend_width = .legend_width
@@ -119,10 +130,12 @@ make_heatmap_fromgct <- function(
 
   # .note <- paste0(description, '\nNES ', sprintf("%.2f", NES), '  pvalue: ', pval)
 
-  if ("rdesc" %in% colnames(gct@rdesc)) {
+  if ("rdesc" %in% colnames(gct@rdesc)) {  # clean this
     row_labels <- gct@rdesc$rdesc
   } else if ("genesymbol" %in% colnames(gct@rdesc)) {
     row_labels <- gct@rdesc$genesymbol
+  } else if ("GeneSymbol" %in% colnames(gct@rdesc)) {
+    row_labels <- gct@rdesc$GeneSymbol
   } else {
     row_labels <- gct@rid
   }
@@ -155,21 +168,25 @@ make_heatmap_fromgct <- function(
     width = heatmap_matrix_width,
     height = heatmap_matrix_height,
     # TODO use z_score_withna or other custom func for handling nas when scaling
+    # This appears to be done
 
     cluster_rows = cluster_rows,
     cluster_columns = cluster_columns,
     #
 
     row_title = row_title,
-    column_title = column_title,
     row_labels = row_labels,
     column_labels = gct@cdesc$id, # id should always be here
+
+    row_title_gp = grid::gpar(fontsize = 10.4, fontface="bold", hjust=1, vjust=1), #just="left"),  # remove just='left' to restore default behavior, defualt just = "center"
+    column_title_gp = grid::gpar(fontsize = 7.4, fontface="bold", hjust=1.4), #just="left"),  # remove just='left' to restore default behavior, defualt just = "center"
+    column_title_rot = 30,
 
     column_split = cut_by,
     top_annotation = ca,
     heatmap_legend_param = heatmap_legend_param,
-    row_names_gp = grid::gpar(fontsize = 7),
-    column_names_gp = grid::gpar(fontsize = 7),
+    row_names_gp = grid::gpar(fontsize = 7, fontface="bold"),
+    column_names_gp = grid::gpar(fontsize = 7, fontface="bold"),
     cluster_column_slices = FALSE,
     column_names_side = "top",
   )
@@ -180,6 +197,11 @@ make_heatmap_fromgct <- function(
   do_draw <- function() {
     draw(ht,
       heatmap_legend_side = "bottom",
+      column_title = column_title %>%
+       stringr::str_replace_all("_", " ") %>%
+       stringr::str_wrap(width = 40),
+      column_title_gp = gpar(fontsize = 13, fontface = "bold", just = "left"),
+
       padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
     )
   }
@@ -210,7 +232,7 @@ plot_heatmap_of_edges <- function(
     gct,
     results_list,
     scale = T,
-    scale_subset = NULL,
+    scale_by = NULL,
     save_func = NULL,
     cluster_rows = TRUE,
     cluster_columns = c(FALSE, TRUE),
@@ -221,8 +243,19 @@ plot_heatmap_of_edges <- function(
     pstat_cutoff = 1,
     replace = TRUE,
     combine_by = NULL,
+    meta_to_include = NULL,
+    meta_to_exclude = NULL,
     ...) {
-  .gct <- if (scale) util_tools$scale_gct(gct, group_by = scale_subset) else gct
+  # transform for plotting
+  .gct <- if (scale) util_tools$scale_gct(gct, group_by = scale_by) else gct
+
+
+  colorbar_title <- if (scale_by %in% colnames(.gct@cdesc)) {
+    paste0("zscore by ", scale_by)
+  } else {
+    "zscore"
+  }
+
 
   if (!is.null(combine_by)) { # check to  ensure is a dataframe with columns facet and rankname
     if (!all(c("facet", "rankname") %in% colnames(combine_by))) {
@@ -243,7 +276,7 @@ plot_heatmap_of_edges <- function(
       aggregated_results <- facets %>%
         purrr::map(~ {
           facet <- .x
-          .ranknames <- combine_by[combine_by$facet == facet, "rankname"]
+          .ranknames <- combine_by[combine_by$facet == facet, "rankname"] # this needs more error checking
           collection_results[.ranknames] %>%
             purrr::imap(~ {
               .x %>% dplyr::mutate(comparison_name = .y)
@@ -344,7 +377,10 @@ plot_heatmap_of_edges <- function(
           sample_order = sample_order,
           row_title = .row_title,
           column_title = paste0(.id, "\n", comparison_name),
-          cut_by = cut_by # ,
+          cut_by = cut_by,
+          meta_to_include = meta_to_include,
+          meta_to_exclude = meta_to_exclude,
+          colorbar_title = colorbar_title
           # ...
         ),
         error = function(e) log_msg(error = paste("failed to produce heatmap:", e$message))
@@ -1283,7 +1319,7 @@ plot_top_ES <- function(
     combine_by = NULL,
     combine_by_name = NULL,
     save_func = NULL,
-    panel_width = 4.6,
+    panel_width = 3.6,
     panel_height = 3.4,
     combined_show_ticks = FALSE,
     combined_label_size = 1.75,
@@ -1358,6 +1394,7 @@ plot_top_ES <- function(
           rankorder_samplepathway$facet <- "x"
         }
         num_panels <- max(length(unique(rankorder$edge$facet)), 1)
+        # more scaling challenges
         if (num_panels > 1) {
           panel_width <- panel_width * .68
           panel_height <- panel_height * .75
@@ -1382,6 +1419,7 @@ plot_top_ES <- function(
   }
 
 
+  # individual plots
   .plts <- rankorder_by_pw %>%
     purrr::imap(~ {
       rankorders <- .x
@@ -1435,14 +1473,19 @@ plotES_combined <- function(enplot_data, label_size = 1.85, title = "", show_tic
   p <- ggplot(data = curve) +
     geom_line(aes(x = rank, y = ES, color = rankname), alpha = .6, show.legend = F) +
     geom_hline(yintercept = 0, colour = "black") +
-    geom_text_repel(
+    geom_label_repel(
       data = curve %>% group_by(rankname) %>% arrange(-abs(ES)) %>% slice_head(n = 1) %>% ungroup(),
-      aes(label = rankname, x = rank, y = ES, color = rankname),
+      # what is this doing? above?
+      aes(label = rankname %>% stringr::str_replace_all("_", " ") %>% stringr::str_wrap(width = 28),
+        x = rank, y = ES, color = rankname),
       # nudge_x = 0.5,
       # nudge_y = 0.5,
       size = label_size,
-      show.legend = F,
-      max.overlaps = Inf
+      show.legend = FALSE,
+      max.overlaps = Inf,
+      fill = "#FFFFFFcc",
+      #xlim = c(-Inf, Inf), ylim = c(-Inf, Inf) # experimental
+
     )
   if (show_ticks == TRUE) {
     p <- p + geom_segment(
