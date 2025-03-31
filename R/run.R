@@ -193,7 +193,8 @@ run <- function(params) {
         log_msg(msg = "pivoting gsea results")
         all_gsea_results %>% io_tools$save_pivoted_gsea_results(
           savedir = file.path(savedir, "gsea_tables"),
-          replace = params$advanced$replace
+          replace = params$advanced$replace,
+          species = species
         )
       }
 
@@ -249,7 +250,7 @@ run <- function(params) {
             rankname_order = params$extra$rankname_order,
             cluster_rows = params$pca$cluster_rows %||% TRUE,
             cluster_columns = params$pca$cluster_columns %||% FALSE,
-            cut_by = params$pca$cut_by %||% params$heatma_gsea$cut_by %||% params$cut_by %||% NULL,
+            cut_by = params$pca$cut_by %||% params$heatmap_gene$cut_by %||% params$cut_by %||% NULL,
           )
         })
       } # todo plot more edge plots and es plots based on the pca results
@@ -270,12 +271,15 @@ run <- function(params) {
 
       if (params$barplot$do_combined == TRUE) {
         log_msg(msg = "plotting faceted barplots")
-        plts <- results_list %>%
+        plts <-  tryCatch({
           plot_tools$do_combined_barplots(
+            results_list,
             facet_order = NULL, # this is n't working properly
             save_func = save_func,
             limit = params$barplot$limit %||% c(10, 20, 30, 50)
-          )
+          )},
+          error = function(e) { return(NULL) }
+            )
       }
 
 
@@ -309,25 +313,34 @@ run <- function(params) {
       combine_by <- params$enplot$combine_by %||% params$combine_by %||% NULL
       combine_by_df <- NULL
       if (!is.null(combine_by) && !is.null(metadata)) {
-        if (!combine_by %in% colnames(metadata)) {
-          combine_by_df <- NULL
-        } else {
-          combine_by_df <- metadata %>%
-            dplyr::select(!!sym(combine_by), id) %>%
-            dplyr::rename(
-              facet = !!sym(combine_by),
-              rankname = id
-            )
-          if (!is.null(params$extra$rankname_order)) {
-            combine_by_df <- combine_by_df %>%
-              mutate(facet = factor(facet, levels = params$extra$rankname_order, ordered = T)) %>%
-              arrange(facet)
+        combine_by_grid <- expand.grid(combine_by_val=combine_by, stringsAsFactors = FALSE)
+        combine_by_grid %>% purrr::pmap( 
+        ~{
+            params = list(...)
+            combine_by_val <- params$combine_by_val
+            if (!combine_by_val %in% colnames(metadata)) {
+              combine_by_df <- NULL
+            } else {
+              combine_by_df <- metadata %>%
+                dplyr::select(!!sym(combine_by_val), id) %>%
+                dplyr::rename(
+                  facet = !!sym(combine_by_val),
+                  rankname = id
+                )
+              if (!is.null(params$extra$rankname_order)) {
+                combine_by_df <- combine_by_df %>%
+                  mutate(facet = factor(facet, levels = params$extra$rankname_order, ordered = T)) %>%
+                  arrange(facet)
+              }
           }
-        }
+        })
       }
 
 
 
+      if (is.null(gct) && params$heatmap_gene$do == TRUE) {
+          log_msg(msg = "heatmap_gene$do set to true but gct is NULL")
+      }
       if (!is.null(gct) && params$heatmap_gene$do == TRUE) {
         ht_edge_plots <- plot_tools$plot_heatmap_of_edges(
           gct,
@@ -337,8 +350,8 @@ run <- function(params) {
           limit = params$heatmap_gene$limit %||% 10,
           sample_order = params$extra$sample_order,
           cut_by = params$heatmap_gene$cut_by %||% params$cut_by %||% NA,
-          cluster_rows = params$heatmap_gene$cluster_rows %||% TRUE,
-          cluster_columns = params$heatmap_gene$cluster_columns %||% FALSE,
+          cluster_rows = params$heatmap_gene$cluster_rows %||% c(FALSE, TRUE),
+          cluster_columns = params$heatmap_gene$cluster_columns %||% c(FALSE, TRUE),
           pstat_cutoff = params$heatmap_gene$pstat_cutoff %||% 1,
           save_func = save_func,
           replace = params$advanced$replace %||% TRUE,
@@ -355,20 +368,73 @@ run <- function(params) {
       # print(genesets_list_of_lists)
       # print(save_func)
 
-      ._ <- plot_tools$plot_top_ES_across(all_gsea_results,
-        ranks_list = ranks_list,
-        genesets_list_of_lists,
-        save_func = save_func,
-        limit = params$enplot$limit %||% 10,
-        do_individual = params$enplot$do_individual %||% TRUE,
-        do_combined = params$enplot$do_combined %||% TRUE,
-        combine_by = combine_by_df, # this is metadata table rankname and facet if exists
-        combine_by_name = combine_by,
-        width = params$enplot$width %||% 5.4,
-        height = params$enplot$height %||% 4.0,
-        combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE,
-        combined_label_size = params$enplot$combined_label_size %||% 2.05
-      )
+      # ===== plot edgse and es
+      # this part is messy
+      # first is metadata organization to determine if and how to aggregate curves
+      # this is nto used right now for heatmap_gene
+      # it is used for plot_top_ES_across
+      combine_by <- params$enplot$combine_by %||% params$combine_by %||% NULL
+      combine_by_df <- NULL
+      if (!is.null(combine_by) && !is.null(metadata)) {
+        combine_by_grid <- expand.grid(combine_by_val=combine_by, stringsAsFactors = FALSE)
+        ._ <- combine_by_grid %>% purrr::pmap( 
+        ~{
+            params = list(...)
+            combine_by_val <- params$combine_by_val
+            if (!combine_by_val %in% colnames(metadata)) {
+              return()
+            } 
+            combine_by_df <- metadata %>%
+              dplyr::select(!!sym(combine_by_val), id) %>%
+              dplyr::rename(
+                facet = !!sym(combine_by_val),
+                rankname = id
+              )
+            if (!is.null(params$extra$rankname_order)) {
+              combine_by_df <- combine_by_df %>%
+                mutate(facet = factor(facet, levels = params$extra$rankname_order, ordered = T)) %>%
+                arrange(facet)
+            }
+
+            print(paste0('limit is: ', params$enplot$limit))
+            ._ <- plot_tools$plot_top_ES_across(all_gsea_results,
+              ranks_list = ranks_list,
+              genesets_list_of_lists,
+              save_func = save_func,
+              limit = params$enplot$limit %||% 20,
+              #do_individual = params$enplot$do_individual %||% TRUE,
+              do_individual = FALSE, # becase we do it down below
+              do_combined = params$enplot$do_combined %||% TRUE,
+              combine_by = combine_by_df, # this is metadata table rankname and facet if exists
+              combine_by_name = combine_by_val,
+              width = params$enplot$width %||% 5.4,
+              height = params$enplot$height %||% 4.0,
+              combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE,
+              combined_label_size = params$enplot$combined_label_size %||% 1.85
+            )
+
+
+        })
+      }
+
+
+      if (!is.null(params$enplot$do_individual) && params$enplot$do_individual == TRUE ) {
+        ._ <- plot_tools$plot_top_ES_across(all_gsea_results,
+          ranks_list = ranks_list,
+          genesets_list_of_lists,
+          save_func = save_func,
+          limit = params$enplot$limit %||% 10,
+          do_individual = params$enplot$do_individual,
+          do_combined = FALSE, # because it is perfromed above in a grid of parameters
+          # combine_by = combine_by_df, # this is metadata table rankname and facet if exists
+          # combine_by_name = combine_by,
+          width = params$enplot$width %||% 5.4,
+          height = params$enplot$height %||% 4.0,
+          # combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE,
+          # combined_label_size = params$enplot$combined_label_size %||% 2.05
+        )
+    }
+
     }
   ) # end of purrr::map loop for individual genesets
 
