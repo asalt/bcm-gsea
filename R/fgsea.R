@@ -89,7 +89,7 @@ select_topn <- function(df,
                         pstat_cutoff = 1,
                         limit = 120,
                         pstat_usetype = c("pval", "padj"),
-                        to_include = NULL, # extra pathways to expilcitly include
+                        to_include = NULL, # extra pathways to explictly include
                         ...) {
   pstat_usetype <- match.arg(pstat_usetype)
 
@@ -228,9 +228,7 @@ run_one <- function(
     fgseaRes <- fgseaRes %>% dplyr::mutate(
       mainpathway = pathway %in% collapse_results$mainPathways
     )
-  } else {
-    fgseaRes$mainpathway <- TRUE
-  }
+  } 
 
   return(fgseaRes)
 }
@@ -270,6 +268,7 @@ run_all_rankobjs <- function(
     logger = logger
   )
 
+
   if (!is.null(cache) && cache == TRUE) {
     logger(msg = "caching is enabled")
     cache_results <- rankobjs %>%
@@ -287,7 +286,7 @@ run_all_rankobjs <- function(
   # print(paste0('length rankobjs : ', length(rankobjs)))
   # print(paste0('length results : ', length(results)))
 
-  species <- species %||% "Homo sapiens"
+  # species <- species %||% "Homo sapiens"
   if (length(results) > 0){ # only trigger for new results
     tryCatch(
       {results <- results %>% map_tools$add_leadingedges_to_results_list(., species=species)},
@@ -615,6 +614,74 @@ get_rankorder_across <- function(
 
 
 
+  # rankorders <- pathways_to_plot %>%
+  #   purrr::map(~ {
+  #     if (!.x %in% names(geneset_lists)) {
+  #       cat(paste0("does not have access to geneset : ", .x))
+  #       return()
+  #     }
+  #     geneset <- geneset_lists[[.x]]
+  #     rank_ids %>%
+  #       purrr::map(~ 
+  #         tryCatch({
+  #           rank_order <- fgsea_tools$get_rankorder(
+  #             geneset,
+  #             ranks_list[[.x]],
+  #             geneset_df = genesets_additional_info
+  #           ) #set_names(rank_ids)}, 
+  #           # add check the dims are the same 
+  #          names(rank_order) <- rank_ids 
+  #          return(rank_order)
+  #         }
+  #      error = function(e) {print(e)})
+
+  #   )}
+  #     ) %>%
+  #   set_names(pathways_to_plot)
+
+  # this is all broken
+  # it was an attem pted refactor that has gone wrong
+  # rankorders <- pathways_to_plot %>%
+  #   purrr::map(~ {
+  #     pathway <- .x
+  #     if (!pathway %in% names(geneset_lists)) {
+  #       cat(paste0("❗️ Missing geneset: ", pathway, "\n"))
+  #       return(NULL)
+  #     }
+  #     geneset <- geneset_lists[[pathway]]
+  
+    #   ranks_for_pathway <- rank_ids %>%
+    #     purrr::map(~ tryCatch({
+    #       rank_order <- get_rankorder(
+    #         geneset,
+    #         ranks_list[[.x]],
+    #         geneset_df = genesets_additional_info
+    #       )
+    #       #names(rank_order) <- rank_ids
+    #       if (length(rank_order) == length(rank_ids)) {
+    #         names(rank_order) <- rank_ids
+    #       } else {
+    #         message("❗️ Length mismatch in rank_order and rank_ids for pathway: ", pathway)
+    #         message("length(rank_order) = ", length(rank_order), ", length(rank_ids) = ", length(rank_ids))
+    #         # browser()
+    #         names(rank_order) <- NULL  # optional: clear names to avoid misleading. this may have unexpected downstream consequences
+    #       }  # a better fallback - and figure why this can happen - would help
+    #
+    #
+    #       return(rank_order)
+    #     },
+    #     error = function(e) {
+    #       message("\n⚠️ Error in get_rankorder for pathway: ", pathway)
+    #       message(conditionMessage(e))
+    #       NULL
+    #     }))
+    #
+    #   ranks_for_pathway
+    # }) %>%
+    # set_names(pathways_to_plot)
+  # this is all broken
+
+
   rankorders <- pathways_to_plot %>%
     purrr::map(~ {
       if (!.x %in% names(geneset_lists)) {
@@ -633,6 +700,9 @@ get_rankorder_across <- function(
         set_names(rank_ids)
     }) %>%
     set_names(pathways_to_plot)
+
+
+
 
   return(rankorders)
 }
@@ -731,7 +801,7 @@ concat_results_all_collections <- function(list_of_lists, main_pathway_ratio = .
 process_rankorder_list <- function(rankorders, pw_name, metadata = NULL, key) {
   rankorders %>%
     purrr::imap(~ {
-      .x[[key]] %>% mutate(pathway = pw_name, rankname = .y)
+      .x[[key]] %>% dplyr::mutate(pathway = pw_name, rankname = .y)
     }) %>%
     bind_rows() %>%
     { if (!is.null(metadata)) left_join(., metadata, by = "rankname") else . }
