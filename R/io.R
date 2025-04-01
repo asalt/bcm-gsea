@@ -18,6 +18,7 @@ util_tools <- get_tool_env("utils")
 
 # map_tools <- new.env()
 # source(file.path(here("R"), "./map.R"), local = map_tools)
+map_tools <- get_tool_env("map")
 
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
@@ -315,14 +316,14 @@ log_msg(msg = paste0("length results list :", length(results_list)))
 
 }
 
-save_pivoted_gsea_results <- function(results_list, savedir = "gsea_tables", replace = FALSE) {
+save_pivoted_gsea_results <- function(results_list, savedir = "gsea_tables", replace = FALSE, species = species) {
 
   if (is.null(replace)) replace <- FALSE
   # here results list is concatenated list. one level per collection
   # names are the collection names
   # values are the fgsea concatenated tables/comparisons for given collection
 
-  results_list %<>% map_tools$add_leadingedges_to_results_list()
+  results_list %<>% map_tools$add_leadingedges_to_results_list(species = species)
 
   results_list_pivoted <- results_list %>% purrr::imap(
     ~{
