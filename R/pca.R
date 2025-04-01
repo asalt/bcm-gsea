@@ -400,7 +400,7 @@ make_heatmap_from_loadings <- function(
       save_func = save_func,
       title = "Top 5% Loadings",
       ...
-    )}, error = function(msg) { log_msg(error=msg) }
+    )}, error = function(msg) { log_msg(error=msg) })
 
   top_loadings <- get_top_loadings(pca_object, components = components, rangeRetain = 1, limit = 5)
   submat <- gsea_object %>% name_cleaner() %>% dplyr::filter(pathway %in% rownames(top_loadings))
