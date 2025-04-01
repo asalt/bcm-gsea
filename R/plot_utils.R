@@ -6,6 +6,7 @@ suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(ComplexHeatmap))
 suppressPackageStartupMessages(library(circlize))
+library(colorspace)
 
 suppressPackageStartupMessages(library(here))
 
@@ -68,7 +69,7 @@ source(file.path(src_dir, "./fgsea.R"), local = fgsea_tools)
 # }
 
 
-plot_and_save <- function(
+plot_and_save_unsafe <- function(
     plot_code,
     filename,
     path = file.path(
@@ -83,6 +84,9 @@ plot_and_save <- function(
   # Setup: Open the appropriate graphics device
 
   log_msg(msg = "plot_and_save")
+  if (is.null(filename)){
+      log_msg(warning = "filename is null")
+  }
 
   full_path <- file.path(path, paste0(filename, ".", type))
 
@@ -91,8 +95,11 @@ plot_and_save <- function(
   if (!fs::dir_exists(path)) fs::dir_create(path)
 
   if (file.exists(full_path) && replace == FALSE) {
+    graphics.off() # turn off anything that opened
     return()
   }
+  # ??
+  on.exit(dev.off(), add = TRUE)
 
   if (type == "pdf") {
     # pdf(full_path, width = width, height = height)
@@ -103,23 +110,59 @@ plot_and_save <- function(
     stop("Unsupported file type")
   }
 
+
   # Execute the plot code (passed as a function)
   h <- plot_code()
+  # if (inherits(h, "ggplot")) {  # this may be included already in the plot_code closure and unnecessary and not worth pytting here
+  #   print(h)  # Required for ggplot rendering inside functions
+  # }
 
   # Teardown: Close the graphics device
-  dev.off()
+  # dev.off()
+  # Ensure device closes even if an error occurs by putting the command here
+  # is this the proper way to do this to ensure avoiding error of having too many open devices?
+  # check all open devices with dev.list()
+  # on.exit(dev.off(), add = TRUE)  moved to above
+
   log_msg(msg = paste0("done"))
 
   return(h)
 }
 
+safe_plot_and_save <- function(...) {
+  tryCatch(
+    plot_and_save_unsafe(...),
+    error = function(e) {
+      message("\n❗️ Error caught: ", conditionMessage(e))
+      message("\nLast traceback:")
+      print(rlang::last_trace(drop = FALSE))
+      
+      message("\nOpen graphics devices:")
+      print(dev.list())
+
+      # Optional: Force close them
+      if (length(dev.list()) > 0) {
+        message("\nClosing all devices...")
+        graphics.off()
+      }
+      
+      # Optional: Write to log file
+      log_msg(warning = paste("Plotting failed:", conditionMessage(e)))
+
+      # Optionally re-throw if you want upstream failure
+      # stop(e)
+    }
+  )
+}
+plot_and_save <- safe_plot_and_save # 
 
 
-create_named_color_list <- function(df, columns) {
-  # Matplotlib default colors
-  matplotlib_colors <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
-                         "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
-                         "#bcbd22", "#17becf")
+# Matplotlib default colors
+#matplotlib_colors <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+#                       "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+#                       "#bcbd22", "#17becf")
+
+create_named_color_list <- function(df, columns, c=80) {
 
   # Initialize an empty list to store the result
   color_list <- list()
@@ -131,7 +174,9 @@ create_named_color_list <- function(df, columns) {
     n_vals <- length(unique_vals)
 
     # Assign colors based on the number of unique values, recycling matplotlib colors if needed
-    colors_assigned <- rep(matplotlib_colors, length.out = n_vals)
+    # colors_assigned <- rep(matplotlib_colors, length.out = n_vals)
+    colors_assigned <- colorspace::qualitative_hcl(palette='Dynamic', n=n_vals, c=c)
+
 
     # Create a named vector for the unique values with corresponding colors
     color_list[[col_name]] <- setNames(colors_assigned, unique_vals)
