@@ -69,10 +69,13 @@ clean_args <- function(params, root_dir = "/") {
 
   if (!is.null(params$volcanodir)) {
     params$volcanodir <- file.path(root_dir, params$volcanodir)
+    if (!file.exists(params$volcanodir)) stop(paste0("volcanodir does not exist: ", params$volcanodir))
   }
 
-  if (!is.null(params$gct_path)) {
+  if (!is.null(params$gct_path) && params$gct_path != "") {
     params$gct_path <- file.path(root_dir, params$gct_path)
+  } else {
+    params$gct_path <- NULL
   }
 
   if (!is.null(params$gct_path) && !file.exists(params$gct_path)) {
@@ -94,12 +97,15 @@ clean_args <- function(params, root_dir = "/") {
   params$advanced$cachedir <- cachedir
 
 
+  # this block could be cleaned up
   if (!is.null(params$rankfiledir)) {
-    if (params$rankfiledir == "savedir") {
+    if (params$rankfiledir == "savedir" || params$rankfiledir == "") {
       params$rankfiledir <- file.path(params$savedir, "ranks")
     } else {
       params$rankfiledir <- file.path(root_dir, params$rankfiledir)
     }
+  } else {
+      params$rankfiledir <- file.path(params$savedir, "ranks")
   }
 
   params$advanced$pivot_gsea_results <- params$advanced$pivot_gsea_results %||% FALSE
@@ -395,7 +401,12 @@ log_msg <- function(msg = NULL, info = NULL, debug = NULL, warning = NULL, warn 
     return()
   }
 
-  msg <- Filter(Negate(is.null), list(msg, info, warning, warn, debug, error))[[1]]
+  msg <- Filter(Negate(is.null), list(msg, info, warning, warn, debug, error))
+  if (length(msg) > 0){
+      msg <- msg[[1]]
+  } else {
+      msg <- "??"
+  }
 
   prefix <- paste0(format(Sys.time(), "[%Y-%m-%d %H:%M:%S] "), level, ": ")
 
