@@ -62,6 +62,7 @@ make_heatmap_fromgct <- function(
     meta_to_include = NULL, # if NULL uses all
     meta_to_exclude = NULL, # if NULL filters nothing out
     colorbar_title = "zscore",
+    cluster_column_slices = TRUE,
     # scale = T
     ...) {
   # gct <- subgct
@@ -187,7 +188,7 @@ make_heatmap_fromgct <- function(
     heatmap_legend_param = heatmap_legend_param,
     row_names_gp = grid::gpar(fontsize = 7, fontface="bold"),
     column_names_gp = grid::gpar(fontsize = 7, fontface="bold"),
-    cluster_column_slices = FALSE,
+    cluster_column_slices = cluster_column_slices,
     column_names_side = "top",
   )
 
@@ -298,22 +299,6 @@ plot_heatmap_of_edges <- function(
   }
 
 
-  # Process each comparison
-  process_comparison <- function(collection_name, comparison_name, result, gct) {
-    forplot <- result %>% fgsea_tools$select_topn(
-      limit = limit,
-      to_include = to_include,
-      pstat_cutoff = pstat_cutoff
-    )
-
-    log_msg(info = paste0("plotting heatmaps for ", collection_name, " ", comparison_name))
-    log_msg(info = paste0("n forplot: ", forplot %>% nrow()))
-
-    purrr::map(seq_len(nrow(forplot)), function(row_index) {
-      process_row(forplot[row_index, ], collection_name, comparison_name, gct)
-    })
-  }
-
 
   # Process each row
   process_row <- function(row, collection_name, comparison_name, gct) {
@@ -339,7 +324,8 @@ plot_heatmap_of_edges <- function(
     param_grid <- expand.grid(
       cluster_rows = cluster_rows,
       cluster_columns = cluster_columns,
-      cut_by = cut_by
+      cut_by = cut_by,
+      stringsAsFactors = FALSE
     )
 
     param_grid %>% purrr::pmap(~ {
@@ -348,16 +334,20 @@ plot_heatmap_of_edges <- function(
       newpath <- file.path(path, make.names(collection_name), "heatmaps_gene")
       cluster_rows <- params$cluster_rows %||% FALSE
       cluster_columns <- params$cluster_columns %||% FALSE
+      cut_by_val <- params$cut_by
 
       filename <- paste0(
         get_arg(save_func, "filename"),
         make.names(row$pathway),
         make.names(comparison_name),
+        "cut_", make.names(cut_by_val),
         "_cr",
         cluster_rows,
         "_cc",
         cluster_columns,
-        nrow(subgct@mat)
+        nrow(subgct@mat),
+        'x',
+        ncol(subgct@mat)
       )
       if (!is.null(save_func)) {
         .save_func <- make_partial(save_func, filename = filename, path = newpath)
@@ -377,7 +367,7 @@ plot_heatmap_of_edges <- function(
           sample_order = sample_order,
           row_title = .row_title,
           column_title = paste0(.id, "\n", comparison_name),
-          cut_by = cut_by,
+          cut_by = cut_by_val,
           meta_to_include = meta_to_include,
           meta_to_exclude = meta_to_exclude,
           colorbar_title = colorbar_title
@@ -387,6 +377,24 @@ plot_heatmap_of_edges <- function(
       )
     })
   }
+
+  # Process each comparison
+  process_comparison <- function(collection_name, comparison_name, result, gct) {
+    forplot <- result %>% fgsea_tools$select_topn(
+      limit = limit,
+      to_include = to_include,
+      pstat_cutoff = pstat_cutoff
+    )
+
+    log_msg(info = paste0("plotting heatmaps for ", collection_name, " ", comparison_name))
+    log_msg(info = paste0("n forplot: ", forplot %>% nrow()))
+
+    purrr::map(seq_len(nrow(forplot)), function(row_index) {
+      process_row(forplot[row_index, ], collection_name, comparison_name, gct)
+    })
+  }
+
+
 
   # Main logic: Iterate through collections
   res <- purrr::map(names(results_list), function(collection_name) {
@@ -600,7 +608,7 @@ barplot_with_numbers <- function(
     wrapped_labels <- sapply(value, function(label) {
       label %>%
         str_replace_all("_", " ") %>%
-        str_wrap(width = 30)
+        str_wrap(width = 36)
     })
     return(wrapped_labels)
   }
@@ -649,7 +657,7 @@ barplot_with_numbers <- function(
       # position = position_dodge(width = 0.8),
       vjust = 0.5, hjust = 0.5
     ) +
-    theme_bw() #+ theme(axis.text.y = element_text(size = map(sel$pathway, get_size)))
+    theme_bw() + theme(axis.text.y = element_text(size = map(sel$pathway, get_size)))
   if ("rankname" %in% colnames(df) && (length(unique(df$rankname)) > 1)) {
     log_msg(info = "facet wrapping by rankname")
     p <- p + facet_wrap(~rankname, labeller = as_labeller(labeller_func))
@@ -838,6 +846,8 @@ plot_results_all_collections <- function(
             path <- file.path(get_arg(save_func, "path"), make.names(.title), "heatmaps_gsea")
             .save_func <- make_partial(save_func, filename = filename, path = path)
           }
+
+          log_msg(info = paste0("cutting by ", .cut_by))
           plot_results_one_collection(.data,
             title = .title,
             metadata = metadata,
@@ -879,7 +889,12 @@ plot_results_one_collection <- function(
     row_annotation = NULL, # can be passed if made somewhere else
     save_func = NULL,
     ...) {
+  if (nrow(df) == 0){
+   log_msg(msg = paste0("no results!"))
+   return()
+  }
   log_msg(msg = paste0("calling plot results one collection"))
+
 
   default_meta_to_exclude <- c(
     "recno", "runno", "searchno", "label", "expr_col", "expr_file",
@@ -1014,7 +1029,7 @@ plot_results_one_collection <- function(
 
 
   rownames(dfp) <- dfp$pathway
-  dfp <- dfp[, metadata$id] # select ranknames as ordered inside metadata dataframe
+  dfp <- dfp[, metadata$id, drop = FALSE] # select ranknames as ordered inside metadata dataframe
 
   # dfp["pathway"] <- NULL # now remove this column to exclude from heatmap
 
@@ -1023,11 +1038,11 @@ plot_results_one_collection <- function(
     as.data.frame()
   rownames(dfp_padj) <- dfp_padj$pathway
   dfp_padj["pathway"] <- NULL
-  dfp_padj <- dfp_padj[, metadata$id]
+  dfp_padj <- dfp_padj[, metadata$id, drop = FALSE]
   # %>% select(-pathway, all_of(metadata$id))
   logical_matrix <- dfp_padj < 0.25
   star_matrix <- ifelse(logical_matrix, "*", "")
-  star_matrix <- star_matrix[, metadata$id] # shouldn't be necessary as comes from dfp_padj
+  star_matrix <- star_matrix[, metadata$id, drop = FALSE] # shouldn't be necessary as comes from dfp_padj
   star_matrix[is.na(star_matrix)] <- ""
 
 
@@ -1428,7 +1443,11 @@ plot_top_ES <- function(
       rankorders %>% purrr::imap(~ {
         rankorder <- .x
         comparison <- .y
-        .stats <- df %>% filter(pathway == !!pathway_name, rankname == !!comparison)
+        .stats <- df %>% dplyr::filter(pathway == pathway_name, rankname == comparison)
+        if (nrow(.stats) == 0 ) { 
+            # problem
+            return(NULL)
+        } 
         .title <- paste0(comparison, "\n", pathway_name)
         .subtitle <- ""
         if (nrow(.stats) == 1) {
