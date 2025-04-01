@@ -380,7 +380,7 @@ make_heatmap_from_loadings <- function(
 
   components <- intersect(components, pca_object$components) # there may be less than 4 components
   top_loadings <- get_top_loadings(pca_object, components = components, rangeRetain = 0.05, limit = Inf)
-  submat <- gsea_object %>% name_cleaner() %>% filter(pathway %in% rownames(top_loadings))
+  submat <- gsea_object %>% name_cleaner() %>% dplyr::filter(pathway %in% rownames(top_loadings))
 
   ra <- ComplexHeatmap::rowAnnotation(
     PC1 = top_loadings$PC1_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white")),
@@ -389,20 +389,21 @@ make_heatmap_from_loadings <- function(
     PC4 = top_loadings$PC4_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white"))
   )
 
-  ht <- plot_tools$plot_results_one_collection(
-    df = submat,
-    metadata = pca_object$metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
-    # pathway_metadata = loadings,
-    row_annotation = ra,
-    limit = Inf,
-    pstat_cutoff = 1, # we want no filtering
-    save_func = save_func,
-    title = "Top 5% Loadings",
-    ...
-  )
+  tryCatch({
+    ht <- plot_tools$plot_results_one_collection(
+      df = submat,
+      metadata = pca_object$metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
+      # pathway_metadata = loadings,
+      row_annotation = ra,
+      limit = Inf,
+      pstat_cutoff = 1, # we want no filtering
+      save_func = save_func,
+      title = "Top 5% Loadings",
+      ...
+    )}, error = function(msg) { log_msg(error=msg) }
 
   top_loadings <- get_top_loadings(pca_object, components = components, rangeRetain = 1, limit = 5)
-  submat <- gsea_object %>% name_cleaner() %>% filter(pathway %in% rownames(top_loadings))
+  submat <- gsea_object %>% name_cleaner() %>% dplyr::filter(pathway %in% rownames(top_loadings))
   submat %<>% mutate(pathway = factor(pathway, levels = rownames(top_loadings), ordered=TRUE)) %>% arrange(pathway)
 
   ra <- ComplexHeatmap::rowAnnotation(
@@ -416,15 +417,17 @@ make_heatmap_from_loadings <- function(
     maybe_metadata <- NULL
   }
 
-  ht <- plot_tools$plot_results_one_collection(
-    df = submat,
-    metadata = maybe_metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
-    # pathway_metadata = loadings,
-    row_annotation = ra,
-    limit = Inf,
-    pstat_cutoff = 1, # we want no filtering
-    save_func = save_func,
-    title = "Top 5 Loadings Per PC",
-    ...
+  tryCatch({
+    ht <- plot_tools$plot_results_one_collection(
+      df = submat,
+      metadata = maybe_metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
+      # pathway_metadata = loadings,
+      row_annotation = ra,
+      limit = Inf,
+      pstat_cutoff = 1, # we want no filtering
+      save_func = save_func,
+      title = "Top 5 Loadings Per PC",
+      ...
+      )}, error = function(msg){ log_msg(error=msg) }
   )
 }
