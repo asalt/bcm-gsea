@@ -87,6 +87,7 @@ do_one <- function(
   gsea_object <- fgsea_tools$filter_on_mainpathway(gsea_object,
     main_pathway_ratio = main_pathway_ratio
   )
+  if (nrow(gsea_object) == 0){return()}
 
   # clean names
   gsea_object <- gsea_object %>% name_cleaner()
@@ -287,17 +288,17 @@ plot_all_biplots <- function(
               p <- tryCatch(
               {
                   plot_biplot(
-                  pca_object,
-                  top_pc = top_pc,
-                  showLoadings = showLoadings,
-                  labSize = labSize,
-                  pointSize = pointSize,
-                  sizeLoadingsNames = sizeLoadingsNames,
-                  colby = .colby,
-                  shape = shape,
-                  title = title,
-                  save_func = save_func
-                  # ...
+                    pca_object,
+                    top_pc = top_pc,
+                    showLoadings = showLoadings,
+                    labSize = labSize,
+                    pointSize = pointSize,
+                    sizeLoadingsNames = sizeLoadingsNames,
+                    colby = .colby,
+                    shape = shape,
+                    title = title,
+                    save_func = save_func
+                    # ...
                 )
               }, error = function(e) {
                 log_msg(msg = paste0("error in plot_all_biplots: ", e))
@@ -375,6 +376,11 @@ make_heatmap_from_loadings <- function(
     pca_object,
     components = c("PC1", "PC2", "PC3", "PC4"),
     save_func = NULL,
+    cut_by = NULL,
+    cluster_rows = TRUE,
+    cluster_columns = FALSE,
+    meta_to_include = NULL,
+    meta_to_exclude = NULL,
     ...){
 
 
@@ -389,18 +395,56 @@ make_heatmap_from_loadings <- function(
     PC4 = top_loadings$PC4_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white"))
   )
 
-  tryCatch({
-    ht <- plot_tools$plot_results_one_collection(
-      df = submat,
-      metadata = pca_object$metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
-      # pathway_metadata = loadings,
-      row_annotation = ra,
-      limit = Inf,
-      pstat_cutoff = 1, # we want no filtering
-      save_func = save_func,
-      title = "Top 5% Loadings",
-      ...
-    )}, error = function(msg) { log_msg(error=msg) })
+
+  maybe_metadata <- pca_object$metadata
+  if ("dummy" %in% colnames(maybe_metadata)) {
+    maybe_metadata <- NULL
+  }
+
+  param_grid <- expand.grid(
+    cluster_rows = cluster_rows,
+    cluster_columns = cluster_columns,
+    cut_by = unique(c(cut_by, NA)),
+    stringsAsFactors = FALSE
+  )
+
+  param_grid %>% purrr::pmap(~{
+
+    params = list(...)
+    .cut_by <- params$cut_by
+    .cut_by_val <- plot_utils$process_cut_by(.cut_by, pca_object$metadata)
+    cut_by_label <- ifelse(!is.null(.cut_by_val), paste0("cut_", make.names(.cut_by)), "")
+    cluster_rows <- params$cluster_rows
+    cluster_columns <- params$cluster_columns
+
+    .save_func <- NULL
+    if (!is.null(save_func)) {
+      filename <- paste0(
+        get_arg(save_func, "filename"),
+        "_gsea_heatmap_5pct",
+        "_rc", ifelse(cluster_rows, "T", "F"),
+        "_cc", ifelse(cluster_columns, "T", "F"),
+        cut_by_label)
+        .save_func <- make_partial(save_func, filename = filename)
+      }
+
+    tryCatch({
+      ht <- plot_tools$plot_results_one_collection(
+        df = submat,
+        metadata = pca_object$metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
+        # pathway_metadata = loadings,
+        row_annotation = ra,
+        limit = Inf,
+        pstat_cutoff = 1, # we want no filtering
+        title = "Top 5% Loadings",
+        cluster_rows = cluster_rows,
+        cluster_columns = cluster_columns,
+        cut_by = .cut_by,
+        save_func = .save_func,
+      )}, error = function(msg) { log_msg(error=msg) }
+    ) # end of tryCatch
+  }) # end of pmap
+
 
   top_loadings <- get_top_loadings(pca_object, components = components, rangeRetain = 1, limit = 5)
   submat <- gsea_object %>% name_cleaner() %>% dplyr::filter(pathway %in% rownames(top_loadings))
@@ -412,22 +456,63 @@ make_heatmap_from_loadings <- function(
     PC3 = top_loadings$PC3_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white")),
     PC4 = top_loadings$PC4_member %>% as.character() %>% anno_simple(col = c("TRUE" = "black", "FALSE" = "white"))
   )
-  maybe_metadata <- pca_object$metadata
-  if ("dummy" %in% colnames(maybe_metadata)) {
-    maybe_metadata <- NULL
-  }
 
-  tryCatch({
-    ht <- plot_tools$plot_results_one_collection(
-      df = submat,
-      metadata = maybe_metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
-      # pathway_metadata = loadings,
-      row_annotation = ra,
-      limit = Inf,
-      pstat_cutoff = 1, # we want no filtering
-      save_func = save_func,
-      title = "Top 5 Loadings Per PC",
-      ...
-      )}, error = function(msg){ log_msg(error=msg) }
-  )
+
+  param_grid %>% purrr::pmap(~{
+
+    params = list(...)
+    .cut_by <- params$cut_by
+    .cut_by_val <- plot_utils$process_cut_by(.cut_by, pca_object$metadata)
+    cut_by_label <- ifelse(!is.null(.cut_by_val), paste0("cut_", make.names(.cut_by)), "")
+    cluster_rows <- params$cluster_rows
+    cluster_columns <- params$cluster_columns
+
+    .save_func <- NULL
+    if (!is.null(save_func)) {
+      filename <- paste0(
+        get_arg(save_func, "filename"),
+        "_gsea_heatmap_top5",
+        "_rc", ifelse(cluster_rows, "T", "F"),
+        "_cc", ifelse(cluster_columns, "T", "F"),
+        cut_by_label)
+        .save_func <- make_partial(save_func, filename = filename)
+      }
+
+
+    tryCatch({
+      ht <- plot_tools$plot_results_one_collection(
+        df = submat,
+        metadata = pca_object$metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
+        # pathway_metadata = loadings,
+        row_annotation = ra,
+        limit = Inf,
+        pstat_cutoff = 1, # we want no filtering
+        title = "Top 5 Loadings Per PC",
+        cluster_rows = cluster_rows,
+        cluster_columns = cluster_columns,
+        cut_by = .cut_by,
+        save_func = .save_func,
+      )}, error = function(msg) { log_msg(error=msg) }
+    ) # end of tryCatch
+  }) # end of pmap
+
+
+
+  # param_grid %>% purrr:pmap(~{
+  #   params <- list(...)
+  #   tryCatch({
+  #     ht <- plot_tools$plot_results_one_collection(
+  #       df = submat,
+  #       metadata = maybe_metadata, # guaranteed to match the colnames of df which was used originally to make the pca obj
+  #       # pathway_metadata = loadings,
+  #       row_annotation = ra,
+  #       limit = Inf,
+  #       pstat_cutoff = 1, # we want no filtering
+  #       save_func = save_func,
+  #       title = "Top 5 Loadings Per PC",
+  #       ...
+  #       )}, error = function(msg){ log_msg(error=msg) }
+  #   ) # end of tryCatch
+  # })
+
 }
