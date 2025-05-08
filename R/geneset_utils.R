@@ -5,11 +5,15 @@ suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(memoise))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(here))
+suppressPackageStartupMessages(library(msigdbr))
 
+# util_tools <- new.env()
+# source(file.path(here("R"), "./utils.R"), local = util_tools)
 
-util_tools <- new.env()
-source(file.path(here("R"), "./utils.R"), local = util_tools)
+source(file.path(here("R", "lazyloader.R")))
+util_tools <- get_tool_env("utils")
 log_msg <- util_tools$make_partial(util_tools$log_msg)
+
 
 
 get_collection_raw <- function(
@@ -31,6 +35,7 @@ get_collection_raw <- function(
     log_msg(info = paste0("reading ", collection_id, " from ", cache_dir, "\n"))
     return(readr::read_tsv(collection_id_path, show_col_types = FALSE))
   }
+  cat(paste0(collection_id, " not found in ", cache_dir, "\n"))
 
   # Data fetching
   df <- msigdbr::msigdbr(
