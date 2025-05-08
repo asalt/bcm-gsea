@@ -364,7 +364,7 @@ run <- function(params) {
           #combine_by_name = combine_by,
           meta_to_include = params$heatmap_gene$legend_include %||% params$legend_include %||% NULL,
           meta_to_exclude = params$heatmap_gene$legend_exclude %||% params$legend_exclude %||% NULL,
-          parallel = params$heatmap_gene$parallel %||% params$advanced$parallel %||% FALSE,
+          parallel = params$heatmap_gene$parallel %||% FALSE   #params$advanced$parallel %||% FALSE, # setting this to true is unstable
 
         )
       }
