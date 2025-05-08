@@ -1,35 +1,35 @@
 [params]
-savedir = "" # this is the base directory all results will be saved within.
+ranks_from = ""  # choices are volcano and gct. must specify this
+savedir = '' # this is the base directory all results will be saved within. paths are relative from where program is executed
 volcanodir = '' # use single quote for specifying paths
-rankfiledir = ''  # OK to leave blank
-gct_path = ""
-ranks_from = ""  # choices are volcano and gct
-species = "Homo sapiens"
+rankfiledir = "savedir" # "savedir" special character string indicating to save rankfiles within the specified savedir
+gct_path = ''
+species = "Homo sapiens"  # Mus musculus, ..
 zscore_emat = true
-zscore_emat_groupby = false #
+zscore_emat_groupby = false # change this to a metadata variable to zscore within. otherwise leave false
 cut_by = "group"
 
 [params.barplot]
-limit = "auto"
+limit = [12, 20, 32]
 do_individual = true
 do_combined = true
 
 [params.enplot]
-do = true
-limit = 10
 do_individual = true
 do_combined = true
+limit = 10
 combine_by = false
 
 [params.heatmap_gsea]
 do = true
-limit = 10
+limit = [10, 20, 40, 80]  # will plot each size
 
 [params.heatmap_gene]
 do = true
 limit = 10
 
 [params.pca]
+do = false
 width = 7.8
 height = 7.4
 col_by = ""
@@ -55,6 +55,16 @@ subcategory = "CP:REACTOME"
 collapse = true
 
 [[params.genesets]]
+category = "C3"
+subcategory = "TFT:GTRD"
+collapse = true
+
+[[params.genesets]]
+category = "C3"
+subcategory = "MIR:MIRDB"
+collapse = true
+
+[[params.genesets]]
 category = "C5"
 subcategory = "GO:MF"
 collapse = true
@@ -74,10 +84,24 @@ category = "C5"
 subcategory = "All"
 collapse = true
 
+
+[[params.genesets]]
+category = "C6"
+subcategory = ""
+collapse = true #
+
+[[params.genesets]]
+category = "C7"
+subcategory = "IMMUNESIGDB"
+collapse = true
+
+
+
 [params.advanced]
 parallel = true
 cache = true
-replace = true
+replace = false
 cachedir = "savedir"
 logfile = "savedir"
 loglevel = "INFO"
+pivot_gsea_results = false
