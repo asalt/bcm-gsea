@@ -59,8 +59,20 @@ create_rnkfiles_from_emat <- function(
     emat,
     apply_z_score = FALSE,
     zscore_groupby = FALSE,
+    sample_exclude = NULL,
     ...) {
   gct <- cmapR::parse_gctx(emat)
+
+
+  if (!is.null(sample_exclude)){
+    to_exclude <- rownames(gct@cdesc[sample_exclude, ])
+    to_keep <- setdiff(rownames(gct@cdesc), to_exclude)
+    if (length(to_exclude) > 0){
+        gct <- cmapR::subset_gct(gct, cid=to_keep)
+    }
+  }
+
+
   if (apply_z_score) {
     gct <- util_tools$scale_gct(gct, group_by = zscore_groupby)
     # .new <- gct %>% cmapR::melt_gct()
@@ -384,12 +396,14 @@ load_and_process_ranks <- function(params) {
   volcanodir <- params$volcanodir
   gct_path <- params$gct_path
   ranks_from <- params$ranks_from
+  sample_exclude <- params$sample_exclude %||% FALSE
   zscore_emat <- params$zscore_emat %||% TRUE
   zscore_emat_groupby <- ifelse(
     (!is.null(params$zscore_emat_groupby) && !is.na(params$zscore_emat_groupby ) && is.character(params$zscore_emat_groupby)),
     params$zscore_emat_groupby,
     FALSE
   )
+
 
   log_msg(msg = paste0("ranks from : ", ranks_from))
   log_msg(msg = paste0("rankfiledir : ", rankfiledir))
@@ -450,7 +464,7 @@ load_and_process_ranks <- function(params) {
   }
   if (ranks_from == "gct" && !is.null(gct_path)) {
     apply_z_score <- zscore_emat
-    rnkdfs <- create_rnkfiles_from_emat(gct_path, apply_z_score = apply_z_score, zscore_groupby = zscore_emat_groupby)
+    rnkdfs <- create_rnkfiles_from_emat(gct_path, apply_z_score = apply_z_score, zscore_groupby = zscore_emat_groupby, sample_exclude=sample_exclude)
 
     names(rnkdfs) <- names(rnkdfs) %>%
       fs::path_file() %>%
