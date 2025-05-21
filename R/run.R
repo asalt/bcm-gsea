@@ -133,6 +133,12 @@ run <- function(params) {
   if (!is.null(params$gct_path) && file.exists(params$gct_path)) {
     log_msg(msg = paste0("reading gct file: ", params$gct_path))
     gct <- cmapR::parse_gctx(params$gct_path)
+    sample_exclude <- params$sample_exclude
+    to_exclude <- rownames(gct@cdesc[sample_exclude, ])
+    to_keep <- setdiff(rownames(gct@cdesc), to_exclude)
+    if (length(to_exclude) > 0){
+        gct <- cmapR::subset_gct(gct, cid=to_keep)
+    }
   } else {
     gct <- NULL
   }
