@@ -329,16 +329,20 @@ run <- function(params) {
         ~{
             params = list(...)
             combine_by_val <- params$combine_by_val
-            if (!combine_by_val %in% colnames(metadata)) {
+            splits <- util_tools$process_cut_by(combine_by_val, metadata)
+            #if (!combine_by_val %in% colnames(metadata)) {
+            if (is.null(splits)){
               combine_by_df <- NULL
             } else {
-              combine_by_df <- metadata %>%
-                dplyr::select(!!sym(combine_by_val), id) %>%
-                dplyr::rename(
-                  facet = !!sym(combine_by_val),
-                  rankname = id
-                )
-              if (!is.null(params$extra$rankname_order)) {
+              combine_by_df <- data.frame(id=rownames(metadata), facet=splits)
+              rownames(combine_by_df) <- combine_by_df$id
+              # combine_by_df <- metadata %>%
+              #   dplyr::select(!!sym(combine_by_val), id) %>%
+              #   dplyr::rename(
+              #     facet = !!sym(combine_by_val),
+              #     rankname = id
+              #  )
+              if (!is.null(params$extra$rankname_order)) { # this will fail if not match exactly
                 combine_by_df <- combine_by_df %>%
                   mutate(facet = factor(facet, levels = params$extra$rankname_order, ordered = T)) %>%
                   arrange(facet)
@@ -395,15 +399,23 @@ run <- function(params) {
         ~{
             params = list(...)
             combine_by_val <- params$combine_by_val
-            if (combine_by_val %in% colnames(metadata)) {
-              combine_by_df <- metadata %>%
-                dplyr::select(!!sym(combine_by_val), id) %>%
-                dplyr::rename(
-                  facet = !!sym(combine_by_val),
-                  rankname = id
-                )
+            splits <- util_tools$process_cut_by(combine_by_val, metadata)
+            if (is.null(splits)){
+              combine_by_df <- NULL
+            } else {
+              combine_by_df <- data.frame(id=rownames(metadata), facet=splits)
+              rownames(combine_by_df) <- combine_by_df$id
+              combine_by_df$rankname <- combine_by_df$id
             }
-            if (!is.null(params$extra$rankname_order)) {
+            # if (combine_by_val %in% colnames(metadata)) {
+            #   combine_by_df <- metadata %>%
+            #     dplyr::select(!!sym(combine_by_val), id) %>%
+            #     dplyr::rename(
+            #       facet = !!sym(combine_by_val),
+            #       rankname = id
+            #     )
+            # }
+            if ((!is.null(params$extra$rankname_order)) && (!is.null(combine_by_df))) {
               combine_by_df <- combine_by_df %>%
                 mutate(facet = factor(facet, levels = params$extra$rankname_order, ordered = T)) %>%
                 arrange(facet)

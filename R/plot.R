@@ -1447,6 +1447,8 @@ plot_top_ES <- function(
       rankorder_by_pw,
       metadata = combine_by
     )
+
+    #combine_by <- plot_utils$process_cut_by(cut_by, cdesc_for_annot)
     combine_by_name <- combine_by_name %||% "all"
     combine_by_name <- ifelse(combine_by_name == FALSE, "all", combine_by_name)
 
