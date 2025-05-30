@@ -253,10 +253,10 @@ plot_heatmap_of_edges <- function(
     meta_to_include = NULL,
     meta_to_exclude = NULL,
     parallel = FALSE,
+    pathways_of_interest = NULL, # TODO: implement this
     ...) {
   # transform for plotting
   .gct <- if (scale) util_tools$scale_gct(gct, group_by = scale_by) else gct
-
 
   colorbar_title <- if (scale_by %in% colnames(.gct@cdesc)) {
     paste0("zscore by ", scale_by)
@@ -402,11 +402,21 @@ plot_heatmap_of_edges <- function(
 
   # Process each comparison
   process_comparison <- function(collection_name, comparison_name, result, gct) {
+
+    xtra <- NULL
+    if (!is.null(pathways_of_interest)){ # an input argument list, or NULL
+      xtra <- result %>% dplyr::filter(pathway %in% pathways_of_interest)
+    }
+
     forplot <- result %>% fgsea_tools$select_topn(
       limit = limit,
       to_include = to_include,
       pstat_cutoff = pstat_cutoff
     )
+
+    if (!is.null(xtra)){
+      forplot <- bind_rows(forplot, xtra)
+    }
 
     log_msg(info = paste0("plotting heatmaps for ", collection_name, " ", comparison_name))
     log_msg(info = paste0("n forplot: ", forplot %>% nrow()))
@@ -1346,6 +1356,7 @@ plot_top_ES_across <- function(
     combined_show_ticks = FALSE,
     width = 3.4,
     height = 4,
+    pathways_of_interest = NULL,
     ...) {
   if (!"list" %in% class(gsea_results)) {
     stop(cat("gsea_results should be a list of data frames"))
@@ -1383,7 +1394,8 @@ plot_top_ES_across <- function(
         save_func = save_func,
         panel_width = width,
         panel_height = height,
-        combined_show_ticks = combined_show_ticks
+        combined_show_ticks = combined_show_ticks,
+        pathways_of_interest = pathways_of_interest
       )
       return(plts)
     })
@@ -1406,19 +1418,30 @@ plot_top_ES <- function(
     combined_show_ticks = FALSE,
     combined_label_size = 1.75,
     filter_on_mainpathway = TRUE,
+    pathways_of_interest = NULL,
     ...) {
   #
+
+  xtra <- NULL
+  if (!is.null(pathways_of_interest)){
+    xtra <- df %>% dplyr::filter(pathway %in% pathways_of_interest)
+  }
 
   if (filter_on_mainpathway == TRUE) {
     df <- fgsea_tools$filter_on_mainpathway(df)
   }
+
   df %<>% fgsea_tools$select_topn(limit = limit)
+
+  if (!is.null(xtra)){
+      df %<>% dplyr::bind_rows(xtra)
+  }
+
   if (nrow(df) == 0) {
     return(NULL)
   }
   pathways <- df$pathway %>% unique()
   geneset_lists <- geneset_collection[pathways]
-
 
   # print(paste0("limit: ", limit))
   # print(nrow(df))
@@ -1430,7 +1453,9 @@ plot_top_ES <- function(
   rankorder_by_pw <- fgsea_tools$get_rankorder_across(
     df,
     ranks_list,
-    geneset_lists
+    geneset_lists,
+    limit = max(120, limit), # why do we even need to set this?
+    pathways_of_interest = pathways_of_interest
   ) # this yields a named list
   # names are pathways
   # values are named lists of rankorder for each sample

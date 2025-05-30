@@ -492,6 +492,7 @@ get_rankorder <- function(
    else warning('should not be a list')
  }
 
+  # browser()
   enplot_data <- plotEnrichmentData(geneset_ids, rankobj)
   rnkorder <- -rankobj %>% rank()
   rankorder_df <- data.frame(
@@ -564,21 +565,37 @@ get_rankorder_across <- function(
     title = "",
     pstat_cutoff = 1,
     pstat_usetype = "padj",
+    filter_on_mainpathway = TRUE,
     main_pathway_ratio = 0.1,
     db = NULL,
     genesets_additional_info = NULL,
+    pathways_of_interest = NULL, # force fetch pathways
     ...) {
 
   if (!"rankname" %in% colnames(df)) {
     stop("rankname not in fgesa_longdf")
   }
 
-  df <- filter_on_mainpathway(df, main_pathway_ratio >= main_pathway_ratio)
+  xtra <- NULL
+  if (!is.null(pathways_of_interest)){
+    xtra <- df %>% dplyr::filter(pathway %in% pathways_of_interest) %>%
+        arrange(pval)
+  }
+
+  if (filter_on_mainpathway == TRUE){
+    df <- filter_on_mainpathway(df, main_pathway_ratio >= main_pathway_ratio)
+  }
+
+
   df <- df %>%
     filter(!!as.symbol(pstat_usetype) < pstat_cutoff) %>%
     arrange(pval) %>%
     distinct(pathway, .keep_all = TRUE) %>%
     head(n = limit)
+
+  if (!is.null(xtra)){
+    df <- bind_rows(df, distinct(xtra, .keep_all = TRUE))
+  }
 
 
   pathways_to_plot <- df$pathway

@@ -150,6 +150,9 @@ run <- function(params) {
   # we then iterate over the genesets one by one
   # so all results for one get generated before moving to the next
 
+  # extra pathways to ensure we plot
+  pathways_of_interest = params$pathways_of_interest
+
 
   genesets_for_iteration %>% purrr::walk(
     ~ {
@@ -336,12 +339,6 @@ run <- function(params) {
             } else {
               combine_by_df <- data.frame(id=rownames(metadata), facet=splits)
               rownames(combine_by_df) <- combine_by_df$id
-              # combine_by_df <- metadata %>%
-              #   dplyr::select(!!sym(combine_by_val), id) %>%
-              #   dplyr::rename(
-              #     facet = !!sym(combine_by_val),
-              #     rankname = id
-              #  )
               if (!is.null(params$extra$rankname_order)) { # this will fail if not match exactly
                 combine_by_df <- combine_by_df %>%
                   mutate(facet = factor(facet, levels = params$extra$rankname_order, ordered = T)) %>%
@@ -372,6 +369,7 @@ run <- function(params) {
           replace = params$advanced$replace %||% TRUE,
           #combine_by = combine_by_df, # this is metadata table rankname and facet if exists
           #combine_by_name = combine_by,
+          pathways_of_interest = pathways_of_interest,
           meta_to_include = params$heatmap_gene$legend_include %||% params$legend_include %||% NULL,
           meta_to_exclude = params$heatmap_gene$legend_exclude %||% params$legend_exclude %||% NULL,
           parallel = params$heatmap_gene$parallel %||% FALSE   #params$advanced$parallel %||% FALSE, # setting this to true is unstable
@@ -407,14 +405,6 @@ run <- function(params) {
               rownames(combine_by_df) <- combine_by_df$id
               combine_by_df$rankname <- combine_by_df$id
             }
-            # if (combine_by_val %in% colnames(metadata)) {
-            #   combine_by_df <- metadata %>%
-            #     dplyr::select(!!sym(combine_by_val), id) %>%
-            #     dplyr::rename(
-            #       facet = !!sym(combine_by_val),
-            #       rankname = id
-            #     )
-            # }
             if ((!is.null(params$extra$rankname_order)) && (!is.null(combine_by_df))) {
               combine_by_df <- combine_by_df %>%
                 mutate(facet = factor(facet, levels = params$extra$rankname_order, ordered = T)) %>%
@@ -434,6 +424,7 @@ run <- function(params) {
               combine_by_name = combine_by_val,
               width = params$enplot$width %||% 5.4,
               height = params$enplot$height %||% 4.0,
+              pathways_of_interest = pathways_of_interest,
               combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE,
               combined_label_size = params$enplot$combined_label_size %||% 1.85
             )
