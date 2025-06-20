@@ -253,7 +253,7 @@ plot_heatmap_of_edges <- function(
     meta_to_include = NULL,
     meta_to_exclude = NULL,
     parallel = FALSE,
-    pathways_of_interest = NULL, # TODO: implement this
+    pathways_of_interest = NULL, # TODO: implement this. this has started somewhere
     ...) {
   # transform for plotting
   .gct <- if (scale) util_tools$scale_gct(gct, group_by = scale_by) else gct
@@ -670,8 +670,18 @@ barplot_with_numbers <- function(
     title = "",
     save_func = NULL,
     facet_order = NULL,
+    nes_range = NULL, # or a list of len 2
     ...) {
+
+  if (!is.null(nes_range)){
+    if (length(nes_range) != 2){
+       stop("nes_range should be a list of length 2")
+    }
+  }
+
+
   sel <- prepare_data_for_barplot(df)
+
 
   custom_labeller <- function(value) {
     wrapped_labels <- sapply(value, function(label) {
@@ -726,7 +736,25 @@ barplot_with_numbers <- function(
       # position = position_dodge(width = 0.8),
       vjust = 0.5, hjust = 0.5
     ) +
-    theme_bw() + theme(axis.text.y = element_text(size = map(sel$pathway, get_size)))
+    theme_bw() + theme(axis.text.y = element_text(size = map(sel$pathway, get_size), face = "bold"))
+
+  if (!is.null(nes_range)){
+    nes_max <- max(sel$NES, na.rm=T) * 1.05
+    nes_min <- min(sel$NES, na.rm=T) * 1.05
+    # Expand user range if needed
+    nes_range[1] <- min(nes_range[1], nes_min)
+    nes_range[2] <- max(nes_range[2], nes_max)
+    # use symmetric range only if both sides have signal
+    if (nes_min < 0 && nes_max > 0) {
+      max_abs <- max(abs(nes_min), abs(nes_max))
+      nes_range <- c(-max_abs, max_abs)
+    } else {
+      nes_range <- c(min(nes_min, 0, na.rm=T), max(nes_max, 0, na.rm=T))
+    }
+    p <- p + xlim(nes_range[1], nes_range[2])
+
+  }
+
   if ("rankname" %in% colnames(df) && (length(unique(df$rankname)) > 1)) {
     log_msg(info = "facet wrapping by rankname")
     p <- p + facet_wrap(~rankname, labeller = as_labeller(labeller_func))
@@ -779,6 +807,9 @@ all_barplots_with_numbers <- function(
           comparison_name <- .y
           .plts <- limit %>% purrr::map(
             ~ {
+
+              nes_max <- max(abs(dataframe$NES), na.rm=T)
+              nes_range <- c(-nes_max, nes_max)
               .limit <- .x
               sel <- fgsea_tools$select_topn(dataframe, limit = .limit)
               .title <- comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
@@ -798,6 +829,7 @@ all_barplots_with_numbers <- function(
                 title = .title,
                 save_func = save_func,
                 facet_order = facet_order,
+                nes_range = nes_range,
                 ...
               )
 
