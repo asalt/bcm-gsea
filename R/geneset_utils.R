@@ -15,6 +15,9 @@ util_tools <- get_tool_env("utils")
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 
+c1_fix <- function(df){
+    df %>% mutate( db_ncbi_gene = ensembl_gene )
+}
 
 get_collection_raw <- function(
     category,
@@ -26,6 +29,8 @@ get_collection_raw <- function(
   if (is.null(logger)) logger <- log_msg
   collection_id <- paste(category, subcategory, make.names(species), sep = "_")
 
+  post_func <- if (category == "C1") c1_fix else identity
+
   cache_dir <- here("cache")
   collection_id_path <- file.path(cache_dir, collection_id)
 
@@ -33,15 +38,18 @@ get_collection_raw <- function(
     cat(paste0("reading ", collection_id, " from ", cache_dir, "\n"))
     logger(msg = paste0("reading ", collection_id, " from ", cache_dir, "\n"))
     log_msg(info = paste0("reading ", collection_id, " from ", cache_dir, "\n"))
-    return(readr::read_tsv(collection_id_path, show_col_types = FALSE))
+    df <- readr::read_tsv(collection_id_path, show_col_types = FALSE)
+    return(df %>% post_func() )
   }
   cat(paste0(collection_id, " not found in ", cache_dir, "\n"))
 
   # Data fetching
   df <- msigdbr::msigdbr(
     species = species,
-    category = category,
-    subcategory = subcategory
+    collection = category,
+    subcollection = if (nchar(subcategory)>0) subcategory else NULL
+    # category = category,
+    # subcategory = subcategory
   )
 
   if (cache == TRUE) {
@@ -52,7 +60,9 @@ get_collection_raw <- function(
     }
   }
 
-  return(df)
+  # special case if C1 must be indexed on ensembl
+
+  return(df %>% post_func())
 }
 
 get_collection <- memoise::memoise(get_collection_raw) # this is convienent for interactive sessions
@@ -125,13 +135,14 @@ get_pathway_info <- function(gsname) {
 
 # now turn each pathway dataframe into a named list
 # Transform each DataFrame and convert it into a named list of gene ids
-genesets_df_to_list <- function(list_of_geneset_dfs) {
+genesets_df_to_list <- function(list_of_geneset_dfs) { # the input here is a dataframe, consider renaming variable
   genesets_list <- list_of_geneset_dfs %>%
     # mutate(gs_fullname = str_c(gs_exact_source, gs_name, sep=" ")) %>%
     # group_by(gs_fullname) %>%
     group_by(gs_name) %>%
-    summarise(entrez_gene_ids = list(as.character(entrez_gene)), .groups = "drop") %>%
+    summarise(entrez_gene_ids = list(as.character(db_ncbi_gene)), .groups = "drop") %>%
     tibble::deframe()
+    # summarise(entrez_gene_ids = list(as.character(entrez_gene)), .groups = "drop") %>%
   genesets_list
 }
 
@@ -141,6 +152,8 @@ geneset_array_to_df <- function(gs) {
     data.frame(
       category = x$category,
       subcategory = x$subcategory,
+      # collection = x$collection,
+      # subcollection = x$subcollection,
       collapse = x$collapse,
       stringsAsFactors = FALSE
     )
