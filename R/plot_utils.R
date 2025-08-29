@@ -83,14 +83,13 @@ plot_and_save_unsafe <- function(
     ...) {
   # Setup: Open the appropriate graphics device
 
-  log_msg(msg = "plot_and_save")
+  #log_msg(msg = "plot_and_save")
   if (is.null(filename)){
       log_msg(warning = "filename is null")
   }
 
   full_path <- file.path(path, paste0(filename, ".", type))
-
-  log_msg(msg = paste0("full_path: ", full_path))
+  # log_msg(msg = paste0("full_path: ", full_path))
 
   if (!fs::dir_exists(path)) fs::dir_create(path)
 
@@ -124,7 +123,7 @@ plot_and_save_unsafe <- function(
   # check all open devices with dev.list()
   # on.exit(dev.off(), add = TRUE)  moved to above
 
-  log_msg(msg = paste0("done"))
+  # log_msg(msg = paste0("done"))
 
   return(h)
 }
@@ -136,16 +135,16 @@ safe_plot_and_save <- function(...) {
       message("\n❗️ Error caught: ", conditionMessage(e))
       message("\nLast traceback:")
       print(rlang::last_trace(drop = FALSE))
-      
+
       message("\nOpen graphics devices:")
       print(dev.list())
 
-      # Optional: Force close them
+      # Force close them
       if (length(dev.list()) > 0) {
         message("\nClosing all devices...")
         graphics.off()
       }
-      
+
       # Optional: Write to log file
       log_msg(warning = paste("Plotting failed:", conditionMessage(e)))
 
@@ -154,7 +153,7 @@ safe_plot_and_save <- function(...) {
     }
   )
 }
-plot_and_save <- safe_plot_and_save # 
+plot_and_save <- safe_plot_and_save #
 
 
 # Matplotlib default colors
