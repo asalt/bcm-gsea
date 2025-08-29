@@ -64,7 +64,7 @@ create_rnkfiles_from_emat <- function(
   gct <- cmapR::parse_gctx(emat)
 
 
-  if (!is.null(sample_exclude)){
+  if ((!is.null(sample_exclude)) && (sample_exclude != FALSE)){
     to_exclude <- rownames(gct@cdesc[sample_exclude, ])
     to_keep <- setdiff(rownames(gct@cdesc), to_exclude)
     if (length(to_exclude) > 0){
@@ -125,7 +125,7 @@ create_rnkfiles_from_volcano <- function(
 
   lst <- volcanofiles %>%
     purrr::set_names(nm = ~ basename(.) %>%
-      fs::path_ext_remove()) %>% # set names first
+        sub("\\.rnk$", "", .)) %>%  # fs::path_ext_remove()) %>% # set names first
     purrr::map(~ {
       .table <- read_tsv(.x, show_col_types = F)
       if (value_col %in% colnames(.table)) {
@@ -418,7 +418,10 @@ load_and_process_ranks <- function(params) {
       rnkdfs <- rnkfiles %>% load_rnkfiles()
       names(rnkdfs) <- names(rnkdfs) %>%
         fs::path_file() %>%
-        fs::path_ext_remove()
+        sub("\\.rnk$", "", .)
+
+        #fs::path_ext_remove() # this is no good
+
 
       name_mapping_file <- file.path(rankfiledir, 'names.txt')
       if (fs::file_exists(name_mapping_file)) {
@@ -428,7 +431,9 @@ load_and_process_ranks <- function(params) {
           delim = '=',
            comment = '#',
            show_col_types = F
-        ) %>% mutate(old = fs::path_ext_remove(old))
+        ) %>% mutate(old = sub("\\.rnk$", "", old))
+
+        # fs::path_ext_remove(old))
 
         for (ix in seq_len(length(rnkdfs))) {
           .new <- name_mapping[ix, ]$new
@@ -468,7 +473,8 @@ load_and_process_ranks <- function(params) {
 
     names(rnkdfs) <- names(rnkdfs) %>%
       fs::path_file() %>%
-      fs::path_ext_remove()
+      sub("\\.rnk$", "", .)
+      #fs::path_ext_remove()
     rnkdfs %>% write_rnkfiles(dir = rankfiledir)
     log_msg(msg = paste0("length of retrieved rankfiles: ", length(rnkdfs)))
     ranks_list <- rnkdfs %>% ranks_dfs_to_lists()
