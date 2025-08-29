@@ -103,7 +103,9 @@ make_heatmap_fromgct <- function(
     }
     cdesc_for_annot[[col]] <- .col
   }
-
+  cdesc_for_annot <- cdesc_for_annot %>%
+    arrange(across(everything()))
+  .mat <- gct@mat[, rownames(cdesc_for_annot)]
 
   .colors <- plot_utils$create_named_color_list(cdesc_for_annot, colnames(cdesc_for_annot), c = 124)
   # if ("group" %in% colnames(gct@cdesc)) {
@@ -139,6 +141,8 @@ make_heatmap_fromgct <- function(
     row_labels <- gct@rdesc$rdesc
   } else if ("genesymbol" %in% colnames(gct@rdesc)) {
     row_labels <- gct@rdesc$genesymbol
+  } else if ("gene_symbol" %in% colnames(gct@rdesc)) {
+    row_labels <- gct@rdesc$gene_symbol
   } else if ("GeneSymbol" %in% colnames(gct@rdesc)) {
     row_labels <- gct@rdesc$GeneSymbol
   } else {
@@ -146,7 +150,6 @@ make_heatmap_fromgct <- function(
   }
 
 
-  .mat <- gct@mat
   # gct@mat %>% apply( 1, function(x) scale(x, center = T, scale = scale)) %>% t() %>% as.matrix()),
 
   if (autoscale == TRUE) {
@@ -183,7 +186,7 @@ make_heatmap_fromgct <- function(
 
     row_title = row_title,
     row_labels = row_labels,
-    column_labels = gct@cdesc$id, # id should always be here
+    column_labels = colnames(.mat), # id should always be here
 
     row_title_gp = grid::gpar(fontsize = 10.4, fontface="bold", hjust=1, vjust=1), #just="left"),  # remove just='left' to restore default behavior, defualt just = "center"
     column_title_gp = grid::gpar(fontsize = 7.4, fontface="bold", hjust=1.4), #just="left"),  # remove just='left' to restore default behavior, defualt just = "center"
