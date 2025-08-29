@@ -99,7 +99,6 @@ run <- function(params) {
 
   # =======
 
-
   # log_msg(paste0("rankfiledir: ", params$rankfiledir))
   # log_msg(paste0("volcanodir: ", params$volcanodir))
   # log_msg(paste0("gct_path: ", params$gct_path))
@@ -133,7 +132,7 @@ run <- function(params) {
   if (!is.null(params$gct_path) && file.exists(params$gct_path)) {
     log_msg(msg = paste0("reading gct file: ", params$gct_path))
     gct <- cmapR::parse_gctx(params$gct_path)
-    sample_exclude <- params$sample_exclude
+    sample_exclude <- params$sample_exclude %||% NULL
     to_exclude <- rownames(gct@cdesc[sample_exclude, ])
     to_keep <- setdiff(rownames(gct@cdesc), to_exclude)
     if (length(to_exclude) > 0){
@@ -362,6 +361,7 @@ run <- function(params) {
           limit = params$heatmap_gene$limit %||% 10,
           sample_order = params$extra$sample_order,
           cut_by = params$heatmap_gene$cut_by %||% params$cut_by %||% NA,
+          combine_by <- params$heatmap_gene$combine_by %||% params$combine_by %||% NULL,
           cluster_rows = params$heatmap_gene$cluster_rows %||% c(FALSE, TRUE),
           cluster_columns = params$heatmap_gene$cluster_columns %||% c(FALSE, TRUE),
           pstat_cutoff = params$heatmap_gene$pstat_cutoff %||% 1,
@@ -446,6 +446,7 @@ run <- function(params) {
           # combine_by_name = combine_by,
           width = params$enplot$width %||% 5.4,
           height = params$enplot$height %||% 4.0,
+          pathways_of_interest = pathways_of_interest,
           # combined_show_ticks = params$enplot$combined_show_ticks %||% FALSE,
           # combined_label_size = params$enplot$combined_label_size %||% 2.05
         )
