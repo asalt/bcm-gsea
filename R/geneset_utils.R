@@ -27,7 +27,7 @@ get_collection_raw <- function(
     logger = NULL) {
   #
   if (is.null(logger)) logger <- log_msg
-  collection_id <- paste(category, subcategory, make.names(species), sep = "_")
+  collection_id <- paste(make.names(category), make.names(subcategory), make.names(species), sep = "_")
 
   post_func <- if (category == "C1") c1_fix else identity
 
@@ -43,14 +43,51 @@ get_collection_raw <- function(
   }
   cat(paste0(collection_id, " not found in ", cache_dir, "\n"))
 
+
+  msig <- function(dbsp) {
+  msigdbr::msigdbr(
+    db_species   = dbsp,
+    species      = species,
+    collection   = category,
+    subcollection = if (nzchar(subcategory)) subcategory else NULL
+    )
+  }
+  db_species_primary <- if (species != "Mus musculus") "HS" else "MM"
+
   # Data fetching
-  df <- msigdbr::msigdbr(
-    species = species,
-    collection = category,
-    subcollection = if (nchar(subcategory)>0) subcategory else NULL
-    # category = category,
-    # subcategory = subcategory
+
+  df <- tryCatch(
+  msig(db_species_primary),
+  error = function(e_primary) {
+    # only fall back if the primary was "MM" (your stated requirement)
+    if (db_species_primary == "MM") {
+      message(sprintf(
+        "msigdbr failed with db_species='%s': %s\nRetrying with db_species='HS'...",
+        db_species_primary, conditionMessage(e_primary)
+      ))
+      tryCatch(
+        msig("HS"),
+        error = function(e_alt) {
+          stop(sprintf(
+            "msigdbr failed with db_species='MM' and fallback 'HS'.\nPrimary error: %s\nFallback error: %s",
+            conditionMessage(e_primary), conditionMessage(e_alt)
+          ))
+        }
+      )} else {
+      # primary wasn't MM → per spec, do not flip; propagate the original error
+      stop(e_primary)
+      }
+    }
   )
+
+  # df <- msigdbr::msigdbr(
+  #   db_species = if (species != "Mus musculus") "HS" else "MM",
+  #   species = species,
+  #   collection = category,
+  #   subcollection = if (nchar(subcategory)>0) subcategory else NULL
+  #   # category = category,
+  #   # subcategory = subcategory
+  # )
 
   if (cache == TRUE) {
     if (!fs::dir_exists(cache_dir)) fs::dir_create(cache_dir)
@@ -140,7 +177,8 @@ genesets_df_to_list <- function(list_of_geneset_dfs) { # the input here is a dat
     # mutate(gs_fullname = str_c(gs_exact_source, gs_name, sep=" ")) %>%
     # group_by(gs_fullname) %>%
     group_by(gs_name) %>%
-    summarise(entrez_gene_ids = list(as.character(db_ncbi_gene)), .groups = "drop") %>%
+    #summarise(entrez_gene_ids = list(as.character(db_ncbi_gene)), .groups = "drop") %>% # not db_ncbi_gene, but ncbi_gene
+    summarise(entrez_gene_ids = list(as.character(ncbi_gene)), .groups = "drop") %>%
     tibble::deframe()
     # summarise(entrez_gene_ids = list(as.character(entrez_gene)), .groups = "drop") %>%
   genesets_list
