@@ -75,11 +75,11 @@ simulate_preranked_data <- function(...) {
   # Generate a list of gene sets for each spike term
   spike_genes_list <- purrr::map(spike_terms, ~ geneset %>%
     dplyr::filter(str_detect(gs_name, .x)) %>%
-    dplyr::pull(entrez_gene) %>%
+    dplyr::pull(ncbi_gene) %>%
     unique())
 
   genes <- geneset %>%
-    dplyr::pull(entrez_gene) %>%
+    dplyr::pull(ncbi_gene) %>%
     unique()
 
   spike_genes <- unique(unlist(spike_genes_list))
