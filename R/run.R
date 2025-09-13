@@ -15,6 +15,26 @@ suppressPackageStartupMessages(library(ggalt))
 suppressPackageStartupMessages(library(here))
 suppressPackageStartupMessages(library(rlang))
 # suppressPackageStartupMessages(library(rmdformats))
+prepare_metadata <- function(gct, params) {
+  if (is.null(gct) || params$ranks_from != "gct") {
+    return(NULL)
+  }
+  metadata <- gct@cdesc
+  possible_group_order <- params$extra$rankname_order %||% NULL
+  if (!is.null(possible_group_order)) {
+    if ("group" %in% colnames(metadata) &&
+        all(possible_group_order %in% metadata$group)) {
+      metadata <- metadata %>%
+        mutate(group = factor(group, levels = possible_group_order, ordered = TRUE)) %>%
+        arrange(group)
+    } else {
+      warning("rankname_order provided but group column missing or incomplete; ignoring ordering")
+    }
+  }
+  metadata <- metadata[gct@cid, , drop = FALSE]
+  metadata
+}
+
 
 
 
@@ -141,6 +161,7 @@ run <- function(params) {
   } else {
     gct <- NULL
   }
+  metadata <- prepare_metadata(gct, params)
 
 
   # this part is challenging to pass everything in the right format
@@ -208,63 +229,55 @@ run <- function(params) {
 
 
       # now we plot results
-      # TODO better and earlier handle metadata loading
-      if (exists("gct") && !is.null(gct) && (params$ranks_from == "gct")) {
-        metadata <- gct@cdesc
-        possible_group_order <- params$extra$rankname_order %||% NULL
-        if ((!is.null(possible_group_order)) && ("group" %in% colnames(metadata)) && all(possible_group_order %in% metadata$group)) {
-          metadata <- metadata %>%
-            mutate(group = factor(group, levels = possible_group_order, ordered = T)) %>%
-            arrange(group)
-        }
-      } else {
-        metadata <- NULL
-      }
 
       # pca
       # =============
-      if (params$pca$do == TRUE) { # TODO: this fails if metadata not right and won't propagate rankname_order down
-        pca_objects <- all_gsea_results %>% pca_tools$do_all(
-          metadata = metadata
-        )
-
-        # log_msg(debug=paste0('pca colby is : ', params$pca$col_by))
-        log_msg(msg = paste0("plot pca all biplots"))
-
-        pca_objects %>% pca_tools$plot_all_biplots(
-          save_func = save_func,
-          top_pc = params$pca$top_pc %||% params$pca$max_pc %||% 3,
-          showLoadings = T,
-          labSize = params$pca$labSize %||% 1.8,
-          pointSize = params$pca$pointSize %||% 4,
-          sizeLoadingsNames = params$pca$sizeLoadingsNames %||% 1.4,
-          colby = params$pca$col_by %||% params$col_by %||% NULL,
-          shape = params$pca$mark_by %||% params$mark_by %||% NULL,
-          fig_width = params$pca$width %||% 8.4,
-          fig_height = params$pca$height %||% 7.6,
-          # group_order = params$extra$facet_order %||% NULL
-        )
-
-        all_gsea_results %>% purrr::imap(~ {
-          collection_name <- .y
-          pca_object <- pca_objects[[.y]]
-          .savedir <- file.path(get_arg(save_func, "path"), make.names(collection_name), "pca")
-          .filename <- paste0(make.names(collection_name), "_top_loadings")
-          .save_func <- make_partial(save_func, path = .savedir, filename = .filename)
-          pca_tools$make_heatmap_from_loadings(
-            gsea_object = .x,
-            pca_object = pca_object,
-            save_func = .save_func,
-            rankname_order = params$extra$rankname_order,
-            cluster_rows = params$pca$cluster_rows %||% TRUE,
-            cluster_columns = params$pca$cluster_columns %||% c(FALSE, TRUE),
-            cut_by = params$pca$cut_by %||% params$heatmap_gene$cut_by %||% params$cut_by %||% NULL,
-            meta_to_include = params$pca$legend_include %||% params$legend_include,
-            meta_to_exclude = params$pca$legend_exclude %||% params$legend_exclude
+      if (params$pca$do == TRUE) {
+        if (is.null(metadata)) {
+          warning("PCA skipped: metadata not available")
+        } else if (!all(names(ranks_list) %in% rownames(metadata))) {
+          warning("PCA skipped: metadata missing required ranknames")
+        } else {
+          pca_objects <- all_gsea_results %>% pca_tools$do_all(
+            metadata = metadata
           )
-        })
-      } # todo plot more edge plots and es plots based on the pca results
 
+          log_msg(msg = paste0("plot pca all biplots"))
+
+          pca_objects %>% pca_tools$plot_all_biplots(
+            save_func = save_func,
+            top_pc = params$pca$top_pc %||% params$pca$max_pc %||% 3,
+            showLoadings = TRUE,
+            labSize = params$pca$labSize %||% 1.8,
+            pointSize = params$pca$pointSize %||% 4,
+            sizeLoadingsNames = params$pca$sizeLoadingsNames %||% 1.4,
+            colby = params$pca$col_by %||% params$col_by %||% NULL,
+            shape = params$pca$mark_by %||% params$mark_by %||% NULL,
+            fig_width = params$pca$width %||% 8.4,
+            fig_height = params$pca$height %||% 7.6,
+            rankname_order = params$extra$rankname_order
+          )
+
+          all_gsea_results %>% purrr::imap(~ {
+            collection_name <- .y
+            pca_object <- pca_objects[[.y]]
+            .savedir <- file.path(get_arg(save_func, "path"), make.names(collection_name), "pca")
+            .filename <- paste0(make.names(collection_name), "_top_loadings")
+            .save_func <- make_partial(save_func, path = .savedir, filename = .filename)
+            pca_tools$make_heatmap_from_loadings(
+              gsea_object = .x,
+              pca_object = pca_object,
+              save_func = .save_func,
+              rankname_order = params$extra$rankname_order,
+              cluster_rows = params$pca$cluster_rows %||% TRUE,
+              cluster_columns = params$pca$cluster_columns %||% c(FALSE, TRUE),
+              cut_by = params$pca$cut_by %||% params$heatmap_gene$cut_by %||% params$cut_by %||% NULL,
+              meta_to_include = params$pca$legend_include %||% params$legend_include,
+              meta_to_exclude = params$pca$legend_exclude %||% params$legend_exclude
+            )
+          })
+        }
+      } # todo plot more edge plots and es plots based on the pca results
 
 
       # now plot
@@ -310,7 +323,7 @@ run <- function(params) {
           # sample_order = params$extra$rankname_order, # get rid of this one, pretty sure
           rankname_order = params$extra$rankname_order,
           meta_to_include = params$heatmap_gsea$legend_include %||% params$legend_include,
-          meta_to_exclude = params$pca$heatmap_gsea$legend_exclude %||% params$legend_exclude
+          meta_to_exclude = params$heatmap_gsea$legend_exclude %||% params$legend_exclude
         )
       }
 
@@ -361,7 +374,7 @@ run <- function(params) {
           limit = params$heatmap_gene$limit %||% 10,
           sample_order = params$extra$sample_order,
           cut_by = params$heatmap_gene$cut_by %||% params$cut_by %||% NA,
-          combine_by <- params$heatmap_gene$combine_by %||% params$combine_by %||% NULL,
+          combine_by = params$heatmap_gene$combine_by %||% params$combine_by %||% NULL,
           cluster_rows = params$heatmap_gene$cluster_rows %||% c(FALSE, TRUE),
           cluster_columns = params$heatmap_gene$cluster_columns %||% c(FALSE, TRUE),
           pstat_cutoff = params$heatmap_gene$pstat_cutoff %||% 1,

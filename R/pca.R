@@ -259,6 +259,7 @@ plot_all_biplots <- function(
     fig_width = 8.4,
     fig_height = 7.6,
     save_func = NULL,
+    rankname_order = NULL,
     ...) {
   log_msg(debug=paste0('colby equal to : ', colby))
   pca_objects %>%
@@ -267,6 +268,14 @@ plot_all_biplots <- function(
         pca_object <- .x
         title <- .y
         collection_name <- .y
+        if (!is.null(rankname_order) &&
+            !is.null(pca_object$metadata) &&
+            all(rankname_order %in% rownames(pca_object$metadata))) {
+          pca_object$metadata <- pca_object$metadata[rankname_order, , drop = FALSE]
+          if (!is.null(pca_object$rotated)) {
+            pca_object$rotated <- pca_object$rotated[rankname_order, , drop = FALSE]
+          }
+        }
 
         plts <- colby %>% purrr::map(
             ~{
@@ -379,6 +388,7 @@ make_heatmap_from_loadings <- function(
     cut_by = NULL,
     cluster_rows = TRUE,
     cluster_columns = FALSE,
+    rankname_order = NULL,
     meta_to_include = NULL,
     meta_to_exclude = NULL,
     ...){
@@ -440,6 +450,9 @@ make_heatmap_from_loadings <- function(
         cluster_rows = cluster_rows,
         cluster_columns = cluster_columns,
         cut_by = .cut_by,
+        rankname_order = rankname_order,
+        meta_to_include = meta_to_include,
+        meta_to_exclude = meta_to_exclude,
         save_func = .save_func,
       )}, error = function(msg) { log_msg(error=msg) }
     ) # end of tryCatch
