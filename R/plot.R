@@ -67,6 +67,7 @@ make_heatmap_fromgct <- function(
     meta_to_exclude = NULL, # if NULL filters nothing out
     colorbar_title = "zscore",
     cluster_column_slices = TRUE,
+    sample_exclude = NULL,
     # scale = T
     ...) {
   # gct <- subgct
@@ -79,6 +80,10 @@ make_heatmap_fromgct <- function(
 
   if (!is.null(sample_order)) {
     gct <- cmapR::subset_gct(gct, cid = sample_order)
+  }
+
+  if (!is.null(sample_exclude)) {
+    gct <- cmapR::subset_gct(gct, cid = setdiff(gct@cid, sample_exclude))
   }
 
   default_meta_to_exclude <- c("recno", "runno", "searchno", "label", "expr_col", "expr_file", "assay", "tube", "Tube", "TubeLabel", "id")
@@ -346,7 +351,7 @@ plot_heatmap_of_edges <- function(
       params <- list(...)
       path <- get_arg(save_func, "path")
       newpath <- file.path(path,
-                           make.names(collection_name),
+                           make.names(strip_pathway_leader(collection_name)),
                            "heatmaps_gene",
                             make.names(row$pathway) %>% substring(1,40)
       )
@@ -597,6 +602,7 @@ strip_pathway_leader <- function(df) {
   df %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "HALLMARK_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "KEGG_")) %>%
+    dplyr::mutate(pathway = stringr::str_remove(pathway, "MEDICUS_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "REACTOME_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "GOMF_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "GOBP_")) %>%
@@ -707,6 +713,19 @@ barplot_with_numbers <- function(
     x <- as.character(x)
     ifelse(nchar(x) < 27, 7.6, ifelse(nchar(x) < 64, 6.6, ifelse(nchar(x) < 84, 6.2, 5.2)))
   }
+  # rewrite below, check for equivalence 
+  # get_size <- function(x) {
+  #   # font size for geneset names
+  #   x <- as.character(x)
+  #   n <- nchar(x)
+
+  #   cut(n,
+  #       breaks = c(-Inf, 27, 64, 84, Inf),
+  #       labels = c(7.6, 6.6, 6.2, 5.2),
+  #       right = FALSE
+  #   ) |> as.numeric()
+  # }
+
 
   p <- sel %>%
     ggplot2::ggplot(
@@ -773,7 +792,7 @@ barplot_with_numbers <- function(
 
   # Calculate total figure size
   total_width_in <- 2.2 + (panel_width_in * ncol)
-  total_height_in <- panel_height_in * nrow + (length(unique(sel$pathway)) / 8)
+  total_height_in <- panel_height_in * nrow + (length(unique(sel$pathway))^1.1 / 8)
   log_msg(msg = paste0("total width: ", total_width_in, " total height: ", total_height_in))
 
 
@@ -814,7 +833,7 @@ all_barplots_with_numbers <- function(
               nes_max <- max(abs(dataframe$NES), na.rm=T)
               nes_range <- c(-nes_max, nes_max)
               .limit <- .x
-              sel <- fgsea_tools$select_topn(dataframe, limit = .limit)
+              sel <- fgsea_tools$select_topn(dataframe, limit = .limit, pstat_cutoff=1)
               .title <- comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
 
               if (!is.null(save_func)) {
@@ -872,7 +891,7 @@ do_combined_barplots <- function(
       .limit <- .x
       res <- fgsea_res_list %>% bind_rows(.id = "rankname") # all comparisons 1 gene set
       # res <- res %>% mutate(rankname = rankname %>% fs::path_file() %>% fs::path_ext_remove())
-      res <- fgsea_tools$select_topn(res, limit = .limit)
+      res <- fgsea_tools$select_topn(res, limit = .limit, pstat_cutoff=1)
       n_sel <- res %>%
         distinct(pathway) %>%
         nrow()

@@ -15,8 +15,12 @@ get_con <- function(db_path = file.path(here("sql"), "rankorder_data.db")){
   return(con)
 }
 
+close_con <- function(con){
+  dbDisconnect(con)
+}
+
 initialize_db <- function(db_path = file.path(here("sql"), "rankorder_data.db"), sql_file = file.path(here("sql"), "init_db.sql")) {
-  print(db_path)
+  log_msg(info="Initializing database...")
   con <- dbConnect(RSQLite::SQLite(), db_path)
   # Read the SQL commands from the file
   sql_commands <- readLines(sql_file)
@@ -29,7 +33,7 @@ initialize_db <- function(db_path = file.path(here("sql"), "rankorder_data.db"),
   for (statement in sql_statements) {
     statement <- trimws(statement)
     if (nchar(statement) > 0) {
-        print(statement)
+        log_msg(debug=statement)
       dbExecute(con, statement)
     }
   }
@@ -239,6 +243,7 @@ insert_curve <- function(
       res <- dbGetQuery(con, sql, params = rankobj_name)
       if (nrow(res) == 0){
         warning("no rank name found, creating")
+        log_msg(warning="no rank name found, creating")
         rankobj_id <- insert_rankobj(con, rankobj_name)
       } else{
         rankobj_id <- res[1,]
@@ -251,6 +256,7 @@ insert_curve <- function(
       res <- dbGetQuery(con, sql, params = pathway_name)
       if (nrow(res) == 0){
         warning("no pathway id found, ")
+        log_msg(warning="no pathway id found, ")
         return()
         # pathway_id <- insert_pathway(con, rankobj_name)
       } else{
@@ -263,7 +269,7 @@ insert_curve <- function(
 
   on.exit({
     dbRollback(con)
-    message("Transaction rolled back due to an error.")
+    message("Transaction rolled back.")
   }, add = TRUE)
 
   dbBegin(con)
@@ -284,27 +290,6 @@ insert_curve <- function(
 
 }
 
-
-insert_ticks <- function(con, rankobj_id = NULL, rankobj_name = NULL, ticks_data = NULL) {
-
-  if (!"data.frame" %in% class(ticks_data)) {
-    stop("ticks_data must be a data frame with columns: rank, stat")
-  }
-
-  # Assuming ranks_data is a data frame with columns: rank, gene
-  if (is.null(rankobj_id)) {
-      sql <- "SELECT rankobj_id from RankObjects where name = ? LIMIT 1"
-      res <- dbGetQuery(con, sql, params = rankobj_name)
-      if (nrow(res) == 0){
-        warning("no rank name found, creating")
-        rankobj_id <- insert_rankobj(con, rankobj_name)
-      } else{
-        rankobj_id <- res[1,]
-      }
-  }
-}
-
-
 get_plot_enrichmentdata_by_pathway <- function(
   con,
   rankobj_id = NULL,
@@ -312,8 +297,6 @@ get_plot_enrichmentdata_by_pathway <- function(
   pathway_id = NULL,
   pathway_name = NULL
  ) {
-
-
 
   # get rankobj id if not provided but name is
   if (is.null(rankobj_id)) {

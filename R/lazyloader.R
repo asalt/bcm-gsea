@@ -1,4 +1,5 @@
 # lazyloader.R
+# TODO have every tool in the R/ directory be loaded in a lazy manner with this script
 suppressPackageStartupMessages(library(here))
 suppressPackageStartupMessages(library(fs))
 suppressPackageStartupMessages(library(purrr))

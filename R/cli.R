@@ -2,6 +2,8 @@ suppressPackageStartupMessages(library(rlang))
 suppressPackageStartupMessages(library(argparser))
 suppressPackageStartupMessages(library(RcppTOML))
 suppressPackageStartupMessages(library(here))
+options(error = rlang::entrace)
+
 
 source(file.path(here("R"), "run.R")) #
 source(file.path(here("R"), "lazyloader.R")) #
