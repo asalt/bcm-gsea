@@ -129,12 +129,12 @@ run <- function(params) {
   # =======  load gct
 
   log_msg(msg = params$gct_path)
+  sample_exclude <- params$sample_exclude %||% NULL
   if (!is.null(params$gct_path) && file.exists(params$gct_path)) {
     log_msg(msg = paste0("reading gct file: ", params$gct_path))
     gct <- cmapR::parse_gctx(params$gct_path)
-    sample_exclude <- params$sample_exclude %||% NULL
     to_exclude <- rownames(gct@cdesc[sample_exclude, ])
-    to_keep <- setdiff(rownames(gct@cdesc), to_exclude)
+    to_keep <- setdiff(gct@cid, to_exclude)
     if (length(to_exclude) > 0){
         gct <- cmapR::subset_gct(gct, cid=to_keep)
     }
@@ -369,6 +369,7 @@ run <- function(params) {
           replace = params$advanced$replace %||% TRUE,
           #combine_by = combine_by_df, # this is metadata table rankname and facet if exists
           #combine_by_name = combine_by,
+          sample_exclude = sample_exclude,
           pathways_of_interest = pathways_of_interest,
           meta_to_include = params$heatmap_gene$legend_include %||% params$legend_include %||% NULL,
           meta_to_exclude = params$heatmap_gene$legend_exclude %||% params$legend_exclude %||% NULL,
