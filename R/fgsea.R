@@ -88,7 +88,7 @@ filter_on_mainpathway <- function(
 select_topn <- function(df,
                         pstat_cutoff = 1,
                         limit = 120,
-                        pstat_usetype = c("pval", "padj"),
+                        pstat_usetype = c("padj", "pval"),
                         to_include = NULL, # extra pathways to explictly include
                         ...) {
   pstat_usetype <- match.arg(pstat_usetype)
@@ -189,16 +189,26 @@ run_one <- function(
   # this doesn't actually error out??
   # set.seed(789)
 
+  nperm <- 5000
+  #nperm_max <- 100000
+
   fgseaRes <- tryCatch(
     {
       # Attempt to run fgsea
+      do_run <- TRUE
+      #while (do_run){
       fgseaRes <- fgsea(
         pathways = geneset,
         stats = rankobj,
         minSize = minSize,
-        maxSize = maxSize
+        maxSize = maxSize,
+        nPermSimple=nperm,
       )
-      # return(fgseaRes)  # Return the result if successful
+      n_fail <- fgseaRes %>% dplyr::filter(is.na(NES))
+      #if ((nrow(n_fail) == 0) | (nperm > nperm_max)) do_run <- FALSE
+      #nperm <- nperm * 2
+      #}
+      return(fgseaRes)  # Return the result if successful
     },
     error = function(e) {
       cat("Error in FGSEA: ", e$message, "\n")
