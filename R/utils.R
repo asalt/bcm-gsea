@@ -170,7 +170,7 @@ infer_ordered_factor <- function(column) { # this probably doesn't do what you w
     non_numeric_values <- tolower(column[non_numeric_indices])
 
     # Assign special order value for "veh" or "vehicle"
-    is_vehicle <- grepl("^veh$|^vehicle|^ctrl$", non_numeric_values, ignore.case = TRUE)
+    is_vehicle <- grepl("^veh$|^vehicle|^ctrl|^dmso$", non_numeric_values, ignore.case = TRUE)
     order_values[non_numeric_indices[is_vehicle]] <- min_num - 2 # Highest priority
 
     # Assign next priority to other non-numeric values
@@ -196,7 +196,6 @@ infer_ordered_factor <- function(column) { # this probably doesn't do what you w
     levels = df_ordered$original_value,
     ordered = TRUE
   )
-  # browser()
 
   return(ordered_factor)
 }
@@ -434,8 +433,8 @@ log_msg <- function(msg = NULL, info = NULL, debug = NULL, warning = NULL, warn 
 
 
 process_cut_by <- function(cut_by, cdesc) {
-  print("***")
-  print(cut_by)
+  #print("***")
+  #print(cut_by)
   # Return NULL immediately if cut_by is NULL
   if (is.null(cut_by)) {
     return(NULL)

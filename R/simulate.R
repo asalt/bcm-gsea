@@ -13,8 +13,13 @@ src_dir <- file.path(here("R"))
 geneset_tools <- new.env()
 source(file.path(src_dir, "./geneset_utils.R"), local = geneset_tools)
 
-# io_tools <- new.env()
-# source(file.path(src_dir, "./io.R"), local = io_tools)
+io_tools <- new.env()
+source(file.path(src_dir, "./io.R"), local = io_tools)
+
+
+source(file.path(here("R", "lazyloader.R")))
+io_tools <- get_tool_env("io")
+geneset_tools <- get_tool_env("geneset_utils")
 
 # ================================
 
@@ -39,15 +44,14 @@ make_random_gct <- function(nrow = 10, ncol = 4) {
 
 
 .cache <- list()
-simulate_preranked_data <- function(...){
+simulate_preranked_data <- function(...) {
   ll <- list(...)
   hashval <- rlang::hash(ll)
   if (!hashval %in% names(.cache)) .cache[[hashval]] <- do.call(.simulate_preranked_data, ll)
-  return(.cache[[hashval]]) 
-
+  return(.cache[[hashval]])
 }
-  
-  
+
+
 
 .simulate_preranked_data <- function(
     seed = 4321,
@@ -107,10 +111,46 @@ simulate_preranked_data <- function(...){
 }
 
 
-
+#' Generate Test Data for GSEA Analysis
+#'
+#' This function generates test data for Gene Set Enrichment Analysis (GSEA) by
+#' simulating preranked data, selecting gene sets of interest, and running
+#' fgsea analysis. It relies on external helper functions from `fgsea_tools`
+#' and `io_tools` for data simulation and manipulation.
+#'
+#' @param collapse Logical. If `TRUE`, collapses redundant pathways. Default is `FALSE`.
+#' @param pathways Character vector. Specifies the pathways of interest. Default
+#'   is `c("H", "GO:BP")`. Supported values are:
+#'   - "H" for Hallmark gene sets
+#'   - "GO:BP" for Gene Ontology Biological Process
+#'   - "GO:CC" for Gene Ontology Cellular Component
+#'   - "GO:MF" for Gene Ontology Molecular Function
+#'
+#' @details
+#' This function simulates two sets of preranked data using `simulate_preranked_data()`
+#' and combines them into a list. It then uses `fgsea_tools` to run GSEA across
+#' all specified pathways. The gene sets of interest are filtered and selected based
+#' on the provided `pathways` argument, and the data is processed using `io_tools`
+#' to convert ranks to the required format.
+#'
+#' The function sources external dependencies for `fgsea_tools` and `io_tools`, and
+#' the gene set collections are fetched using `geneset_tools$get_collections()`.
+#'
+#' @note
+#' This function depends on the `test_fgsea.R` file for proper testing and
+#' success, though this is not strictly guaranteed.
+#'
+#' @return A list of GSEA results for all pathways.
+#'
+#' @example
+#' # Example usage:
+#' res <- generate_test_data(collapse = TRUE, pathways = c("H", "GO:BP"))
+#'
+#' @seealso `simulate_preranked_data`, `fgsea_tools`, `io_tools`
+#'
 generate_test_data <- function(collapse = FALSE,
-                               pathways = c("H", "GO:BP")
-                               ) {
+                               pathways = c("H", "GO:BP"),
+                               preranked_data = NULL) {
   # this function relies on simulate preranked data from fgsea tools,
   # which depends on test_fgsea.R for guaranteed* success
   # *not guaranteed
@@ -143,13 +183,17 @@ generate_test_data <- function(collapse = FALSE,
     genesets_of_interest
   )
 
-  #TODO 
+  # TODO
   geneset_list <- genesets %>% purrr::imap(~ geneset_tools$genesets_df_to_list(.x))
 
   # named_data = list(data=data)
-  data1 <- simulate_preranked_data(seed = 1234, sample_frac = .4)
-  data2 <- simulate_preranked_data(seed = 4321, sample_frac = .4)
-  data <- list(first = data1, second = data2)
+  if (is.null(preranked_data)) {
+    data1 <- simulate_preranked_data(seed = 1234, sample_frac = .4)
+    data2 <- simulate_preranked_data(seed = 4321, sample_frac = .4)
+    data <- list(first = data1, second = data2)
+  } else {
+    data <- preranked_data
+  }
   rankobjs <- io_tools$ranks_dfs_to_lists(data)
 
 
@@ -158,5 +202,3 @@ generate_test_data <- function(collapse = FALSE,
   res <- fgsea_tools$run_all_pathways(geneset_list, rankobjs, collapse = collapse)
   return(res)
 }
-
-
