@@ -14,7 +14,7 @@ pytest ./python/tests/
 
 # Running R tests
 echo "Running R tests..."
-for f in ./R/tests/test_*R; do
+for f in ./R/tests/unit_tests/test_*R; do
     echo "Running $f..."
     (
         cd $(dirname $f)       # Switch to the directory where the test file is located

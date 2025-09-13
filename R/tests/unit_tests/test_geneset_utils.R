@@ -7,7 +7,7 @@ suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(testthat))
 
 geneset_tools <- new.env()
-source("../geneset_utils.R", local = geneset_tools)
+source("../../geneset_utils.R", local = geneset_tools)
 
 #' this is a mock get_collection
 #' that isn't being used currently

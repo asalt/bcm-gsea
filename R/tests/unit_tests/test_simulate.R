@@ -3,11 +3,16 @@ suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(testthat))
 suppressPackageStartupMessages(library(here))
 
-src_dir <- file.path(here("R"))
-sim_tools <- new.env()
-source(file.path(src_dir, "simulate.R"), local = sim_tools)
-# ==
 
+
+# src_dir <- file.path(here("R"))
+# sim_tools <- new.env()
+# source(file.path(src_dir, "simulate.R"), local = sim_tools)
+
+source(file.path(here("R", "lazyloader.R")))
+sim_tools <- get_tool_env("simulate")
+
+# ==
 
 testthat::test_that("test simulate", {
   data <- sim_tools$simulate_preranked_data()

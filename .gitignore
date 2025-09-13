@@ -1,9 +1,21 @@
+# editors
+.vscode
+*.vim
+
+# cache
+cache/
+
+# build 
+build/
+*.egg-info/
+__pycache__
 
 # Ignore results
 results/
 
 # Ignore SQLite database files
 *.sqlite
+*.db
 
 # Ignore R user files
 .Rproj.user
@@ -12,3 +24,9 @@ results/
 
 
 *.html
+
+# occasional write to default Rplots.pdf out to be ignored
+Rplots.pdf
+
+# logs
+*.log

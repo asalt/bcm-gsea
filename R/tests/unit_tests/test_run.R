@@ -1,9 +1,10 @@
-# options(error = function() { 
+# not fully fleshed out
+# options(error = function() {
 #             # print(dump.frames())
 #             traceback(1)
 #             cat("\n")
 # })
-options(error = NULL)  # or recover
+options(error = NULL) # or recover
 
 suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(magrittr))
@@ -22,10 +23,14 @@ source(file.path(here("R"), "./geneset_utils.R"), local = geneset_tools)
 fgsea_tools <- new.env()
 source(file.path(here("R"), "./fgsea.R"), local = fgsea_tools)
 
+sim_tools <- new.env()
+source(file.path(here("R"), "./simulate"), local = sim_tools)
+
 run_env <- new.env()
 source(file.path(here("R"), "./run.R"), local = run_env)
 
 # ==================================
+
 data_dir <- "test_data" %>% fs::path_abs()
 output_dir <- "test_output" %>% fs::path_abs()
 test_gct_path <- file.path(data_dir, "test.gct") %>% fs::path_abs()
@@ -47,11 +52,11 @@ setup <- function() {
   if (!fs::dir_exists(data_dir)) fs::dir_create(data_dir)
   if (!fs::dir_exists(output_dir)) fs::dir_create(data_dir)
 
-  datas1 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data(seed = 4321))
+  datas1 <- purrr::map(1:3, ~ sim_tools$simulate_preranked_data(seed = 4321))
   datas1 %<>% purrr::map(~ .x %>% mutate(value = value + rnorm(nrow(.), sd = .1)))
-  datas2 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data(seed = 1234))
+  datas2 <- purrr::map(1:3, ~ sim_tools$simulate_preranked_data(seed = 1234))
   datas2 %<>% purrr::map(~ .x %>% mutate(value = value + rnorm(nrow(.), sd = .1)))
-  datas3 <- purrr::map(1:3, ~ fgsea_tools$simulate_preranked_data(seed = 9999))
+  datas3 <- purrr::map(1:3, ~ sim_tools$simulate_preranked_data(seed = 9999))
   datas3 %<>% purrr::map(~ .x %>% mutate(value = value + rnorm(nrow(.), sd = .1)))
   datas <-
     c(
@@ -67,10 +72,9 @@ setup <- function() {
   )
 
   ._ <- datas %>% purrr::imap(~ {
-                                  # if (!file.exists(
-                                  write_tsv(.x, file.path(data_dir, paste0(.y, ".tsv")))
-  }
-  )
+    # if (!file.exists(
+    write_tsv(.x, file.path(data_dir, paste0(.y, ".tsv")))
+  })
 
   .mat <- base::Reduce(
     accumulate = F,
@@ -94,8 +98,8 @@ setup <- function() {
     rdesc = .rdesc
   )
   # test_gct_path <- file.path(data_dir, "test.gct")
-  if (!file.exists(test_gct_path)) cmapR::write_gct(gct, test_gct_path, appenddim=F)
-   #return(test_gct_path)
+  if (!file.exists(test_gct_path)) cmapR::write_gct(gct, test_gct_path, appenddim = F)
+  # return(test_gct_path)
 }
 
 teardown <- function() {
@@ -109,24 +113,39 @@ setup()
 
 
 testthat::test_that("test main function with valid parameters", {
-
   params <- list(
     rankfiledir = data_dir,
     volcanodir = data_dir,
     savedir = output_dir,
     gct_path = test_gct_path,
     ranks_from = "volcano",
-    genesets = list( list(category="H", subcategory="", collapse=FALSE) )
+    genesets = list(
+      list(category = "H", subcategory = "", collapse = FALSE) # ,
+      # list(category="C5", subcategory="GO:BP", collapse=TRUE)
+    )
   )
 
   testthat::expect_no_error({
     print("Function is being called")
     run_env$run(params)
   })
-
 })
 
 
+# testthat::test_that("test main function with valid parameters", {
+#   params <- list(
+#     rankfiledir = data_dir,
+#     volcanodir = data_dir,
+#     savedir = output_dir,
+#     gct_path = test_gct_path,
+#     ranks_from = "volcano",
+#     genesets = list( list(category="H", subcategory="", collapse=FALSE) )
+#   )
+#   testthat::expect_no_error({
+#     print("Function is being called")
+#     run_env$run(params)
+#   })
+# })
 
 # test_invalid_dir()
 # test_one()
@@ -164,26 +183,26 @@ testthat::test_that("test main function with valid parameters", {
 
 
 # test_one <- function() {
-  # geneset <- msigdbr::msigdbr(
-  #   species = "Homo sapiens",
-  #   category = "H",
-  #   subcategory = ""
-  # )
+# geneset <- msigdbr::msigdbr(
+#   species = "Homo sapiens",
+#   category = "H",
+#   subcategory = ""
+# )
 
 
-  # genes <- geneset %>%
-  #   pull(entrez_gene) %>%
-  #   unique()
+# genes <- geneset %>%
+#   pull(entrez_gene) %>%
+#   unique()
 
-  # for (f in c("groupA_vs_B_dirB.tsv", "group_A_vs_C_dirB.tsv")) {
-  #   .values <- rnorm(n = length(genes))
-  #   .data <- data.frame(
-  #     geneid = genes,
-  #     signedlogp = .values
-  #   )
-  #   .out <- file.path(data_dir, f)
-  #   write_tsv(.data, .out)
-  # }
+# for (f in c("groupA_vs_B_dirB.tsv", "group_A_vs_C_dirB.tsv")) {
+#   .values <- rnorm(n = length(genes))
+#   .data <- data.frame(
+#     geneid = genes,
+#     signedlogp = .values
+#   )
+#   .out <- file.path(data_dir, f)
+#   write_tsv(.data, .out)
+# }
 
 #   rmarkdown::render("../../run.Rmd",
 #     output_format = "html_document",
