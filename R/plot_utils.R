@@ -161,6 +161,14 @@ plot_and_save <- safe_plot_and_save #
 #                       "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
 #                       "#bcbd22", "#17becf")
 
+
+is_numericish <- function(x) {
+  if (is.numeric(x)) return(TRUE)
+  x <- trimws(as.character(x))
+  x <- x[nzchar(x)]                       # drop empty strings
+  suppressWarnings(all(!is.na(as.numeric(x))))
+}
+
 create_named_color_list <- function(df, columns, c=80) {
 
   # Initialize an empty list to store the result
@@ -169,6 +177,7 @@ create_named_color_list <- function(df, columns, c=80) {
   # Iterate over each column
   for (col_name in columns) {
     df[[col_name]][is.na(df[[col_name]])] <- "NA"
+
     unique_vals <- sort(unique(df[[col_name]]))
     n_vals <- length(unique_vals)
 
@@ -179,6 +188,13 @@ create_named_color_list <- function(df, columns, c=80) {
 
     # Create a named vector for the unique values with corresponding colors
     color_list[[col_name]] <- setNames(colors_assigned, unique_vals)
+    # rewrite this sometime
+    if ("NA" %in% names(color_list[[col_name]]) ){
+      color_list[[col_name]][["NA"]] <- "grey40"
+    }
+    if ("na" %in% names(color_list[[col_name]]) ){
+      color_list[[col_name]][["na"]] <- "grey40"
+    }
   }
 
   return(color_list)
