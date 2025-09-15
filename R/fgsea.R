@@ -282,17 +282,18 @@ run_all_rankobjs <- function(
   if (!is.null(cache) && cache == TRUE) {
     logger(msg = "caching is enabled")
     cache_results <- rankobjs %>%
-      purrr::map(~ do.call(fgsea_cache_manager, c(list(rankobj = .x), fgsea_args)) ) %>%
-      Filter(Negate(is.null), .)
+      purrr::map(~ do.call(fgsea_cache_manager, c(list(rankobj = .x), fgsea_args))) %>%
+      purrr::compact()
 
     .to_do <- setdiff(names(rankobjs), names(cache_results))
     rankobjs <- rankobjs[.to_do]
 
   } else {
-    cache_results <- NULL
+    cache_results <- list()
   }
 
-  results <- rankobjs %>% .map_func(~ do.call(run_one, c(list(rankobj = .), fgsea_args)))
+  results <- rankobjs %>% .map_func(~ do.call(run_one, c(list(rankobj = .), fgsea_args))) %>%
+    purrr::compact()
   # print(paste0('length rankobjs : ', length(rankobjs)))
   # print(paste0('length results : ', length(results)))
 
@@ -327,10 +328,7 @@ run_all_rankobjs <- function(
     )
   }
 
-  final_results <- c(
-    Filter(function(x) !is.null(x), cache_results),
-    Filter(function(x) !is.null(x), results)
-  )
+  final_results <- c(cache_results, results)
 
   return(final_results)
 }
