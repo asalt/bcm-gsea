@@ -233,3 +233,22 @@ testthat::test_that("test main function with valid parameters", {
 # )
 
 # test_render()
+
+
+# tests for prepare_metadata
+testthat::test_that("prepare_metadata returns NULL when gct missing", {
+  params <- list(ranks_from = "gct", extra = list(rankname_order = c("B","A")))
+  expect_null(run_env$prepare_metadata(NULL, params))
+})
+
+testthat::test_that("prepare_metadata orders group correctly", {
+  mat <- matrix(1:4, nrow = 2)
+  colnames(mat) <- c("s1","s2")
+  rdesc <- data.frame(id = rownames(mat))
+  rownames(rdesc) <- rownames(mat)
+  cdesc <- data.frame(group = c("A","B"), row.names = c("s1","s2"))
+  gct <- new("GCT", mat = mat, cdesc = cdesc, rdesc = rdesc)
+  params <- list(ranks_from = "gct", extra = list(rankname_order = c("B","A")))
+  meta <- run_env$prepare_metadata(gct, params)
+  testthat::expect_equal(rownames(meta), c("s2","s1"))
+})
