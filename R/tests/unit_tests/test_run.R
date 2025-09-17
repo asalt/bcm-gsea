@@ -30,6 +30,8 @@ source(file.path(here("R"), "./simulate.R"), local = sim_tools)
 run_env <- new.env()
 source(file.path(here("R"), "./run.R"), local = run_env)
 
+source(file.path(here("R"), "tests", "unit_tests", "helpers", "fgsea_test_helpers.R"))
+
 # ==================================
 
 trycatch <- function(expr, silent = TRUE) {
@@ -96,19 +98,6 @@ setup <- function(data_dir, output_dir, gct_path) {
 }
 
 testthat::test_that("test main function with valid parameters", {
-  fake_fgsea <- function(pathways, stats, ...) {
-    tibble::tibble(
-      pathway = names(pathways),
-      pval = 0.01,
-      padj = 0.02,
-      log2err = 0,
-      ES = 1,
-      NES = 1,
-      size = purrr::map_int(pathways, length),
-      leadingEdge = purrr::map(pathways, ~ head(.x, n = min(3, length(.x))))
-    )
-  }
-
   testthat::with_mocked_bindings({
     keep_artifacts <- identical(tolower(Sys.getenv("BCM_GSEA_KEEP_RUN_TEST_ARTIFACTS", "false")), "true")
     root_dir <- fs::path(tempdir(), sprintf("bcm-gsea-run-%s-%04d",
@@ -159,7 +148,7 @@ testthat::test_that("test main function with valid parameters", {
       print("Function is being called")
       run_env$run(params)
     })
-  }, fgsea = fake_fgsea, .package = "fgsea")
+  }, fgsea = fgsea_test_fake_fgsea, .package = "fgsea")
 })
 
 

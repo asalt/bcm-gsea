@@ -8,6 +8,8 @@ suppressPackageStartupMessages(library(here))
 fgsea_tools <- new.env()
 source(file.path(here("R"), "fgsea.R"), local = fgsea_tools)
 
+source(file.path(here("R"), "tests", "unit_tests", "helpers", "fgsea_test_helpers.R"))
+
 
 snapshot_path <- file.path(here("R"), "tests", "unit_tests", "fixtures", "fgsea_basic_results.rds")
 
@@ -27,36 +29,8 @@ test_that("run_all_pathways output matches golden snapshot", {
     )
   )
 
-  original_mapper <- fgsea_tools$map_tools$add_leadingedges_to_results_list
-  defer(assign("add_leadingedges_to_results_list", original_mapper, envir = fgsea_tools$map_tools))
-  assign(
-    "add_leadingedges_to_results_list",
-    function(fgsea_res_list, species = NULL) {
-      purrr::map(fgsea_res_list, ~ {
-        if (is.null(.x) || !"leadingEdge" %in% names(.x)) {
-          return(.x)
-        }
-        edge_strings <- purrr::map_chr(.x$leadingEdge, ~ paste(.x, collapse = "/"))
-        .x$leadingEdge_entrezid <- edge_strings
-        .x$leadingEdge_genesymbol <- edge_strings
-        .x
-      })
-    },
-    envir = fgsea_tools$map_tools
-  )
-
-  fake_fgsea <- function(pathways, stats, ...) {
-    tibble(
-      pathway = names(pathways),
-      pval = seq_along(pathways) / (length(pathways) + 1),
-      padj = pval * 1.5,
-      log2err = log2(map_int(pathways, length) + 1),
-      ES = map_dbl(pathways, ~ sum(stats[.x], na.rm = TRUE)),
-      NES = ES / map_int(pathways, length),
-      size = map_int(pathways, length),
-      leadingEdge = map(pathways, ~ .x[seq_len(min(3, length(.x)))] )
-    )
-  }
+  original_mapper <- fgsea_test_install_leadingedge_stub(fgsea_tools$map_tools)
+  defer(fgsea_test_restore_leadingedge_stub(fgsea_tools$map_tools, original_mapper))
 
   logger <- function(...) invisible(NULL)
 
@@ -73,7 +47,7 @@ test_that("run_all_pathways output matches golden snapshot", {
       logger = logger,
       species = "Homo sapiens"
     )
-  }, fgsea = fake_fgsea, .package = "fgsea")
+  }, fgsea = fgsea_test_fake_fgsea, .package = "fgsea")
 
   combined <- fgsea_tools$concat_results_all_collections(results)
   combined <- purrr::imap_dfr(combined, ~ mutate(.x, collection = .y)) %>%
