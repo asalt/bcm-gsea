@@ -8,12 +8,15 @@ import functools
 import logging
 
 import pathlib
+from pathlib import Path
 import click
 from collections import defaultdict
 
 # from concurrent.futures import ProcessPoolExecutor, as_completed
 # from tqdm import tqdm
 import pandas as pd
+
+from . import export_packager
 
 # from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -144,3 +147,71 @@ def launch_assistant(port):
     from .persistent_llm_server import start_server, run_server
 
     run_server(port=port)
+
+
+@main.command()
+@click.option(
+    "-s",
+    "--savedir",
+    type=click.Path(exists=True, file_okay=False),
+    help="Directory containing bcm-gsea pipeline outputs",
+)
+@click.option(
+    "-c",
+    "--config",
+    type=click.Path(exists=True, dir_okay=False),
+    help="TOML configuration file used for the run",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(dir_okay=False),
+    help="Target ZIP file path for the packaged export",
+)
+@click.option("--include-cache/--exclude-cache", default=False, show_default=True)
+@click.option("--include-ranks/--exclude-ranks", default=False, show_default=True)
+@click.option("--include-hashes/--skip-hashes", default=True, show_default=True)
+@click.option(
+    "--label",
+    type=str,
+    help="Custom root directory name inside the archive",
+)
+@click.option(
+    "--split-components/--single-archive",
+    default=False,
+    show_default=True,
+    help="Package each top-level result folder into its own zip inside an output directory",
+)
+def package(
+    savedir,
+    config,
+    output,
+    include_cache,
+    include_ranks,
+    include_hashes,
+    label,
+    split_components,
+):
+    """Package analysis outputs into a distributable archive."""
+
+    if not savedir and not config:
+        raise click.UsageError("Provide either --savedir or --config")
+
+    try:
+        archive_path, manifest = export_packager.package_results(
+            savedir=Path(savedir) if savedir else None,
+            config_path=Path(config) if config else None,
+            output_path=Path(output) if output else None,
+            include_cache=include_cache,
+            include_ranks=include_ranks,
+            include_hashes=include_hashes,
+            export_label=label,
+            split_components=split_components,
+        )
+    except export_packager.PackagingError as exc:
+        raise click.ClickException(str(exc))
+
+    descriptor = "package directory" if split_components else "archive"
+    click.echo(f"Created {descriptor}: {archive_path}")
+    click.echo(f"Files packaged: {manifest['file_count']}")
+    click.echo(f"Total size: {manifest['total_size_bytes']:,} bytes")
