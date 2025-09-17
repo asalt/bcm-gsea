@@ -3,11 +3,19 @@
 
 import asyncio
 import websockets
+
 import ollama
 from collections import deque
 
+from .agents import submit_task, event_loop
+from .voice import voice_stream
+from .voice import voice_queue
+from .voice import voice_main
+
 # Persistent memory for conversation context
-conversation_context = deque(maxlen=100)  # Keeps the last 100 interactions for summarization
+conversation_context = deque(
+    maxlen=100
+)  # Keeps the last 100 interactions for summarization
 
 # Initial prompt to instruct the LLM
 initial_prompt = (
@@ -27,11 +35,12 @@ def summarize_context():
     # set options for different levels of llms. we can use smaller models for simpler summarization tasks.
     # so we can summarize very quickly. We will have to fit all of these in memory though, or have to cycle through
     # them if memory gets full. something to think about.
-    total_figures = len([line for line in conversation_context if 'saving' in line])
-    total_files = len([line for line in conversation_context if 'file' in line])
-    recent_entries = '; '.join(list(conversation_context)[-5:])
+    total_figures = len([line for line in conversation_context if "saving" in line])
+    total_files = len([line for line in conversation_context if "file" in line])
+    recent_entries = "; ".join(list(conversation_context)[-5:])
     summary = f"Total figures: {total_figures}, Total files: {total_files}, Recent entries: {recent_entries}..."
     return summary
+
 
 # Function to handle the respond command
 async def handle_respond_command(websocket):
@@ -39,14 +48,17 @@ async def handle_respond_command(websocket):
     conversation_context.append(response)
     await websocket.send(response)
 
+
 # Function to handle the summarize command
 async def handle_summarize_command(websocket):
     summary = summarize_context()
     await websocket.send(f"[SUMMARY]: {summary}")
 
+
 # Function to handle an unknown command
 async def handle_unknown_command(websocket, command):
     await websocket.send(f"[ERROR]: Unknown command '{command}'")
+
 
 # Function to handle a log entry in passive mode
 async def handle_log_entry(websocket, prompt):
@@ -56,39 +68,68 @@ async def handle_log_entry(websocket, prompt):
         summary = summarize_context()
         await websocket.send(f"[SUMMARY]: {summary}")
 
+
 # Function to handle a single client connection
+# persistent_llm_server.py
+# Handle incoming WebSocket connections
 async def handle_connection(websocket):
     while True:
         try:
             prompt = await websocket.recv()
-            # Check if the prompt is a command
-            if prompt.startswith("COMMAND: "):
-                command = prompt[len("COMMAND: "):].strip().lower()
-                if command == COMMAND_RESPOND:
-                    await handle_respond_command(websocket)
-                    continue
-                if command == COMMAND_SUMMARIZE:
-                    await handle_summarize_command(websocket)
-                    continue
-                await handle_unknown_command(websocket, command)
-                continue
-            # Handle log entry in passive mode
-            await handle_log_entry(websocket, prompt)
-        except websockets.ConnectionClosed:
+            print(f"Received: {prompt}")
+            # Add a new message to the priority queue for processing or speaking
+            await submit_task(prompt, agent="thinker", priority=1)
+        except Exception as e:
+            print(f"Connection error: {e}")
             break
 
-# Function to start the WebSocket server
+
 async def start_server(host="localhost", port=8765):
+    import websockets
+
     async with websockets.serve(handle_connection, host, port):
+        print(f"Server started on {host}:{port}")
         await asyncio.Future()  # Keep the server running indefinitely
+
+
+# Function to add new messages to the queue
+async def submit_to_voice_queue(message):
+    """
+    Submit a new message to the voice queue.
+    """
+    await voice_queue.put(message)
+
+
+# persistent_llm_server.py
+def run_server(host="localhost", port=8765):
+    async def server_task():
+        # Create the tasks separately to ensure they run concurrently
+        server = asyncio.create_task(start_server(host, port))
+        event = asyncio.create_task(event_loop())
+        voice = asyncio.create_task(voice_main())
+
+        # Run them all concurrently
+        await asyncio.gather(server, event, voice)
+
+    asyncio.run(server_task())
+
 
 # Main function to run the server
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="WebSocket server with persistent memory, summarization, and passive/active modes.")
-    parser.add_argument("--host", type=str, default="localhost", help="Host address to run the server on")
-    parser.add_argument("--port", type=int, default=8765, help="Port to run the server on")
+    parser = argparse.ArgumentParser(
+        description="WebSocket server with persistent memory, summarization, and passive/active modes."
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="localhost",
+        help="Host address to run the server on",
+    )
+    parser.add_argument(
+        "--port", type=int, default=8765, help="Port to run the server on"
+    )
     args = parser.parse_args()
 
     asyncio.run(start_server(host=args.host, port=args.port))

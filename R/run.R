@@ -311,7 +311,8 @@ run <- function(params) {
         bubble_tools$all_bubble_plots(
           results_list,
           limit = params$bubbleplot$limit,
-          save_func = save_func
+          save_func = save_func,
+          glyph = params$bubbleplot$glyph
         )
       }
 
@@ -328,7 +329,8 @@ run <- function(params) {
             bubble_tools$do_combined_bubble_plots(
               results_list,
               save_func = save_func,
-              limit = params$bubbleplot$limit
+              limit = params$bubbleplot$limit,
+              glyph = params$bubbleplot$glyph
             )
           },
           error = function(e) {

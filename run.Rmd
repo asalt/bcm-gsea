@@ -12,14 +12,15 @@ output:
     code_folding: "hide"
     css: "custom.css"
 params:
-  volcanodir: 
-  rankfiledir: ""
-  gct_path: ""
+  volcanodir: "/mnt/e/MSPC001161/results/MSPC001161_20240815/volcano/"
+  rankfiledir: "/mnt/e/MSPC001161/results/bcm_gsea_linregres/rnkfiles/"
+  #gct_path: "../results/MSPC001128/export/MSPC001128_data_gct_all_1.0more_nonzero_normtype_median_n6x2995.gct"
+  gct_path: "/mnt/e/MSPC001161/results/MSPC001161_20240815/export/MSPC001161_20240815_data_gct_all_0.66more_nonzero_normtype_median_n13x3317.gct"
   cut_by: none
   # ranks_from: "volcano"  # choices are volcano and gct
-  ranks_from: "gct"  # choices are volcano and gct
-  species: ""	
-  savedir: ""
+  ranks_from: "volcano"  # choices are volcano and gct
+  species: "Rattus norvegicus"	
+  savedir: "/mnt/e/MSPC001161/results/bcm_gsea_linregres"
   genesets_json: >
     [
       {"category": "H", "subcategory": "", "collapse" : "FALSE"},
@@ -263,18 +264,21 @@ if ((!is.null(volcanodir) && !file.exists(volcanodir)) &&
 log_msg(msg = paste0("TESTING: ", TESTING))
 ```
 
-```{r}
+```{r, label='load ranks'}
 load_and_process_ranks <- function(params) {
   rankfiledir <- params$rankfiledir
   volcanodir <- params$volcanodir
   gct_path <- params$gct_path
   ranks_from <- params$ranks_from
 
-  log_msg(msg = paste0("rankfiledir :", rankfiledir))
+  log_msg(msg = paste0("ranks from : ", ranks_from))
+  log_msg(msg = paste0("rankfiledir : ", rankfiledir))
 
-  if (!is.null(rankfiledir) && file.exists(rankfiledir)) {
+  if (!is.null(rankfiledir) && file.exists(rankfiledir)) { # 
     rnkfiles <- dir_ls(path = rankfiledir, regexp = ".*\\.rnk$", fail = FALSE)
+    log_msg(msg = paste0("looking for rank files in ", rankfiledir))
     if (length(rnkfiles) > 0) {
+      log_msg(msg = paste0("found ", length(rnkfiles), " rankfiles"))
       rnkdfs <- rnkfiles %>% io_tools$load_rnkfiles()
       names(rnkdfs) <- names(rnkdfs) %>%
         fs::path_file() %>%
@@ -282,12 +286,14 @@ load_and_process_ranks <- function(params) {
       ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
       return(ranks_list)
     } # exit and we're done
+    log_msg(msg = "couldn't find any rnkfiles")
     if (ranks_from == "volcano") {
       if (is.null(volcanodir) || !file.exists(volcanodir)) {
         stop("improper volcanodir specification")
       }
-      log_msg("saving rankfiles from volcano output. using signedlogp as value")
+      log_msg(msg="saving rankfiles from volcano output. using signedlogp as value")
       rnkdfs <- io_tools$create_rnkfiles_from_volcano(volcanodir, value_col = "signedlogP")
+      rnkdfs %>% io_tools$write_rnkfiles(dir = rankfiledir) # and save
       names(rnkdfs) <- names(rnkdfs) %>%
         fs::path_file() %>%
         fs::path_ext_remove()
@@ -300,9 +306,10 @@ load_and_process_ranks <- function(params) {
       names(rnkdfs) <- names(rnkdfs) %>%
         fs::path_file() %>%
         fs::path_ext_remove()
-      log_msg(paste0("length of retrieved rankfiles: ", length(rnkdfs)))
+      log_msg(msg=paste0("length of retrieved rankfiles: ", length(rnkdfs)))
       ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
     }
+    # not sure if this level of flow is relevant, refactor later
     rnkdfs %>% io_tools$write_rnkfiles(dir = rankfiledir)
     return(ranks_list)
   }
@@ -320,10 +327,11 @@ load_and_process_ranks <- function(params) {
   # return(ranks_list)
 }
 ranks_list <- load_and_process_ranks(params)
+
 ```
 
 
-```{r, label='load ranks', eval=!TESTING}
+```{r, label='maybe load gct', eval=!TESTING}
 # this whole section can (and should) be skipped if TESTING == TRUE
 
 
@@ -335,7 +343,7 @@ if (!exists("gct") || is.null(gct)) {
     gct <- NULL
   }
 }
-log_msg(msg = paste0("gct: ", class(gct)))
+# log_msg(msg = paste0("gct: ", class(gct)))
 
 # rnkfiles <- dir_ls(path=rankfiledir, regexp = ".*rnk$", fail = F)
 # log_msg(msg=paste0('n rank files: ', length(rnkfiles)))
@@ -344,12 +352,14 @@ log_msg(msg = paste0("gct: ", class(gct)))
 # ranks_list <- rnkdfs %>% io_tools$ranks_dfs_to_lists()
 
 log_msg(msg = paste0("names ranks list "))
-log_msg(msg = str_c(names(ranks_list), sep = "\n"))
+log_msg(msg = str_c(names(ranks_list), collapse = "\n"))
 ```
 
 
 # run fgsea
 ```{r, label='run fgsea', cache=T}
+(names(ranks_list))
+(names(genesets_list_of_lists))
 if (TESTING == FALSE) {
   results_list <- fgsea_tools$run_all_pathways(genesets_list_of_lists,
     ranks_list,
@@ -410,7 +420,7 @@ results_list[[1]][[1]] %>%
 
 
 
-```{r, label=save, eval=T}
+```{r, label = "save gsea result tables", eval=T}
 ._ <- results_list %>%
   io_tools$save_gsea_results(savedir = file.path(savedir, "gsea_tables"))
 ```
@@ -426,7 +436,7 @@ results_list[[1]][[1]] %>%
   plot_tools$barplot_with_numbers()
 ```
 ## plotting all barplots for each comparison within one geneset
-```{r, label='all barplots, separate', eval=TRUE}
+```{r, label='all barplots, separate', eval=F}
 results_list[[1]] %>% imap(
   ~ {
     sel <- .x %>%
@@ -443,7 +453,7 @@ results_list[[1]] %>% imap(
 ## plotting all barplots for each comparison across all genesets
 ```{r, label='all barplots, separate, save', fig.width=10, fig.height=8, eval=T}
 log_msg(msg = "plotting individual barplots")
-plts <- results_list %>% plot_tools$all_barplots_with_numbers(save_func = util_tools$make_partial(save_func, width = 12, height = 12))
+plts <- results_list %>% plot_tools$all_barplots_with_numbers(save_func = util_tools$make_partial(save_func, width = 12, height = 9))
 
 # if you want to print the plots:
 # for (plt in plts){
@@ -454,16 +464,18 @@ plts <- results_list %>% plot_tools$all_barplots_with_numbers(save_func = util_t
 ## plot facetted barplot across genesets
 
 prewritten function to merge gsea results across comparisons and make faceted barplot
-```{r, label="combined barplots, save", fig.width=12, fig.height=12, eval=T}
+```{r, label="combined barplots, save", fig.width=12, fig.height=12, eval=F}
 log_msg(msg = "plotting faceted barplots")
 plts <- results_list %>%
   plot_tools$process_results_across_rnks(
-    save_func = util_tools$make_partial(save_func, width = 14, height = 12)
+    save_func = util_tools$make_partial(save_func, width = 14, height = 18)
   )
 
 for (plt in plts) {
   print(plt)
 }
+
+
 ```
 
 
@@ -475,21 +487,22 @@ all_gsea_results <- fgsea_tools$concat_results_all_collections(results_list)
 
 # es plots
 ```{r, eval=F}
-rankorder_by_pathway <- fgsea_tools$get_rankorder_across(
-  all_gsea_results[["H_"]],
-  ranks_list,
-  geneset_lists = genesets_list_of_lists[["H_"]]
-)
 
-# genesets_additional_info = genesets_of_interest, # dataframe with collapse indicator
-# results_list['H_']
-plts <- rankorder_by_pathway$HALLMARK_HYPOXIA %>%
-  purrr::imap(~ {
-    .x %>% plot_tools$plotES(title = .y)
-  })
+._ <- plot_tools$plot_top_ES_across(all_gsea_results,
+                       ranks_list = ranks_list,
+                       genesets_list_of_lists,
+                       limit=30,
+                       save_func = save_func
+                           )
 
-p <- ggpubr::ggarrange(plotlist = plts)
-print(p)
+# this does one:
+# plot_tools$plot_top_ES(all_gsea_results$`C5_GO:BP`,
+#                        ranks_list = ranks_list,
+#                        genesets_list_of_lists[["C5_GO:BP"]],
+#                        limit=2,
+#                        save_func = save_func 
+#                        )
+
 
 ```
 
@@ -502,7 +515,7 @@ print(p)
 
 log_msg(msg = "drawing a heatmap. save_func is null")
 
-ht <- all_gsea_results$H_ %>% plot_tools$plot_results_one_collection(
+ht <- all_gsea_results$`C5_GO:CC` %>% plot_tools$plot_results_one_collection(
   metadata = NULL,
   cut_by = NULL,
   limit = 120,
@@ -529,7 +542,9 @@ hts <- all_gsea_results %>% plot_tools$plot_results_all_collections(
   pstat_cutoff = 1,
   limit = 40,
   # save_func = .gsea_heatmap_save_func,
-  save_func = save_func
+  save_func = save_func,
+  cluster_columns=T,
+  cluster_rows=T,
 )
 
 for (ht in hts) {

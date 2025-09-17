@@ -13,11 +13,17 @@ cut_by = "group"
 limit = [12, 20, 32]
 do_individual = true
 do_combined = true
+  [params.barplot.advanced]
+  stroke_width = 1.0
 
 [params.bubbleplot]
 limit = [12, 20, 32]
 do_individual = true
 do_combined = true
+glyph = "⁕"
+  [params.bubbleplot.advanced]
+  stroke_width = 0.8
+  stroke_alpha = 0.55
 
 [params.enplot]
 do_individual = true

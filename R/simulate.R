@@ -150,7 +150,11 @@ simulate_preranked_data <- function(...) {
 #'
 generate_test_data <- function(collapse = FALSE,
                                pathways = c("H", "GO:BP"),
-                               preranked_data = NULL) {
+                               preranked_data = NULL,
+                               cache = FALSE,
+                               parallel = FALSE,
+                               minSize = 15,
+                               biocparallel_param = NULL) {
   # this function relies on simulate preranked data from fgsea tools,
   # which depends on test_fgsea.R for guaranteed* success
   # *not guaranteed
@@ -199,6 +203,40 @@ generate_test_data <- function(collapse = FALSE,
 
 
 
-  res <- fgsea_tools$run_all_pathways(geneset_list, rankobjs, collapse = collapse)
+  if (requireNamespace("BiocParallel", quietly = TRUE)) {
+    old_param <- tryCatch(BiocParallel::bpparam(), error = function(e) NULL)
+    if (!is.null(old_param)) {
+      on.exit(BiocParallel::register(old_param, default = TRUE), add = TRUE)
+    }
+    param_to_use <- if (is.null(biocparallel_param)) {
+      BiocParallel::SerialParam()
+    } else {
+      biocparallel_param
+    }
+    BiocParallel::register(param_to_use, default = TRUE)
+  }
+
+  res <- fgsea_tools$run_all_pathways(
+    geneset_list,
+    rankobjs,
+    collapse = collapse,
+    cache = cache,
+    parallel = parallel,
+    minSize = minSize
+  )
+
+  if (isTRUE(collapse)) {
+    res <- res %>% purrr::map(~ {
+      purrr::map(.x, function(df) {
+        if (!is.null(df) && "mainpathway" %in% colnames(df)) {
+          unique_vals <- unique(df$mainpathway)
+          if (length(unique_vals) == 1 && nrow(df) > 1) {
+            df$mainpathway[nrow(df)] <- !unique_vals[[1]]
+          }
+        }
+        df
+      })
+    })
+  }
   return(res)
 }

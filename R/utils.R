@@ -69,6 +69,7 @@ clean_args <- function(params, root_dir = "/") {
   default_limit_values <- c(10, 20, 30, 50)
   params$barplot$limit <- normalize_limit_vector(params$barplot$limit, default_limit_values)
   params$bubbleplot$limit <- normalize_limit_vector(params$bubbleplot$limit, params$barplot$limit)
+  params$bubbleplot$glyph <- params$bubbleplot$glyph %||% "⁕"
 
   params$heatmap_gsea$do <- params$heatmap_gsea$do %||% TRUE
   params$heatmap_gene$do <- params$heatmap_gene$do %||% TRUE

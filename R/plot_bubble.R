@@ -4,6 +4,7 @@ suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(purrr))
 suppressPackageStartupMessages(library(here))
+suppressPackageStartupMessages(library(scales))
 
 source(file.path(here("R"), "lazyloader.R"))
 
@@ -17,9 +18,9 @@ get_args <- util_tools$get_args
 get_arg <- util_tools$get_arg
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
-GLYPH <- "⁕"
+DEFAULT_BUBBLE_GLYPH <- "⁕"
 
-prepare_data_for_bubble <- function(df) {
+prepare_data_for_bubble <- function(df, glyph = DEFAULT_BUBBLE_GLYPH) {
   if (!"pval" %in% colnames(df)) {
     df <- df %>% mutate(pval = padj)
   }
@@ -49,7 +50,7 @@ prepare_data_for_bubble <- function(df) {
         TRUE ~ ">=0.25"
       ),
       fill_value = sign(NES) * (1 - pmin(pval, 1)),
-      sig_label = ifelse(sig_category == "<0.05", GLYPH, ""),
+      sig_label = ifelse(sig_category == "<0.05", glyph, ""),
       text_color = ifelse(abs(fill_value) > 0.55, "#FFFFFF", "#111111")
     )
 }
@@ -62,9 +63,10 @@ bubble_plot <- function(
     facet_order = NULL,
     nes_range = NULL,
     size_range = c(3.0, 9.0),
+    glyph = DEFAULT_BUBBLE_GLYPH,
     ...) {
 
-  sel <- prepare_data_for_bubble(df)
+  sel <- prepare_data_for_bubble(df, glyph = glyph)
   log_msg(msg = paste0("bubble_plot: received ", nrow(df), " rows, plotting ", nrow(sel), " after prep"))
 
   if (nrow(sel) == 0) {
@@ -110,7 +112,7 @@ bubble_plot <- function(
         colour = sig_category
       ),
       shape = 21,
-      stroke = 1.1,
+      stroke = 0.8,
       alpha = 0.9
     ) +
     scale_fill_gradient2(
@@ -128,20 +130,21 @@ bubble_plot <- function(
     ) +
     scale_colour_manual(
       values = c(
-        "<0.25" = "#3f3f3f",
-        "<0.05" = "#000000",
-        ">=0.25" = "transparent"
+        "<0.25" = scales::alpha("#3f3f3f", 0.45),
+        "<0.05" = scales::alpha("#000000", 0.55),
+        ">=0.25" = scales::alpha("#000000", 0)
       ),
       breaks = c("<0.25", "<0.05"),
-      labels = c("padj < 0.25", paste0("padj < 0.05 (", GLYPH, ")")),
+      labels = c("padj < 0.25", paste0("padj < 0.05 (", glyph, ")")),
       guide = guide_legend(
         title = "Significance",
         override.aes = list(
           shape = 21,
           fill = "grey70",
           size = 4.5,
-          stroke = 1.2,
-          alpha = 1
+          stroke = 0.8,
+          alpha = 1,
+          colour = scales::alpha("#000000", 0.55)
         )
       )
     ) +
@@ -249,6 +252,7 @@ all_bubble_plots <- function(
     facet_order = NULL,
     limit = 20,
     size_range = c(3.0, 9.0),
+    glyph = DEFAULT_BUBBLE_GLYPH,
     ...) {
   if (!is.null(save_func)) {
     existing_filename <- get_arg(save_func, "filename")
@@ -318,6 +322,7 @@ all_bubble_plots <- function(
               facet_order = facet_order,
               nes_range = nes_range,
               size_range = size_range,
+              glyph = glyph,
               ...
             )
           })
@@ -333,6 +338,7 @@ do_combined_bubble_plots <- function(
     facet_order = NULL,
     limit = 20,
     size_range = c(3.0, 9.0),
+    glyph = DEFAULT_BUBBLE_GLYPH,
     ...) {
   genesets <- names(results_list)
 
@@ -377,6 +383,7 @@ do_combined_bubble_plots <- function(
         facet_order = facet_order,
         nes_range = nes_range,
         size_range = size_range,
+        glyph = glyph,
         ...
       )
     })
