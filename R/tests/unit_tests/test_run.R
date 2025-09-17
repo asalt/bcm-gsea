@@ -13,6 +13,7 @@ suppressPackageStartupMessages(library(rmarkdown))
 suppressPackageStartupMessages(library(cmapR))
 suppressPackageStartupMessages(library(fs))
 suppressPackageStartupMessages(library(here))
+suppressPackageStartupMessages(library(withr))
 
 io_tools <- new.env()
 source(file.path(here("R"), "io.R"), local = io_tools)
@@ -24,19 +25,12 @@ fgsea_tools <- new.env()
 source(file.path(here("R"), "./fgsea.R"), local = fgsea_tools)
 
 sim_tools <- new.env()
-source(file.path(here("R"), "./simulate"), local = sim_tools)
+source(file.path(here("R"), "./simulate.R"), local = sim_tools)
 
 run_env <- new.env()
 source(file.path(here("R"), "./run.R"), local = run_env)
 
 # ==================================
-
-data_dir <- "test_data" %>% fs::path_abs()
-output_dir <- "test_output" %>% fs::path_abs()
-test_gct_path <- file.path(data_dir, "test.gct") %>% fs::path_abs()
-
-# ==================================
-
 
 trycatch <- function(expr, silent = TRUE) {
   tryCatch(expr, error = function(e) {
@@ -48,9 +42,9 @@ trycatch <- function(expr, silent = TRUE) {
 
 
 
-setup <- function() {
-  if (!fs::dir_exists(data_dir)) fs::dir_create(data_dir)
-  if (!fs::dir_exists(output_dir)) fs::dir_create(data_dir)
+setup <- function(data_dir, output_dir, gct_path) {
+  if (!fs::dir_exists(data_dir)) fs::dir_create(data_dir, recurse = TRUE)
+  if (!fs::dir_exists(output_dir)) fs::dir_create(output_dir, recurse = TRUE)
 
   datas1 <- purrr::map(1:3, ~ sim_tools$simulate_preranked_data(seed = 4321))
   datas1 %<>% purrr::map(~ .x %>% mutate(value = value + rnorm(nrow(.), sd = .1)))
@@ -98,37 +92,74 @@ setup <- function() {
     rdesc = .rdesc
   )
   # test_gct_path <- file.path(data_dir, "test.gct")
-  if (!file.exists(test_gct_path)) cmapR::write_gct(gct, test_gct_path, appenddim = F)
-  # return(test_gct_path)
+  cmapR::write_gct(gct, gct_path, appenddim = F)
 }
-
-teardown <- function() {
-  if (fs::dir_exists(data_dir)) fs::dir_delete(data_dir)
-  if (fs::dir_exists(output_dir)) fs::dir_delete(output_dir)
-}
-
-# == begin tests
-
-setup()
-
 
 testthat::test_that("test main function with valid parameters", {
-  params <- list(
-    rankfiledir = data_dir,
-    volcanodir = data_dir,
-    savedir = output_dir,
-    gct_path = test_gct_path,
-    ranks_from = "volcano",
-    genesets = list(
-      list(category = "H", subcategory = "", collapse = FALSE) # ,
-      # list(category="C5", subcategory="GO:BP", collapse=TRUE)
+  fake_fgsea <- function(pathways, stats, ...) {
+    tibble::tibble(
+      pathway = names(pathways),
+      pval = 0.01,
+      padj = 0.02,
+      log2err = 0,
+      ES = 1,
+      NES = 1,
+      size = purrr::map_int(pathways, length),
+      leadingEdge = purrr::map(pathways, ~ head(.x, n = min(3, length(.x))))
     )
-  )
+  }
 
-  testthat::expect_no_error({
-    print("Function is being called")
-    run_env$run(params)
-  })
+  testthat::with_mocked_bindings({
+    keep_artifacts <- identical(tolower(Sys.getenv("BCM_GSEA_KEEP_RUN_TEST_ARTIFACTS", "false")), "true")
+    root_dir <- fs::path(tempdir(), sprintf("bcm-gsea-run-%s-%04d",
+      format(Sys.time(), "%Y%m%d%H%M%S"),
+      sample.int(9999, 1)
+    ))
+    fs::dir_create(root_dir, recurse = TRUE)
+
+    if (!keep_artifacts) {
+      defer(fs::dir_delete(root_dir), envir = parent.frame())
+    } else {
+      message("Keeping bcm-gsea run-loop test artifacts in ", root_dir)
+    }
+
+    data_dir <- fs::path(root_dir, "data")
+    output_dir <- fs::path(root_dir, "output")
+    fs::dir_create(data_dir, recurse = TRUE)
+    fs::dir_create(output_dir, recurse = TRUE)
+    test_gct_path <- fs::path(data_dir, "test.gct")
+
+    setup(data_dir, output_dir, test_gct_path)
+
+    params <- list(
+      rankfiledir = data_dir,
+      volcanodir = data_dir,
+      savedir = output_dir,
+      gct_path = test_gct_path,
+      ranks_from = "volcano",
+      advanced = list(
+        cache = FALSE,
+        quiet = TRUE,
+        parallel = FALSE,
+        replace = TRUE,
+        cachedir = fs::path(output_dir, "cache"),
+        logfile = fs::path(output_dir, "run.log")
+      ),
+      barplot = list(do_individual = FALSE, do_combined = FALSE),
+      heatmap_gsea = list(do = FALSE),
+      heatmap_gene = list(do = FALSE),
+      enplot = list(do_individual = FALSE, do_combined = FALSE),
+      pca = list(do = FALSE),
+      genesets = list(
+        list(category = "H", subcategory = "", collapse = FALSE)
+      )
+    )
+
+    testthat::expect_no_error({
+      print("Function is being called")
+      run_env$run(params)
+    })
+  }, fgsea = fake_fgsea, .package = "fgsea")
 })
 
 
