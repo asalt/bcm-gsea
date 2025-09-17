@@ -18,12 +18,19 @@ get_arg <- util_tools$get_arg
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 prepare_data_for_bubble <- function(df) {
+  if (!"pval" %in% colnames(df)) {
+    df <- df %>% mutate(pval = padj)
+  }
+
   plot_tools$prepare_data_for_barplot(df) %>%
     mutate(
       padj = ifelse(is.na(padj), 1, padj),
+      pval = ifelse(is.na(pval), 1, pval),
       plot_leading_edge = pmax(leadingEdgeNum, 1),
-      outline_val = ifelse(is.na(outline_val), "transparent", outline_val),
-      fill_value = sign(NES) * (1 - pmin(padj, 1))
+      sig_pval = !is.na(pval) & pval < 0.05,
+      outline_val = ifelse(sig_pval, "black", "transparent"),
+      fill_value = sign(NES) * (1 - pmin(pval, 1)),
+      sig_label = ifelse(sig_pval, "*", "")
     )
 }
 
@@ -82,17 +89,17 @@ bubble_plot <- function(
         color = outline_val
       ),
       shape = 21,
-      stroke = 0.6,
+      stroke = 1.0,
       alpha = 0.9
     ) +
     scale_fill_gradient2(
-      low = "#2166ac",
-      mid = "#f0f0f0",
-      high = "#b2182b",
+      low = "#084594",
+      mid = "#ffffff",
+      high = "#b30000",
       midpoint = 0,
       limits = c(-1, 1),
-      na.value = "grey85",
-      guide = guide_colourbar(title = "1 - padj")
+      na.value = "#f7f7f7",
+      guide = guide_colourbar(title = "1 - pval")
     ) +
     scale_size(
       range = size_range,
@@ -100,6 +107,12 @@ bubble_plot <- function(
     ) +
     scale_color_identity() +
     scale_x_continuous(expand = expansion(mult = c(0.12, 0.12))) +
+    geom_text(
+      aes(label = sig_label),
+      color = "black",
+      size = 3.4,
+      vjust = 0.45
+    ) +
     labs(
       title = formatted_title,
       subtitle = formatted_subtitle,
