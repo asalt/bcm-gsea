@@ -18,7 +18,7 @@ R Analysis: The main analysis is performed using R, with fgsea for fast gene set
 Python Integration: Python manages the database, hosts APIs, and stores results.
   This component is still under development.
 Testing: Comprehensive testing using pytest for Python and testthat for R.
-Visualization: Utilizes ggplot2 for high-quality plots.
+Visualization: Utilizes ggplot2 for high-quality plots, including faceted barplots, heatmaps, PCA plots, and bubble plots summarizing pathway directionality.
 
 Script main entry points are driven by python command line parsing and variable dispatch.
 
@@ -110,6 +110,27 @@ No filtering is performed at this stage; if `collapse == TRUE` redundant pathway
 
 
 
+### plot_bubble.R
+
+Bubble plots provide a compact view of pathway directionality for each comparison. Key behaviour:
+
+- Fill colour encodes signed enrichment strength using `1 - pval` (reds for positive NES, blues for negative NES).
+- Circle outline indicates significance thresholds (`padj < 0.25`); a centered asterisk marks pathways with `padj < 0.05`.
+- Subtitles show the associated rank / contrast along with the `top N` limit used in the selection.
+- Output files are written alongside barplots with consistent, length-safe filenames so they remain portable across operating systems.
+
+Enable or disable bubble plotting from configuration by adding a `[params.bubbleplot]` section, e.g.
+
+```
+[params.bubbleplot]
+limit = [12, 20, 32]
+do_individual = true
+do_combined = true
+```
+
+The limit vector controls how many pathways are shown per figure; the `do_*` toggles mirror the barplot configuration.
+
+
 ## Citations
 To cite package ‘fgsea’ in publications use:
 
@@ -199,4 +220,3 @@ To cite package ‘ComplexHeatmap’ in publications use:
 
 
 ```
-

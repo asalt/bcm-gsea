@@ -17,13 +17,40 @@ get_args <- util_tools$get_args
 get_arg <- util_tools$get_arg
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
+GLYPH <- "⁕"
+
 prepare_data_for_bubble <- function(df) {
+  if (!"pval" %in% colnames(df)) {
+    df <- df %>% mutate(pval = padj)
+  }
+
   plot_tools$prepare_data_for_barplot(df) %>%
     mutate(
-      padj = ifelse(is.na(padj), 1, padj),
+      padj = {
+        tmp <- padj
+        if (is.list(tmp)) {
+          tmp <- vapply(tmp, function(x) as.numeric(x)[1], numeric(1), USE.NAMES = FALSE)
+        }
+        tmp <- suppressWarnings(as.numeric(tmp))
+        ifelse(is.na(tmp), 1, tmp)
+      },
+      pval = {
+        tmp <- pval
+        if (is.list(tmp)) {
+          tmp <- vapply(tmp, function(x) as.numeric(x)[1], numeric(1), USE.NAMES = FALSE)
+        }
+        tmp <- suppressWarnings(as.numeric(tmp))
+        ifelse(is.na(tmp), 1, tmp)
+      },
       plot_leading_edge = pmax(leadingEdgeNum, 1),
-      outline_val = ifelse(is.na(outline_val), "transparent", outline_val),
-      fill_value = sign(NES) * (1 - pmin(padj, 1))
+      sig_category = dplyr::case_when(
+        padj < 0.05 ~ "<0.05",
+        padj < 0.25 ~ "<0.25",
+        TRUE ~ ">=0.25"
+      ),
+      fill_value = sign(NES) * (1 - pmin(pval, 1)),
+      sig_label = ifelse(sig_category == "<0.05", GLYPH, ""),
+      text_color = ifelse(abs(fill_value) > 0.55, "#FFFFFF", "#111111")
     )
 }
 
@@ -49,11 +76,11 @@ bubble_plot <- function(
     str_replace_all("_", " ") %>%
     str_wrap(width = 42)
 
-  formatted_subtitle <- subtitle %>%
-    purrr::when(
-      is.null(.) ~ NULL,
-      TRUE ~ (.) %>% str_replace_all("_", " ") %>% str_wrap(width = 60)
-    )
+  formatted_subtitle <- if (is.null(subtitle)) {
+    NULL
+  } else {
+    subtitle %>% str_replace_all("_", " ") %>% str_wrap(width = 60)
+  }
 
   custom_labeller <- function(value) {
     vapply(value, function(label) {
@@ -74,31 +101,52 @@ bubble_plot <- function(
       plot_leading_edge = pmax(1, plot_leading_edge)
     )
 
+  sel_text <- sel %>% filter(sig_category == "<0.05")
+  sel_text_dark <- sel_text %>% filter(text_color == "#FFFFFF")
+  sel_text_light <- sel_text %>% filter(text_color != "#FFFFFF")
   p <- ggplot(sel, aes(x = NES, y = pathway)) +
     geom_point(
       aes(
         size = plot_leading_edge,
         fill = fill_value,
-        color = outline_val
+        color = sig_category
       ),
       shape = 21,
-      stroke = 0.6,
+      stroke = 1.1,
       alpha = 0.9
     ) +
     scale_fill_gradient2(
-      low = "#2166ac",
-      mid = "#f0f0f0",
-      high = "#b2182b",
+      low = "#084594",
+      mid = "#ffffff",
+      high = "#b30000",
       midpoint = 0,
       limits = c(-1, 1),
-      na.value = "grey85",
-      guide = guide_colourbar(title = "1 - padj")
+      na.value = "#f7f7f7",
+      guide = guide_colourbar(title = "1 - pval")
     ) +
     scale_size(
       range = size_range,
       guide = guide_legend(title = "Leading edge genes")
     ) +
-    scale_color_identity() +
+    scale_colour_manual(
+      values = c(
+        "<0.25" = "#3f3f3f",
+        "<0.05" = "#000000",
+        ">=0.25" = "transparent"
+      ),
+      breaks = c("<0.25", "<0.05"),
+      labels = c("padj < 0.25", paste0("padj < 0.05 (", GLYPH, ")")),
+      guide = guide_legend(
+        title = "Significance",
+        override.aes = list(
+          shape = 21,
+          fill = "grey70",
+          size = 4.5,
+          stroke = 1.2,
+          alpha = 1
+        )
+      )
+    ) +
     scale_x_continuous(expand = expansion(mult = c(0.12, 0.12))) +
     labs(
       title = formatted_title,
@@ -113,6 +161,30 @@ bubble_plot <- function(
       plot.title = element_text(size = 10, face = "bold"),
       legend.position = "right"
     )
+
+  if (nrow(sel_text_dark) > 0) {
+    p <- p + geom_text(
+      data = sel_text_dark,
+      inherit.aes = FALSE,
+      aes(x = NES, y = pathway, label = sig_label),
+      colour = "#FFFFFF",
+      size = 3.0,
+      vjust = 0.5,
+      show.legend = FALSE
+    )
+  }
+
+  if (nrow(sel_text_light) > 0) {
+    p <- p + geom_text(
+      data = sel_text_light,
+      inherit.aes = FALSE,
+      aes(x = NES, y = pathway, label = sig_label),
+      colour = "#111111",
+      size = 3.0,
+      vjust = 0.5,
+      show.legend = FALSE
+    )
+  }
 
   if (is.null(nes_range)) {
     nes_max <- suppressWarnings(max(sel$NES, na.rm = TRUE))
