@@ -9,7 +9,10 @@ suppressPackageStartupMessages(library(stringr))
 if (!exists("get_tool_env", envir = .GlobalEnv)) {
   get_tool_env <- local({
     # all_tools <- file.path(here("R"), list.files(here("R"), pattern = "\\.R$", full.names = FALSE))
-    all_tools <- fs::dir_ls(path=here("R"), glob = "*.R") %>% map(basename) %>% flatten_chr() %>% str_remove(".R")
+    all_tools <- fs::dir_ls(path = here("R"), glob = "*.R") %>%
+      map(basename) %>%
+      purrr::list_c() %>%
+      str_remove(".R")
 
     print(getwd())
     print(all_tools)
