@@ -293,13 +293,23 @@ run_all_rankobjs <- function(
   }
 
   results <- rankobjs %>% .map_func(~ do.call(run_one, c(list(rankobj = .), fgsea_args)))
+  results <- Filter(Negate(is.null), results)
   # print(paste0('length rankobjs : ', length(rankobjs)))
   # print(paste0('length results : ', length(results)))
 
   # species <- species %||% "Homo sapiens"
   if (length(results) > 0){ # only trigger for new results
     tryCatch(
-      {results <- results %>% map_tools$add_leadingedges_to_results_list(., species=species)},
+      {
+        results <- results %>% map_tools$add_leadingedges_to_results_list(., species=species)
+        results <- purrr::map(results, ~{
+          if (!is.null(.) && !"mainpathway" %in% colnames(.)) {
+            dplyr::mutate(., mainpathway = TRUE)
+          } else {
+            .
+          }
+        })
+      },
       error = function(e){
         print(paste0('error mapping names to genes, ', e))
       }
@@ -866,4 +876,3 @@ combine_rankorders_on_sample <- function(rankorders, metadata = NULL, ...) {
 
   return(res_list)
 }
-

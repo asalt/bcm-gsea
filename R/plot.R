@@ -350,30 +350,28 @@ plot_heatmap_of_edges <- function(
     param_grid %>% purrr::pmap( ~{
       params <- list(...)
       path <- get_arg(save_func, "path")
-      newpath <- file.path(path,
-                           make.names(strip_pathway_leader(collection_name)),
-                           "heatmaps_gene",
-                            make.names(row$pathway) %>% substring(1,40)
-      )
+      collection_dir <- util_tools$safe_path_component(strip_pathway_leader(collection_name))
+      pathway_dir <- util_tools$safe_path_component(strip_pathway_leader(row$pathway), max_chars = 40)
+      newpath <- util_tools$safe_subdir(path, collection_dir, "heatmaps_gene", pathway_dir)
       cluster_rows <- params$cluster_rows %||% FALSE
       cluster_columns <- params$cluster_columns %||% FALSE
       cut_by_val <- params$cut_by
 
       .cut_by_val <- plot_utils$process_cut_by(cut_by_val, subgct@cdesc)
-      cut_by_label <- ifelse(!is.null(.cut_by_val), paste0("cut_", make.names(cut_by_val)), "")
+      cut_by_label <- if (!is.null(.cut_by_val)) {
+        paste0("cut_", util_tools$safe_path_component(cut_by_val, max_chars = 32))
+      } else {
+        ""
+      }
 
-      filename <- paste0(
-        get_arg(save_func, "filename"), #make.names(row$pathway),
-        make.names(comparison_name),
-        "_cr",
-        ifelse(cluster_rows, "T", "F"),
-        "_cc",
-        ifelse(cluster_columns, "T", "F"),
+      filename <- util_tools$safe_filename(
+        get_arg(save_func, "filename"),
+        comparison_name,
+        paste0("cr", ifelse(cluster_rows, "T", "F")),
+        paste0("cc", ifelse(cluster_columns, "T", "F")),
         cut_by_label,
-        "_",
-        nrow(subgct@mat),
-        'x',
-        ncol(subgct@mat)
+        paste0(nrow(subgct@mat), "x", ncol(subgct@mat)),
+        fallback = "gene_heatmap"
       )
       if (!is.null(save_func)) {
         .save_func <- make_partial(save_func, filename = filename, path = newpath)
@@ -815,7 +813,7 @@ all_barplots_with_numbers <- function(
     limit = 20,
     ...) {
   if (!is.null(save_func)) {
-    filename <- paste0(get_arg(save_func, "filename"), "barplot_")
+    filename <- util_tools$safe_filename(get_arg(save_func, "filename"), "barplot", fallback = "barplot")
     save_func <- make_partial(save_func, filename = filename)
   }
 
@@ -837,12 +835,16 @@ all_barplots_with_numbers <- function(
               .title <- comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
 
               if (!is.null(save_func)) {
-                filename <- paste0(
+                collection_dir <- util_tools$safe_path_component(collection_name)
+                comparison_dir <- util_tools$safe_path_component(comparison_name)
+                filename <- util_tools$safe_filename(
                   get_arg(save_func, "filename"),
-                  make.names(collection_name), "_", make.names(comparison_name),
-                  "_", nrow(sel)
+                  collection_dir,
+                  comparison_dir,
+                  paste0("n", nrow(sel)),
+                  fallback = "barplot"
                 )
-                path <- file.path(get_arg(save_func, "path"), make.names(collection_name), "barplots")
+                path <- util_tools$safe_subdir(get_arg(save_func, "path"), collection_dir, "barplots")
                 save_func <- make_partial(save_func, filename = filename, path = path)
               }
               log_msg(msg = paste0("plotting barplot target ", path, " ", collection_name))
@@ -898,8 +900,16 @@ do_combined_barplots <- function(
       # pathway_df <- get_pathway_info(geneset_name)
       # .merge <- left_join(res , pathway_df, by= )
       if (!is.null(save_func)) {
-        filename <- paste0("barplot_", make.names(geneset_name), "_", n_sel, "_all")
-        path <- file.path(get_arg(save_func, "path"), make.names(geneset_name), "barplots")
+        geneset_dir <- util_tools$safe_path_component(geneset_name)
+        filename <- util_tools$safe_filename(
+          get_arg(save_func, "filename"),
+          "barplot",
+          geneset_dir,
+          paste0("n", n_sel),
+          "all",
+          fallback = "barplot_all"
+        )
+        path <- util_tools$safe_subdir(get_arg(save_func, "path"), geneset_dir, "barplots")
         log_msg(msg = paste0("plotting barplot target ", path, " ", geneset_name, " "))
         save_func <- make_partial(save_func, filename = filename, path = path)
       }
@@ -958,19 +968,24 @@ plot_results_all_collections <- function(
           cluster_rows <- params$cluster_rows
           cluster_columns <- params$cluster_columns
           .cut_by_val <- plot_utils$process_cut_by(.cut_by, metadata)
-          cut_by_label <- ifelse(!is.null(.cut_by_val), paste0("cut_", make.names(.cut_by)), "")
+          cut_by_label <- if (!is.null(.cut_by_val)) {
+            paste0("cut_", util_tools$safe_path_component(.cut_by, max_chars = 32))
+          } else {
+            ""
+          }
 
           if (!is.null(save_func)) {
-            filename <- paste0(
+            title_dir <- util_tools$safe_path_component(.title)
+            filename <- util_tools$safe_filename(
               get_arg(save_func, "filename"),
               "gsea_heatmap",
-              "_rc", ifelse(cluster_rows, "T", "F"),
-              "_cc", ifelse(cluster_columns, "T", "F"),
+              paste0("rc", ifelse(cluster_rows, "T", "F")),
+              paste0("cc", ifelse(cluster_columns, "T", "F")),
               cut_by_label,
-              "_",
-              make.names(.title)
+              title_dir,
+              fallback = "gsea_heatmap"
             )
-            path <- file.path(get_arg(save_func, "path"), make.names(.title), "heatmaps_gsea")
+            path <- util_tools$safe_subdir(get_arg(save_func, "path"), title_dir, "heatmaps_gsea")
             .save_func <- make_partial(save_func, filename = filename, path = path)
           }
 
@@ -1435,8 +1450,13 @@ plot_top_ES_across <- function(
       geneset_collection <- geneset_collections[[collection_name]]
       if (!is.null(save_func)) {
         path <- get_arg(save_func, "path")
-        newpath <- file.path(path, make.names(collection_name), make.names("enrichplots"))
-        filename <- make.names(collection_name) %>% substring(1,40)
+        collection_dir <- util_tools$safe_path_component(collection_name)
+        newpath <- util_tools$safe_subdir(path, collection_dir, "enrichplots")
+        filename <- util_tools$safe_filename(
+          get_arg(save_func, "filename"),
+          collection_dir,
+          fallback = "enrichplots"
+        )
         save_func <- make_partial(save_func, path = newpath, filename = filename)
       }
       plts <- plot_top_ES(df, ranks_list, geneset_collection,
@@ -1548,10 +1568,18 @@ plot_top_ES <- function(
 
 
       if (!is.null(save_func)) {
-        newdir <- paste(get_arg(save_func, "filename"), make.names(pathway_name), sep = "_") %>%
-            substring(1,60)
-        newpath <- file.path(get_arg(save_func, "path"), newdir)
-        newfilename <- paste0(make.names("combined"), make.names(combine_by_name), sep = "_")
+        newdir <- util_tools$safe_filename(
+          get_arg(save_func, "filename"),
+          pathway_name,
+          fallback = "combined_dir",
+          max_chars = 60
+        )
+        newpath <- util_tools$safe_subdir(get_arg(save_func, "path"), newdir)
+        newfilename <- util_tools$safe_filename(
+          "combined",
+          combine_by_name,
+          fallback = "combined"
+        )
 
         if (!"facet" %in% names(rankorder$edge)) { # this should be true if do_combined is true
           rankorder_samplepathway$facet <- "x"
@@ -1567,7 +1595,7 @@ plot_top_ES <- function(
         .width <- panel_width * .ncol
         .height <- panel_height * .8 * .nrow
 
-        save_func <- make_partial(save_func, path=newpath, filename = newfilename, width = .width, height = .height)
+        save_func <- make_partial(save_func, path = newpath, filename = newfilename, width = .width, height = .height)
         # and now call it
         save_func(plot_code = function() print(.plt))
       }
@@ -1610,10 +1638,14 @@ plot_top_ES <- function(
 
 
         if (!is.null(save_func)) {
-          newdir <- paste(get_arg(save_func, "filename"), make.names(pathway_name), sep="_") %>%
-            substring(1,60)
-          newpath <- file.path(get_arg(save_func, "path"), newdir)
-          newfilename <-  make.names(comparison)
+          newdir <- util_tools$safe_filename(
+            get_arg(save_func, "filename"),
+            pathway_name,
+            fallback = "enrich",
+            max_chars = 60
+          )
+          newpath <- util_tools$safe_subdir(get_arg(save_func, "path"), newdir)
+          newfilename <- util_tools$safe_filename(comparison, fallback = "comparison")
           save_func <- make_partial(save_func, path = newpath, filename = newfilename)
           # and now call it
           save_func(
@@ -1842,7 +1874,11 @@ plot_tables_faster <- function(
         gsea_param = 0.5,
       )
 
-      outpath <- file.path(ENPLOT_BASEDIR, make.names(geneset_name), make.names(rank_name_nice))
+      outpath <- util_tools$safe_subdir(
+        ENPLOT_BASEDIR,
+        util_tools$safe_path_component(geneset_name),
+        util_tools$safe_path_component(rank_name_nice)
+      )
       if (!fs::dir_exists(outpath)) fs::dir_create(outpath)
 
       # print(p)

@@ -14,6 +14,11 @@ limit = [12, 20, 32]
 do_individual = true
 do_combined = true
 
+[params.bubbleplot]
+limit = [12, 20, 32]
+do_individual = true
+do_combined = true
+
 [params.enplot]
 do_individual = true
 do_combined = true

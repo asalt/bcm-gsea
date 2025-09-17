@@ -33,6 +33,7 @@ run <- function(params) {
   # fgsea_tools <- get_tool_env("fgsea")
   plot_tools <- get_tool_env("plot")
   plot_utils <- get_tool_env("plot_utils")
+  bubble_tools <- get_tool_env("plot_bubble")
   pca_tools <- get_tool_env("pca")
   voice_tools <- get_tool_env("voice")
 
@@ -248,8 +249,14 @@ run <- function(params) {
         all_gsea_results %>% purrr::imap(~ {
           collection_name <- .y
           pca_object <- pca_objects[[.y]]
-          .savedir <- file.path(get_arg(save_func, "path"), make.names(collection_name), "pca")
-          .filename <- paste0(make.names(collection_name), "_top_loadings")
+          collection_dir <- util_tools$safe_path_component(collection_name)
+          .savedir <- util_tools$safe_subdir(get_arg(save_func, "path"), collection_dir, "pca")
+          .filename <- util_tools$safe_filename(
+            get_arg(save_func, "filename"),
+            collection_dir,
+            "top_loadings",
+            fallback = "top_loadings"
+          )
           .save_func <- make_partial(save_func, path = .savedir, filename = .filename)
           pca_tools$make_heatmap_from_loadings(
             gsea_object = .x,
@@ -291,6 +298,47 @@ run <- function(params) {
           )},
           error = function(e) { return(NULL) }
             )
+      }
+
+      if (params$bubbleplot$do_individual == TRUE) {
+        log_msg(msg = paste0(
+          "plotting individual bubble plots (limits: ",
+          paste(params$bubbleplot$limit, collapse = ","),
+          "; replace=",
+          params$advanced$replace %||% TRUE,
+          ")"
+        ))
+        bubble_tools$all_bubble_plots(
+          results_list,
+          limit = params$bubbleplot$limit,
+          save_func = save_func
+        )
+      }
+
+      if (params$bubbleplot$do_combined == TRUE) {
+        log_msg(msg = paste0(
+          "plotting combined bubble plots (limits: ",
+          paste(params$bubbleplot$limit, collapse = ","),
+          "; replace=",
+          params$advanced$replace %||% TRUE,
+          ")"
+        ))
+        bubble_combined_result <- tryCatch(
+          {
+            bubble_tools$do_combined_bubble_plots(
+              results_list,
+              save_func = save_func,
+              limit = params$bubbleplot$limit
+            )
+          },
+          error = function(e) {
+            log_msg(warning = paste0("bubble plot combined failed: ", conditionMessage(e)))
+            NULL
+          }
+        )
+        if (is.null(bubble_combined_result)) {
+          log_msg(msg = "bubble combined plots returned NULL")
+        }
       }
 
 

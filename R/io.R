@@ -64,7 +64,13 @@ create_rnkfiles_from_emat <- function(
   gct <- cmapR::parse_gctx(emat)
 
 
-  if ((!is.null(sample_exclude)) && (sample_exclude != FALSE)){
+  #if ((!is.null(sample_exclude)) && (sample_exclude != FALSE)){
+  # if (!is.null(sample_exclude) && !isFALSE(sample_exclude) && length(sample_exclude) > 0L) {
+  if (!is.null(sample_exclude) && # safer
+    !(is.logical(sample_exclude) && length(sample_exclude) == 1L && isFALSE(sample_exclude)) &&
+    length(sample_exclude) > 0L) {
+
+
     to_exclude <- rownames(gct@cdesc[sample_exclude, ])
     to_keep <- setdiff(rownames(gct@cdesc), to_exclude)
     if (length(to_exclude) > 0){
@@ -300,7 +306,11 @@ log_msg(msg = paste0("length results list :", length(results_list)))
     result_list %>% purrr::imap(~{
       result <- .x
       comparison_name <- .y
-      outf <- file.path(savedir, make.names(paste0(collection_name, "_", comparison_name, ".tsv")))
+      filename <- paste0(
+        util_tools$safe_filename(collection_name, comparison_name, fallback = "gsea_result"),
+        ".tsv"
+      )
+      outf <- file.path(savedir, filename)
       if (!"data.frame" %in% class(result)) {
         log_msg(paste0("Invalid result, cannot write to file."))
         return()
@@ -351,7 +361,11 @@ save_pivoted_gsea_results <- function(results_list, savedir = "gsea_tables", rep
           # Alternatively, use names_glue for more complex naming
           # names_glue = "{rankname}_{.value}"
         )
-      outf <- file.path(savedir, make.names(paste0(collection_name, "_", 'all', ".tsv")))
+      filename <- paste0(
+        util_tools$safe_filename(collection_name, "all", fallback = "gsea_result"),
+        ".tsv"
+      )
+      outf <- file.path(savedir, filename)
       if (fs::file_exists(outf) && !replace) {
         log_msg(msg = paste0("File ", outf, " already exists, skipping"))
         return(res_pivoted)

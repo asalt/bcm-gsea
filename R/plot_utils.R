@@ -88,12 +88,26 @@ plot_and_save_unsafe <- function(
       log_msg(warning = "filename is null")
   }
 
+  filename <- util_tools$safe_path_component(filename, fallback = "plot")
+
   full_path <- file.path(path, paste0(filename, ".", type))
+  log_msg(msg = paste0("plot_and_save: target ", full_path))
+
+  max_total <- 240
+  if (nchar(full_path) > max_total) {
+    base_len <- nchar(file.path(path, ""))
+    extension_len <- nchar(paste0(".", type))
+    allowed <- max_total - base_len - extension_len
+    allowed <- max(16, allowed)
+    filename <- util_tools$safe_path_component(filename, fallback = "plot", max_chars = allowed)
+    full_path <- file.path(path, paste0(filename, ".", type))
+  }
   # log_msg(msg = paste0("full_path: ", full_path))
 
   if (!fs::dir_exists(path)) fs::dir_create(path)
 
   if (file.exists(full_path) && replace == FALSE) {
+    log_msg(msg = paste0("plot_and_save: skipping existing file ", full_path))
     graphics.off() # turn off anything that opened
     return()
   }
@@ -125,6 +139,7 @@ plot_and_save_unsafe <- function(
 
   # log_msg(msg = paste0("done"))
 
+  log_msg(msg = paste0("plot_and_save: wrote ", full_path))
   return(h)
 }
 
@@ -241,4 +256,3 @@ process_cut_by <- function(cut_by, cdesc) {
 
   return(cut_by_factor)
 }
-

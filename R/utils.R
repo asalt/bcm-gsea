@@ -2,6 +2,7 @@ suppressPackageStartupMessages(library(here))
 suppressPackageStartupMessages(library(fs))
 suppressPackageStartupMessages(library(cmapR))
 suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(digest))
 # suppressPackageStartupMessages(library(dplyr))
 
 source(file.path(here("R"), "lazyloader.R"))
@@ -55,12 +56,19 @@ clean_args <- function(params, root_dir = "/") {
   # all top level params
   params$advanced <- params$advanced %||% list()
   params$barplot <- params$barplot %||% list()
+  params$bubbleplot <- params$bubbleplot %||% list()
   params$heatmap_gsea <- params$heatmap_gsea %||% list()
   params$heatmap_gene <- params$heatmap_gene %||% list()
   params$enplot <- params$enplot %||% list()
 
   params$barplot$do_individual <- params$barplot$do_individual %||% TRUE
   params$barplot$do_combined <- params$barplot$do_combined %||% TRUE
+  params$bubbleplot$do_individual <- params$bubbleplot$do_individual %||% TRUE
+  params$bubbleplot$do_combined <- params$bubbleplot$do_combined %||% TRUE
+
+  default_limit_values <- c(10, 20, 30, 50)
+  params$barplot$limit <- normalize_limit_vector(params$barplot$limit, default_limit_values)
+  params$bubbleplot$limit <- normalize_limit_vector(params$bubbleplot$limit, params$barplot$limit)
 
   params$heatmap_gsea$do <- params$heatmap_gsea$do %||% TRUE
   params$heatmap_gene$do <- params$heatmap_gene$do %||% TRUE
@@ -144,6 +152,143 @@ clean_args <- function(params, root_dir = "/") {
   print(str(params))
 
   return(params)
+}
+
+
+# Helpers for safe filesystem naming ------------------------------------
+
+.sanitize_component <- function(x) {
+  if (is.null(x) || length(x) == 0) {
+    return(NA_character_)
+  }
+  candidate <- as.character(x)[1]
+  if (is.na(candidate)) {
+    return(NA_character_)
+  }
+  candidate <- trimws(candidate)
+  if (!nzchar(candidate)) {
+    return(NA_character_)
+  }
+
+  # transliterate to ASCII where possible, fall back to underscore substitution
+  candidate_ascii <- suppressWarnings(iconv(candidate,
+    from = "",
+    to = "ASCII//TRANSLIT",
+    sub = "_"
+  ))
+  if (!is.na(candidate_ascii) && nzchar(candidate_ascii)) {
+    candidate <- candidate_ascii
+  }
+
+  candidate <- gsub("[^A-Za-z0-9._-]+", "_", candidate)
+  candidate <- gsub("_+", "_", candidate)
+  candidate <- gsub("^_+|_+$", "", candidate)
+
+  if (!nzchar(candidate)) {
+    return(NA_character_)
+  }
+
+  return(candidate)
+}
+
+safe_path_component <- function(x, fallback = "item", max_chars = 60, allow_empty = FALSE) {
+  candidate <- .sanitize_component(x)
+
+  if (is.na(candidate) || (!nzchar(candidate) && !allow_empty)) {
+    candidate <- fallback
+  } else if (allow_empty && (is.na(candidate) || !nzchar(candidate))) {
+    candidate <- ""
+  }
+
+  if (nzchar(candidate) && nchar(candidate) > max_chars) {
+    hash <- substr(digest::digest(candidate, algo = "crc32"), 1, 8)
+    keep <- max(1, max_chars - nchar(hash) - 1)
+    candidate <- paste0(substr(candidate, 1, keep), "_", hash)
+  }
+
+  if (!allow_empty && !nzchar(candidate)) {
+    candidate <- fallback
+  }
+
+  return(candidate)
+}
+
+safe_filename <- function(..., fallback = "file", max_chars = 80, delim = "_") {
+  parts <- list(...)
+  if (length(parts) == 0) {
+    return(fallback)
+  }
+
+  sanitized <- vapply(parts, function(part) {
+    safe_path_component(part, fallback = "", max_chars = max_chars, allow_empty = TRUE)
+  }, character(1), USE.NAMES = FALSE)
+
+  sanitized <- sanitized[nzchar(sanitized)]
+  if (length(sanitized) == 0) {
+    candidate <- fallback
+  } else {
+    candidate <- paste(sanitized, collapse = delim)
+  }
+
+  if (!nzchar(candidate)) {
+    candidate <- fallback
+  }
+
+  if (nchar(candidate) > max_chars) {
+    hash <- substr(digest::digest(candidate, algo = "crc32"), 1, 8)
+    keep <- max(1, max_chars - nchar(hash) - nchar(delim))
+    candidate <- paste0(substr(candidate, 1, keep), delim, hash)
+  }
+
+  if (!nzchar(candidate)) {
+    candidate <- fallback
+  }
+
+  return(candidate)
+}
+
+safe_subdir <- function(base, ..., max_chars = 60) {
+  components <- list(...)
+  if (length(components) == 0) {
+    return(base)
+  }
+
+  sanitized <- vapply(components, function(part) {
+    safe_path_component(part, max_chars = max_chars)
+  }, character(1), USE.NAMES = FALSE)
+
+  do.call(file.path, c(list(base), as.list(sanitized)))
+}
+
+
+
+normalize_limit_vector <- function(limit, fallback = c(10, 20, 30, 50)) {
+  if (is.null(limit)) {
+    return(fallback)
+  }
+
+  if (is.list(limit)) {
+    limit <- unlist(limit, use.names = FALSE)
+  }
+
+  if (is.character(limit)) {
+    if (length(limit) == 1L) {
+      limit_candidate <- tolower(limit)
+      if (limit_candidate %in% c("auto", "default", "all", "")) {
+        return(fallback)
+      }
+    }
+    limit <- suppressWarnings(as.numeric(limit))
+  }
+
+  limit <- suppressWarnings(as.numeric(limit))
+  limit <- limit[is.finite(limit) & !is.na(limit) & limit > 0]
+
+  if (length(limit) == 0) {
+    return(fallback)
+  }
+
+  sort(unique(limit))
 }
 
 

@@ -279,9 +279,15 @@ plot_all_biplots <- function(
 
               log_msg(msg=paste0('.colby equal to : ', .colby))
               if (!is.null(save_func)) {
+              collection_dir <- util_tools$safe_path_component(collection_name)
               save_func <- make_partial(save_func,
-                filename = paste0("pca_biplot_", make.names(title), "_col", make.names(.colby)),
-                path = file.path(get_arg(save_func, "path"), make.names(collection_name), "pca"),
+                filename = util_tools$safe_filename(
+                  "pca_biplot",
+                  title,
+                  paste0("col", .colby),
+                  fallback = "pca_biplot"
+                ),
+                path = util_tools$safe_subdir(get_arg(save_func, "path"), collection_dir, "pca"),
                 width = fig_width, height = fig_height
               )
               }
@@ -413,18 +419,24 @@ make_heatmap_from_loadings <- function(
     params = list(...)
     .cut_by <- params$cut_by
     .cut_by_val <- plot_utils$process_cut_by(.cut_by, pca_object$metadata)
-    cut_by_label <- ifelse(!is.null(.cut_by_val), paste0("cut_", make.names(.cut_by)), "")
+    cut_by_label <- if (!is.null(.cut_by_val)) {
+      paste0("cut_", util_tools$safe_path_component(.cut_by, max_chars = 32))
+    } else {
+      ""
+    }
     cluster_rows <- params$cluster_rows
     cluster_columns <- params$cluster_columns
 
     .save_func <- NULL
     if (!is.null(save_func)) {
-      filename <- paste0(
+      filename <- util_tools$safe_filename(
         get_arg(save_func, "filename"),
-        "_gsea_heatmap_5pct",
-        "_rc", ifelse(cluster_rows, "T", "F"),
-        "_cc", ifelse(cluster_columns, "T", "F"),
-        cut_by_label)
+        "gsea_heatmap_5pct",
+        paste0("rc", ifelse(cluster_rows, "T", "F")),
+        paste0("cc", ifelse(cluster_columns, "T", "F")),
+        cut_by_label,
+        fallback = "gsea_heatmap"
+      )
         .save_func <- make_partial(save_func, filename = filename)
       }
 
@@ -463,18 +475,24 @@ make_heatmap_from_loadings <- function(
     params = list(...)
     .cut_by <- params$cut_by
     .cut_by_val <- plot_utils$process_cut_by(.cut_by, pca_object$metadata)
-    cut_by_label <- ifelse(!is.null(.cut_by_val), paste0("cut_", make.names(.cut_by)), "")
+    cut_by_label <- if (!is.null(.cut_by_val)) {
+      paste0("cut_", util_tools$safe_path_component(.cut_by, max_chars = 32))
+    } else {
+      ""
+    }
     cluster_rows <- params$cluster_rows
     cluster_columns <- params$cluster_columns
 
     .save_func <- NULL
     if (!is.null(save_func)) {
-      filename <- paste0(
+      filename <- util_tools$safe_filename(
         get_arg(save_func, "filename"),
-        "_gsea_heatmap_top5",
-        "_rc", ifelse(cluster_rows, "T", "F"),
-        "_cc", ifelse(cluster_columns, "T", "F"),
-        cut_by_label)
+        "gsea_heatmap_top5",
+        paste0("rc", ifelse(cluster_rows, "T", "F")),
+        paste0("cc", ifelse(cluster_columns, "T", "F")),
+        cut_by_label,
+        fallback = "gsea_heatmap"
+      )
         .save_func <- make_partial(save_func, filename = filename)
       }
 
