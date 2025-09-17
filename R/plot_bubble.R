@@ -30,6 +30,7 @@ prepare_data_for_bubble <- function(df) {
 bubble_plot <- function(
     df,
     title = "",
+    subtitle = NULL,
     save_func = NULL,
     facet_order = NULL,
     nes_range = NULL,
@@ -47,6 +48,12 @@ bubble_plot <- function(
   formatted_title <- title %>%
     str_replace_all("_", " ") %>%
     str_wrap(width = 42)
+
+  formatted_subtitle <- subtitle %>%
+    purrr::when(
+      is.null(.) ~ NULL,
+      TRUE ~ (.) %>% str_replace_all("_", " ") %>% str_wrap(width = 60)
+    )
 
   custom_labeller <- function(value) {
     vapply(value, function(label) {
@@ -95,6 +102,7 @@ bubble_plot <- function(
     scale_x_continuous(expand = expansion(mult = c(0.12, 0.12))) +
     labs(
       title = formatted_title,
+      subtitle = formatted_subtitle,
       x = "NES",
       y = NULL
     ) +
@@ -218,9 +226,24 @@ all_bubble_plots <- function(
               ))
             }
 
+            rank_label <- sel$rankname %>% na.omit() %>% unique()
+            rank_label <- if (length(rank_label) == 0) {
+              NULL
+            } else {
+              rank_label %>%
+                str_replace_all("_", " ") %>%
+                paste(collapse = ", ")
+            }
+            subtitle_text <- if (!is.null(rank_label)) {
+              paste0("rank: ", rank_label, " • top ", .limit)
+            } else {
+              paste0("top ", .limit, " pathways")
+            }
+
             bubble_plot(
               sel,
               title = comparison_name,
+              subtitle = subtitle_text,
               save_func = local_save_func,
               facet_order = facet_order,
               nes_range = nes_range,
@@ -279,6 +302,7 @@ do_combined_bubble_plots <- function(
       bubble_plot(
         res,
         title = geneset_name,
+        subtitle = paste0("top ", .limit, " pathways"),
         save_func = local_save_func,
         facet_order = facet_order,
         nes_range = nes_range,
