@@ -813,7 +813,11 @@ all_barplots_with_numbers <- function(
     limit = 20,
     ...) {
   if (!is.null(save_func)) {
-    filename <- util_tools$safe_filename(get_arg(save_func, "filename"), "barplot", fallback = "barplot")
+    filename <- util_tools$safe_filename(
+      get_arg(save_func, "filename"),
+      "bar",
+      fallback = "bar"
+    )
     save_func <- make_partial(save_func, filename = filename)
   }
 
@@ -834,24 +838,32 @@ all_barplots_with_numbers <- function(
               sel <- fgsea_tools$select_topn(dataframe, limit = .limit, pstat_cutoff=1)
               .title <- comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
 
-              if (!is.null(save_func)) {
+              local_save_func <- save_func
+              save_path <- NULL
+              if (!is.null(local_save_func)) {
                 collection_dir <- util_tools$safe_path_component(collection_name)
                 comparison_dir <- util_tools$safe_path_component(comparison_name)
-                filename <- util_tools$safe_filename(
-                  get_arg(save_func, "filename"),
+                save_path <- util_tools$safe_subdir(
+                  get_arg(local_save_func, "path"),
                   collection_dir,
-                  comparison_dir,
-                  paste0("n", nrow(sel)),
-                  fallback = "barplot"
+                  "bar",
+                  comparison_dir
                 )
-                path <- util_tools$safe_subdir(get_arg(save_func, "path"), collection_dir, "barplots")
-                save_func <- make_partial(save_func, filename = filename, path = path)
+                filename <- util_tools$safe_filename(
+                  "bar",
+                  paste0("top", .limit),
+                  paste0("n", nrow(sel)),
+                  fallback = "bar"
+                )
+                local_save_func <- make_partial(local_save_func, filename = filename, path = save_path)
+                log_msg(msg = paste0(
+                  "plotting bar target ", file.path(save_path, paste0(filename, ".pdf")), " ", collection_name
+                ))
               }
-              log_msg(msg = paste0("plotting barplot target ", path, " ", collection_name))
 
               p <- barplot_with_numbers(sel,
                 title = .title,
-                save_func = save_func,
+                save_func = local_save_func,
                 facet_order = facet_order,
                 nes_range = nes_range,
                 ...
@@ -899,23 +911,25 @@ do_combined_barplots <- function(
         nrow()
       # pathway_df <- get_pathway_info(geneset_name)
       # .merge <- left_join(res , pathway_df, by= )
-      if (!is.null(save_func)) {
+      local_save_func <- save_func
+      if (!is.null(local_save_func)) {
         geneset_dir <- util_tools$safe_path_component(geneset_name)
         filename <- util_tools$safe_filename(
-          get_arg(save_func, "filename"),
-          "barplot",
-          geneset_dir,
+          get_arg(local_save_func, "filename"),
+          "bar",
           paste0("n", n_sel),
           "all",
-          fallback = "barplot_all"
+          fallback = "bar_all"
         )
-        path <- util_tools$safe_subdir(get_arg(save_func, "path"), geneset_dir, "barplots")
-        log_msg(msg = paste0("plotting barplot target ", path, " ", geneset_name, " "))
-        save_func <- make_partial(save_func, filename = filename, path = path)
+        path <- util_tools$safe_subdir(get_arg(local_save_func, "path"), geneset_dir, "bar")
+        log_msg(msg = paste0(
+          "plotting bar target ", file.path(path, paste0(filename, ".pdf")), " ", geneset_name, " "
+        ))
+        local_save_func <- make_partial(local_save_func, filename = filename, path = path)
       }
       p <- res %>% barplot_with_numbers(
         title = geneset_name,
-        save_func = save_func,
+        save_func = local_save_func,
         facet_order = facet_order,
         ...
       )

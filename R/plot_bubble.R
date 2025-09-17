@@ -283,20 +283,25 @@ all_bubble_plots <- function(
             nes_range <- if (is.finite(nes_max)) c(-nes_max, nes_max) else NULL
 
             local_save_func <- save_func
+            save_path <- NULL
             if (!is.null(local_save_func)) {
               collection_dir <- util_tools$safe_path_component(collection_name)
               comparison_dir <- util_tools$safe_path_component(comparison_name)
               filename <- util_tools$safe_filename(
                 "bubble",
-                collection_dir,
-                comparison_dir,
+                paste0("top", .limit),
                 paste0("n", nrow(sel)),
                 fallback = "bubble"
               )
-              path <- util_tools$safe_subdir(get_arg(local_save_func, "path"), collection_dir, "bubbles")
-              local_save_func <- make_partial(local_save_func, filename = filename, path = path)
+              save_path <- util_tools$safe_subdir(
+                get_arg(local_save_func, "path"),
+                collection_dir,
+                "bubble",
+                comparison_dir
+              )
+              local_save_func <- make_partial(local_save_func, filename = filename, path = save_path)
               log_msg(msg = paste0(
-                "bubble all: saving to ", file.path(path, paste0(filename, ".pdf"))
+                "bubble all: saving to ", file.path(save_path, paste0(filename, ".pdf"))
               ))
             }
 
@@ -363,12 +368,11 @@ do_combined_bubble_plots <- function(
         geneset_dir <- util_tools$safe_path_component(geneset_name)
         filename <- util_tools$safe_filename(
           "bubble",
-          geneset_dir,
           paste0("n", n_sel),
           "all",
           fallback = "bubble_all"
         )
-        path <- util_tools$safe_subdir(get_arg(local_save_func, "path"), geneset_dir, "bubbles")
+        path <- util_tools$safe_subdir(get_arg(local_save_func, "path"), geneset_dir, "bubble")
         local_save_func <- make_partial(local_save_func, filename = filename, path = path)
         log_msg(msg = paste0(
           "bubble combined: saving to ", file.path(path, paste0(filename, ".pdf"))
