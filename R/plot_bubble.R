@@ -9,8 +9,8 @@ source(file.path(here("R"), "lazyloader.R"))
 
 util_tools <- get_tool_env("utils")
 plot_utils <- get_tool_env("plot_utils")
-fgsea_tools <- get_tool_env("fgsea")
-plot_tools <- get_tool_env("plot")
+fgsea_tools <- get_tool_env("fgsea" )
+plot_tools <- get_tool_env("plot" )
 
 make_partial <- util_tools$make_partial
 get_args <- util_tools$get_args
@@ -96,20 +96,18 @@ bubble_plot <- function(
       arrange(rankname)
   }
 
-  sel <- sel %>%
-    mutate(
-      plot_leading_edge = pmax(1, plot_leading_edge)
-    )
+  sel <- sel %>% mutate(plot_leading_edge = pmax(1, plot_leading_edge))
 
   sel_text <- sel %>% filter(sig_category == "<0.05")
   sel_text_dark <- sel_text %>% filter(text_color == "#FFFFFF")
   sel_text_light <- sel_text %>% filter(text_color != "#FFFFFF")
+
   p <- ggplot(sel, aes(x = NES, y = pathway)) +
     geom_point(
       aes(
         size = plot_leading_edge,
         fill = fill_value,
-        color = sig_category
+        colour = sig_category
       ),
       shape = 21,
       stroke = 1.1,
@@ -270,7 +268,7 @@ all_bubble_plots <- function(
           comparison_name <- .y
 
           purrr::map(limit, function(.limit) {
-           sel <- fgsea_tools$select_topn(dataframe, limit = .limit, pstat_cutoff = 1)
+            sel <- fgsea_tools$select_topn(dataframe, limit = .limit, pstat_cutoff = 1)
             log_msg(msg = paste0(
               "bubble all: collection=", collection_name,
               " comparison=", comparison_name,
@@ -342,7 +340,7 @@ do_combined_bubble_plots <- function(
     fgsea_res_list <- results_list[[geneset_name]]
 
     purrr::map(limit, function(.limit) {
-     res <- fgsea_res_list %>% bind_rows(.id = "rankname")
+      res <- fgsea_res_list %>% bind_rows(.id = "rankname")
       res <- fgsea_tools$select_topn(res, limit = .limit, pstat_cutoff = 1)
       n_sel <- res %>% distinct(pathway) %>% nrow()
       log_msg(msg = paste0(
