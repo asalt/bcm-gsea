@@ -65,6 +65,8 @@ clean_args <- function(params, root_dir = "/") {
   params$barplot$do_combined <- params$barplot$do_combined %||% TRUE
   params$bubbleplot$do_individual <- params$bubbleplot$do_individual %||% TRUE
   params$bubbleplot$do_combined <- params$bubbleplot$do_combined %||% TRUE
+  params$barplot$advanced <- params$barplot$advanced %||% list()
+  params$bubbleplot$advanced <- params$bubbleplot$advanced %||% list()
 
   default_limit_values <- c(10, 20, 30, 50)
   params$barplot$limit <- normalize_limit_vector(params$barplot$limit, default_limit_values)

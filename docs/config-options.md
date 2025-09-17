@@ -1,12 +1,18 @@
 # BCM-GSEA Configuration Reference
 
-This document lists all supported keys in the bcm-gsea configuration TOML files, including default values and notes on behaviour.
+This document lists all supported keys in the bcm-gsea configuration TOML files, including default values and notes on behaviour. You can also explore the schema from the CLI, e.g.:
+
+```
+$ bcm-gsea describe
+$ bcm-gsea describe params.bubbleplot --json
+```
 
 ## Top-level Structure
 
 ```
 [params]
 [params.barplot]
+[params.barplot.advanced]
 [params.bubbleplot]
 [params.bubbleplot.advanced]
 [params.enplot]
@@ -35,7 +41,10 @@ This document lists all supported keys in the bcm-gsea configuration TOML files,
 - `limit` (array of ints, default `[12,20,32]`): `top N` sizes to plot individually/combined.
 - `do_individual` (bool, default `true`): Render barplots per comparison.
 - `do_combined` (bool, default `true`): Render aggregated barplots.
-- `advanced.stroke_width` (float, default `1.0`): Outline width for bar panels.
+
+### params.barplot.advanced
+
+- `stroke_width` (float, default `1.0`): Outline width for bar panels.
 
 ## params.bubbleplot
 
@@ -43,8 +52,11 @@ This document lists all supported keys in the bcm-gsea configuration TOML files,
 - `do_individual` (bool, default `true`): Render per-comparison bubbles.
 - `do_combined` (bool, default `true`): Render combined bubbles per gene set.
 - `glyph` (string, default `"⁕"`): Symbol for `padj < 0.05` markers.
-- `advanced.stroke_alpha` (float, default `0.55`): Outer ring transparency (`0`–`1`).
-- `advanced.stroke_width` (float, default `0.8`): Outline width for bubble points.
+
+### params.bubbleplot.advanced
+
+- `stroke_alpha` (float, default `0.55`): Outer ring transparency (`0`–`1`).
+- `stroke_width` (float, default `0.8`): Outline width for bubble points.
 
 ## params.enplot
 
@@ -102,4 +114,3 @@ Each entry defines a gene-set collection:
 - `loglevel` (string, default `"INFO"`)
 - `pivot_gsea_results` (bool, default `false`)
 - `quiet` (bool, default `false`)
-

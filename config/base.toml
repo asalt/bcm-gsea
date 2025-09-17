@@ -34,6 +34,10 @@ combine_by = false
 [params.heatmap_gsea]
 do = true
 limit = [10, 20, 40, 80]  # will plot each size
+cut_by = false
+cluster_rows = true
+cluster_columns = [false, true]
+legend_include = []
 
 [params.heatmap_gene]
 do = true
@@ -45,10 +49,16 @@ width = 7.8
 height = 7.4
 col_by = ""
 mark_by = ""
+top_pc = 3
+max_pc = 3
+labSize = 1.8
+pointSize = 4.0
+sizeLoadingsNames = 1.4
 
 [params.extra]
 rankname_order = []
 samplename_order = []
+sample_order = []
 
 [[params.genesets]]
 category = "H"
@@ -116,3 +126,4 @@ cachedir = "savedir"
 logfile = "savedir"
 loglevel = "INFO"
 pivot_gsea_results = false
+quiet = false

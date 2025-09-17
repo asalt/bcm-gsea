@@ -17,6 +17,7 @@ from collections import defaultdict
 import pandas as pd
 
 from . import export_packager
+from . import config_schema
 
 # from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -215,3 +216,57 @@ def package(
     click.echo(f"Created {descriptor}: {archive_path}")
     click.echo(f"Files packaged: {manifest['file_count']}")
     click.echo(f"Total size: {manifest['total_size_bytes']:,} bytes")
+
+
+def _serialize_default(value):
+    if isinstance(value, (dict, list)):
+        import json
+
+        return json.dumps(value, indent=2, sort_keys=True)
+    return value
+
+
+@main.command()
+@click.argument("section", required=False)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text tables")
+def describe(section, as_json):
+    """Describe configuration sections and defaults."""
+
+    try:
+        descriptor = config_schema.describe_section(section)
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if as_json:
+        import json
+
+        click.echo(json.dumps(config_schema.section_to_dict(descriptor), indent=2, sort_keys=True))
+        return
+
+    header = descriptor.path
+    click.echo(f"[{header}]")
+    click.echo(descriptor.description or "")
+    click.echo("")
+
+    if descriptor.fields:
+        key_width = max(len(field.name) for field in descriptor.fields)
+        type_width = max(len(field.type) for field in descriptor.fields)
+        for field_info in descriptor.fields:
+            default_value = _serialize_default(field_info.default)
+            click.echo(
+                f"{field_info.name.ljust(key_width)}  {field_info.type.ljust(type_width)}  default={default_value}"
+            )
+            if field_info.description:
+                click.echo(f"  {field_info.description}")
+            if field_info.choices:
+                click.echo(f"  choices: {', '.join(map(str, field_info.choices))}")
+            click.echo("")
+    else:
+        click.echo("(no options)")
+        click.echo("")
+
+    if descriptor.subsections:
+        click.echo("Subsections:")
+        for subsection in descriptor.subsections:
+            suffix = " (array)" if subsection.is_array else ""
+            click.echo(f"  - {subsection.path}{suffix}: {subsection.description}")
