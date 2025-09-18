@@ -92,9 +92,13 @@ $ bcm-gsea describe params.bubbleplot --json
 
 ## params.extra
 
-- `rankname_order` (array of strings)
-- `samplename_order` (array of strings)
-- `sample_order` (array of strings)
+- `rankname_order` (array of strings): Explicit left-to-right order for rank names (comparisons). When present, every plot that displays comparisons (combined barplots, bubbleplots, GSEA heatmaps, PCA heatmaps, etc.) will honour this sequence after intersecting it with the ranks that were actually generated. A single value of `"sample_order"` is treated as an alias for the `sample_order` vector.
+- `samplename_order` (array of strings): Reserved for future use. The field is parsed but currently ignored by the R pipeline.
+- `sample_order` (array of strings): Legacy alias for `rankname_order`. If only `sample_order` is provided it is copied to `rankname_order`; the strings must match the comparison names exactly to take effect.
+
+### Rank file helpers
+
+- `rankfiledir/names.txt` (optional): Plain text mapping file used when reading existing `.rnk` files. Each line should take the form `NewLabel=old_file_name.rnk`. Mappings are applied in file order, so you can both rename and reorder comparisons without regenerating ranks. Lines starting with `#` are ignored.
 
 ## params.genesets (array of tables)
 

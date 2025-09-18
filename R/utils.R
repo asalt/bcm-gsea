@@ -122,7 +122,9 @@ clean_args <- function(params, root_dir = "/") {
   params$advanced$pivot_gsea_results <- params$advanced$pivot_gsea_results %||% FALSE
   #
   if (!is.null(params$extra$rankname_order)) {
+    params$extra$rankname_order <- as.character(params$extra$rankname_order)
     if (length(params$extra$rankname_order) == 1 && params$extra$rankname_order == "sample_order") {
+      log_msg(info = "params.extra.rankname_order references 'sample_order'; using params.extra.sample_order instead")
       params$extra$rankname_order <- params$extra$sample_order
     }
   } else {
@@ -130,11 +132,19 @@ clean_args <- function(params, root_dir = "/") {
   }
 
   if (!is.null(params$extra$sample_order)) {
+    params$extra$sample_order <- as.character(params$extra$sample_order)
     if (length(params$extra$sample_order) == 1 && params$extra$sample_order == "rankname_order") {
+      log_msg(info = "params.extra.sample_order references 'rankname_order'; using params.extra.rankname_order instead")
       params$extra$sample_order <- params$extra$rankname_order
     }
   } else {
     params$extra$sample_order <- params$extra$rankname_order
+  }
+
+  if (!is.null(params$extra$rankname_order) && !is.null(params$extra$sample_order)) {
+    if (!identical(params$extra$rankname_order, params$extra$sample_order)) {
+      log_msg(warning = "params.extra.rankname_order and params.extra.sample_order differ; continuing with rankname_order as canonical list")
+    }
   }
 
   params$species <- params$species %||% "Homo sapiens"

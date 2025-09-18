@@ -449,12 +449,32 @@ load_and_process_ranks <- function(params) {
 
         # fs::path_ext_remove(old))
 
+        missing_rankfiles <- setdiff(name_mapping$old, names(rnkdfs))
+        if (length(missing_rankfiles) > 0) {
+          log_msg(warning = paste0(
+            "names.txt references rank files that were not loaded: ",
+            paste(missing_rankfiles, collapse = ", "),
+            ". These entries will be skipped."
+          ))
+        }
+
+        duplicated_new_labels <- name_mapping$new[duplicated(name_mapping$new)]
+        if (length(duplicated_new_labels) > 0) {
+          log_msg(warning = paste0(
+            "names.txt contains duplicate target labels: ",
+            paste(unique(duplicated_new_labels), collapse = ", "),
+            ". Later mappings will overwrite earlier ones."
+          ))
+        }
+
         for (ix in seq_len(length(rnkdfs))) {
           .new <- name_mapping[ix, ]$new
           .old <- name_mapping[ix, ]$old
           if (.old %in% names(rnkdfs)) {
             rnkdfs[.new] <- rnkdfs[.old]
             rnkdfs[.old] <- NULL
+          } else {
+            log_msg(debug = paste0("Skipping mapping for missing rank file: ", .old))
           }
         }
 

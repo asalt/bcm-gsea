@@ -79,7 +79,20 @@ make_heatmap_fromgct <- function(
   # print(paste0("sample order is null? ", is.null(sample_order)))
 
   if (!is.null(sample_order)) {
-    gct <- cmapR::subset_gct(gct, cid = sample_order)
+    missing_samples <- setdiff(sample_order, gct@cid)
+    if (length(missing_samples) > 0) {
+      log_msg(warning = paste0(
+        "sample_order entries not present in expression matrix: ",
+        paste(missing_samples, collapse = ", "),
+        ". They will be ignored."
+      ))
+    }
+    sample_order <- intersect(sample_order, gct@cid)
+    if (length(sample_order) == 0) {
+      log_msg(info = "sample_order did not match any samples; falling back to matrix order")
+    } else {
+      gct <- cmapR::subset_gct(gct, cid = sample_order)
+    }
   }
 
   if (!is.null(sample_exclude)) {
@@ -1092,13 +1105,45 @@ plot_results_one_collection <- function(
   #   sample_order <- union(sample_order, unique(df$rankname))
   # }
 
+  requested_rank_order <- rankname_order
+  available_ranknames <- unique(df$rankname)
+
+  if (!is.null(requested_rank_order)) {
+    missing_ranknames <- setdiff(requested_rank_order, available_ranknames)
+    if (length(missing_ranknames) > 0) {
+      log_msg(warning = paste0(
+        "rankname_order entries not present in results: ",
+        paste(missing_ranknames, collapse = ", "),
+        ". These names will be ignored."
+      ))
+    }
+
+    duplicated_ranknames <- requested_rank_order[duplicated(requested_rank_order)]
+    if (length(duplicated_ranknames) > 0) {
+      log_msg(warning = paste0(
+        "rankname_order contains duplicate labels: ",
+        paste(unique(duplicated_ranknames), collapse = ", "),
+        ". Keeping the first occurrence of each."
+      ))
+    }
+  }
+
   if (is.null(rankname_order)) {
-    rankname_order <- unique(df$rankname)
+    rankname_order <- available_ranknames
+    log_msg(debug = "rankname_order not supplied; using detected order from results")
   } else {
-    rankname_order <- intersect(rankname_order, unique(df$rankname))
+    rankname_order <- intersect(rankname_order, available_ranknames)
     if (length(rankname_order) == 0) {
       warning("rankname_order is empty, using default")
-      rankname_order <- unique(df$rankname) # default backup
+      rankname_order <- available_ranknames # default backup
+    } else if (!is.null(requested_rank_order)) {
+      if (length(rankname_order) < length(unique(requested_rank_order))) {
+        log_msg(info = paste0(
+          "Applied rankname_order for ",
+          length(rankname_order),
+          " comparisons (", length(unique(requested_rank_order)), " requested)."
+        ))
+      }
     }
   }
 

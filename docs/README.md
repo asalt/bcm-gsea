@@ -20,6 +20,33 @@ Python Integration: Python manages the database, hosts APIs, and stores results.
 Testing: Comprehensive testing using pytest for Python and testthat for R.
 Visualization: Utilizes ggplot2 for high-quality plots, including faceted barplots, heatmaps, PCA plots, and bubble plots summarizing pathway directionality.
 
+## Ordering Samples & Comparisons
+
+The order in which comparisons appear determines how combined plots, heatmaps, and PCA overlays read. You can control this in two complementary ways:
+
+1. **`params.extra.rankname_order`** – Add a vector of comparison names (`rankname`s) to your TOML configuration. Every plotting helper intersects this list with the rank names present in the run, preserving your requested left‑to‑right order.
+
+    ```toml
+    [params.extra]
+    rankname_order = ["Treated_vs_Control", "Knockout_vs_Control", "Rescue_vs_Knockout"]
+    ```
+
+    - `sample_order` is a legacy alias; if you only supply `sample_order`, it is copied into `rankname_order` during parameter sanitisation.
+    - The strings must match the comparison names exactly (case sensitive). Missing entries are dropped silently, so double-check spelling if your plots fall back to alphabetical order.
+
+2. **`names.txt`** – When you point the run at an existing rank directory, you can rename (and implicitly re-order) comparisons without touching the `.rnk` files. Drop a `names.txt` file next to the ranks with one mapping per line:
+
+    ```text
+    TreatmentA=Treated_vs_Control.rnk
+    TreatmentB=Knockout_vs_Control.rnk
+    Rescue=Rescue_vs_Knockout.rnk
+    ```
+
+    - The left side becomes the new comparison label; the right side references the filename (with optional `.rnk` suffix).
+    - Mappings are applied from top to bottom, so you can curate both naming and ordering in a single pass. Lines starting with `#` are treated as comments.
+
+When a GCT file is supplied, column metadata (`gct@cdesc`) is leveraged for group annotations. If `rankname_order` lines up with the `group` column, those factors are re-leveled to match your configuration; otherwise, the pipeline falls back to the natural order of the rank files. For volcano-only runs, you can still steer ordering with `rankname_order` or `names.txt`, even though no additional metadata is attached.
+
 Script main entry points are driven by python command line parsing and variable dispatch.
 
 ```
