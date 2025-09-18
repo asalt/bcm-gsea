@@ -24,6 +24,9 @@ plots) without reintroducing the instability that was observed with the original
      inherited graphics devices and tends to be more stable across platforms.
    - Provide an escape hatch (`parallel = FALSE`) and surface the choice via
      configuration (`params$heatmap_gene$parallel`, `params$enplot$parallel`).
+   - New helper scaffolding lives in `R/parallel_heatmap.R` (`resolve_multisession_workers`,
+     `with_multisession_plan`, `run_multisession_jobs`) and can be wired into the
+     plotting code once we are ready.
 
 2. **Reduce payload size**
    - Replace global GCT passing with lightweight job descriptors. Each worker
