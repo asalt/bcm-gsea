@@ -16,7 +16,7 @@ log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 
 c1_fix <- function(df){
-    df %>% mutate( db_ncbi_gene = ensembl_gene )
+    df %>% mutate( db_ncbi_gene = ensembl_gene ) %>% mutate( ncbi_gene = ensembl_gene)
 }
 
 get_collection_raw <- function(
