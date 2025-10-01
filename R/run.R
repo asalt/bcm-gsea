@@ -288,16 +288,24 @@ run <- function(params) {
       }
 
       if (params$barplot$do_combined == TRUE) {
-        log_msg(msg = "plotting faceted barplots")
-        plts <-  tryCatch({
-          plot_tools$do_combined_barplots(
-            results_list,
-            facet_order = NULL, # this is n't working properly
-            save_func = save_func,
-            limit = params$barplot$limit %||% c(10, 20, 30, 50)
-          )},
-          error = function(e) { return(NULL) }
+        log_msg(msg = "plotting faceted barplots (combined)")
+        plts <- tryCatch(
+          {
+            plot_tools$do_combined_barplots(
+              results_list,
+              facet_order = NULL, # this isn't working properly
+              save_func = save_func,
+              limit = params$barplot$limit %||% c(10, 20, 30, 50)
             )
+          },
+          error = function(e) {
+            log_msg(warning = paste0("bar plot combined failed: ", conditionMessage(e)))
+            NULL
+          }
+        )
+        if (is.null(plts)) {
+          log_msg(msg = "bar combined plots returned NULL")
+        }
       }
 
       if (params$bubbleplot$do_individual == TRUE) {

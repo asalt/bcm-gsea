@@ -629,6 +629,8 @@ prepare_data_for_barplot <- function(df) {
   df_renamed <- df %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "HALLMARK_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "KEGG_")) %>%
+    # Strip vendor-specific prefixes if present
+    dplyr::mutate(pathway = stringr::str_remove_all(pathway, stringr::regex("(?i)MEDICUS_?"))) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "GOMF_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "REACTOME_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "GOBP_")) %>%
@@ -647,7 +649,7 @@ prepare_data_for_barplot <- function(df) {
   sel <- df %>%
     arrange(-abs(NES)) %>%
     arrange(-NES) %>%
-    mutate(pathway = str_replace_all(pathway, "_", " ") %>% str_wrap(width = 40)) %>%
+    mutate(pathway = str_replace_all(pathway, "_", " ") %>% str_wrap(width = 52)) %>%
     mutate(pathway = factor(pathway, levels = unique(pathway), ordered = T)) %>%
     arrange(pathway) # %>%
 
@@ -688,6 +690,7 @@ prepare_data_for_barplot <- function(df) {
 barplot_with_numbers <- function(
     df,
     title = "",
+    subtitle = NULL,
     save_func = NULL,
     facet_order = NULL,
     nes_range = NULL, # or a list of len 2
@@ -707,11 +710,19 @@ barplot_with_numbers <- function(
     wrapped_labels <- sapply(value, function(label) {
       label %>%
         str_replace_all("_", " ") %>%
-        str_wrap(width = 36)
+        str_wrap(width = 48)
     })
     return(wrapped_labels)
   }
   labeller_func <- custom_labeller
+
+  # Format title/subtitle with less aggressive wrapping
+  formatted_title <- title %>%
+    stringr::str_replace_all("_", " ") %>%
+    stringr::str_wrap(width = 54)
+  formatted_subtitle <- if (is.null(subtitle)) NULL else subtitle %>%
+    stringr::str_replace_all("_", " ") %>%
+    stringr::str_wrap(width = 72)
 
 
   if (!is.null(facet_order)) {
@@ -720,10 +731,33 @@ barplot_with_numbers <- function(
       arrange(rankname)
   }
 
-  get_size <- function(x) { # fontsizse for geneset names
-    x <- as.character(x)
-    ifelse(nchar(x) < 27, 7.6, ifelse(nchar(x) < 64, 6.6, ifelse(nchar(x) < 84, 6.2, 5.2)))
+  # Dynamically choose a single y-axis font size based on longest label
+  pathway_chars <- sel$pathway %>% as.character() %>%
+    stringr::str_replace_all("\n", " ") %>%
+    stringr::str_squish()
+  max_label_chars <- if (length(pathway_chars) > 0) max(nchar(pathway_chars)) else 0
+  axis_text_y_size <- dplyr::case_when(
+    max_label_chars < 36 ~ 7.6,
+    max_label_chars < 64 ~ 6.6,
+    max_label_chars < 84 ~ 6.2,
+    TRUE ~ 5.2
+  )
+
+  # Compute bubble-like fill value: sign(NES) * (1 - pval)
+  if (!"pval" %in% colnames(sel)) {
+    sel <- sel %>% mutate(pval = padj)
   }
+  sel <- sel %>% mutate(
+    pval = {
+      tmp <- pval
+      if (is.list(tmp)) {
+        tmp <- vapply(tmp, function(x) as.numeric(x)[1], numeric(1), USE.NAMES = FALSE)
+      }
+      tmp <- suppressWarnings(as.numeric(tmp))
+      ifelse(is.na(tmp), 1, tmp)
+    },
+    fill_value = sign(NES) * (1 - pmin(pval, 1))
+  )
   # rewrite below, check for equivalence 
   # get_size <- function(x) {
   #   # font size for geneset names
@@ -744,18 +778,29 @@ barplot_with_numbers <- function(
         y = pathway,
         x = NES,
         # size = leadingEdgeNum,
-        fill = padj,
+        fill = fill_value,
         # fill = rankname
         # color = outline_val,
         # col = id
       )
     ) +
+    # Reference line at x=0 behind bars
+    geom_vline(xintercept = 0, colour = scales::alpha("#555555", 0.6), size = 0.4, show.legend = FALSE) +
     # scale_color_gradient(low = "#0000ffee", high = "#ff0000ee") +  # Adjust colors to represent p-values
     # geom_point() +
-    scale_fill_gradient2(high = "grey", mid = "#ba2020", low = "#c92020", midpoint = .25, limits = c(0, 1)) +
+    scale_fill_gradient2(
+      low = "#084594",
+      mid = "#ffffff",
+      high = "#b30000",
+      midpoint = 0,
+      limits = c(-1, 1),
+      na.value = "#f7f7f7",
+      guide = guide_colourbar(title = "1 - pval")
+    ) +
     geom_col(linewidth = 0.8, aes(color = outline_val)) +
     scale_color_identity() +
-    labs(title = title %>% labeller_func()) +
+    scale_y_discrete(position = "right") +
+    labs(title = formatted_title, subtitle = formatted_subtitle) +
     # scale_color_manual(values=c("black", 'blue'))+
     # scale_size(range = c(4, 12)) +  # Adjust point sizes
     geom_text(
@@ -769,7 +814,12 @@ barplot_with_numbers <- function(
       # position = position_dodge(width = 0.8),
       vjust = 0.5, hjust = 0.5
     ) +
-    theme_bw() + theme(axis.text.y = element_text(size = map(sel$pathway, get_size), face = "bold"))
+    theme_bw() + theme(
+      axis.text.y = element_text(size = axis_text_y_size, face = "bold"),
+      axis.text.x = element_text(size = 7.0),
+      plot.title = element_text(size = 10, face = "bold", hjust = 0),
+      plot.subtitle = element_text(hjust = 0)
+    )
 
   if (!is.null(nes_range)){
     nes_max <- max(sel$NES, na.rm=T) * 1.05
@@ -799,11 +849,22 @@ barplot_with_numbers <- function(
     nrow <- 1
   }
   panel_width_in <- 4.0
-  panel_height_in <- 3.4
+  # Height scales linearly with number of rows and respects facet rows
+  n_pathways <- dplyr::n_distinct(sel$pathway)
+  text_scale <- axis_text_y_size / 6.6
+  per_row_in <- dplyr::case_when(
+    n_pathways <= 20 ~ 0.28,
+    n_pathways <= 60 ~ 0.25,
+    TRUE ~ 0.26
+  ) * text_scale
+  per_row_in <- max(min(per_row_in, 0.34), 0.18)
+  min_panel_height_in <- 3.2
+  facet_strip_pad_in <- 0.35
+  panel_height_in <- max(min_panel_height_in, per_row_in * n_pathways + facet_strip_pad_in)
 
   # Calculate total figure size
   total_width_in <- 2.2 + (panel_width_in * ncol)
-  total_height_in <- panel_height_in * nrow + (length(unique(sel$pathway))^1.1 / 8)
+  total_height_in <- panel_height_in * nrow
   log_msg(msg = paste0("total width: ", total_width_in, " total height: ", total_height_in))
 
 
@@ -817,6 +878,14 @@ barplot_with_numbers <- function(
     )
   }
   return(p)
+}
+
+# Format a readable source/collection label for subtitles
+format_source_label <- function(name) {
+  name %>%
+    stringr::str_replace_all("[:._]", " ") %>%
+    stringr::str_replace_all("\\s+", " ") %>%
+    stringr::str_squish()
 }
 
 all_barplots_with_numbers <- function(
@@ -837,6 +906,7 @@ all_barplots_with_numbers <- function(
   plts <- results_list %>% purrr::imap(
     ~ {
       collection_name <- .y
+      collection_label <- format_source_label(collection_name)
       list_of_comparisons <- .x
       plts <- list_of_comparisons %>% imap(
         ~ {
@@ -850,6 +920,17 @@ all_barplots_with_numbers <- function(
               .limit <- .x
               sel <- fgsea_tools$select_topn(dataframe, limit = .limit, pstat_cutoff=1)
               .title <- comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
+
+              rank_label <- sel$rankname %>% na.omit() %>% unique()
+              rank_label <- if (length(rank_label) == 0) NULL else rank_label %>%
+                stringr::str_replace_all("_", " ") %>%
+                paste(collapse = ", ")
+              base_subtitle <- if (!is.null(rank_label)) {
+                paste0("rank: ", rank_label, " • top ", .limit)
+              } else {
+                paste0("top ", .limit, " pathways")
+              }
+              subtitle_text <- paste0(base_subtitle, " • source: ", collection_label)
 
               local_save_func <- save_func
               save_path <- NULL
@@ -876,6 +957,7 @@ all_barplots_with_numbers <- function(
 
               p <- barplot_with_numbers(sel,
                 title = .title,
+                subtitle = subtitle_text,
                 save_func = local_save_func,
                 facet_order = facet_order,
                 nes_range = nes_range,
@@ -912,6 +994,7 @@ do_combined_barplots <- function(
   purrr::map(genesets, ~ {
     geneset_name <- .x
     fgsea_res_list <- results_list[[geneset_name]]
+    collection_label <- format_source_label(geneset_name)
     # geneset <- genesets_list[[geneset_name]]
 
     plts <- limit %>% purrr::map(~ {
@@ -922,6 +1005,15 @@ do_combined_barplots <- function(
       n_sel <- res %>%
         distinct(pathway) %>%
         nrow()
+      log_msg(msg = paste0(
+        "bar combined: geneset=", geneset_name,
+        " limit=", .limit,
+        " selected_rows=", nrow(res),
+        " distinct_pathways=", n_sel
+      ))
+      # Symmetric NES range across all facets for consistency
+      nes_max <- suppressWarnings(max(abs(res$NES), na.rm = TRUE))
+      nes_range <- if (is.finite(nes_max)) c(-nes_max, nes_max) else NULL
       # pathway_df <- get_pathway_info(geneset_name)
       # .merge <- left_join(res , pathway_df, by= )
       local_save_func <- save_func
@@ -942,6 +1034,8 @@ do_combined_barplots <- function(
       }
       p <- res %>% barplot_with_numbers(
         title = geneset_name,
+        subtitle = paste0("top ", .limit, " pathways • source: ", collection_label),
+        nes_range = nes_range,
         save_func = local_save_func,
         facet_order = facet_order,
         ...

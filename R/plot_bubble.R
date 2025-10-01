@@ -20,6 +20,14 @@ log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 DEFAULT_BUBBLE_GLYPH <- "⁕"
 
+# Format a readable source/collection label for subtitles
+format_source_label <- function(name) {
+  name %>%
+    stringr::str_replace_all("[:._]", " ") %>%
+    stringr::str_replace_all("\\s+", " ") %>%
+    stringr::str_squish()
+}
+
 prepare_data_for_bubble <- function(df, glyph = DEFAULT_BUBBLE_GLYPH) {
   if (!"pval" %in% colnames(df)) {
     df <- df %>% mutate(pval = padj)
@@ -76,19 +84,19 @@ bubble_plot <- function(
 
   formatted_title <- title %>%
     str_replace_all("_", " ") %>%
-    str_wrap(width = 42)
+    str_wrap(width = 54)
 
   formatted_subtitle <- if (is.null(subtitle)) {
     NULL
   } else {
-    subtitle %>% str_replace_all("_", " ") %>% str_wrap(width = 60)
+    subtitle %>% str_replace_all("_", " ") %>% str_wrap(width = 72)
   }
 
   custom_labeller <- function(value) {
     vapply(value, function(label) {
       label %>%
         str_replace_all("_", " ") %>%
-        str_wrap(width = 36)
+        str_wrap(width = 48)
     }, character(1))
   }
 
@@ -104,7 +112,23 @@ bubble_plot <- function(
   sel_text_dark <- sel_text %>% filter(text_color == "#FFFFFF")
   sel_text_light <- sel_text %>% filter(text_color != "#FFFFFF")
 
+  # Dynamically adjust y-axis text size based on label length
+  # Remove line breaks when measuring to approximate visual width
+  pathway_chars <- sel$pathway %>% as.character() %>%
+    stringr::str_replace_all("\n", " ") %>%
+    stringr::str_squish()
+  max_label_chars <- if (length(pathway_chars) > 0) max(nchar(pathway_chars)) else 0
+  # Align size scaling with heatmap/barplot conventions
+  axis_text_y_size <- dplyr::case_when(
+    max_label_chars < 36 ~ 7.6,
+    max_label_chars < 64 ~ 6.6,
+    max_label_chars < 84 ~ 6.2,
+    TRUE ~ 5.2
+  )
+
   p <- ggplot(sel, aes(x = NES, y = pathway)) +
+    # Reference line at x=0, layered behind points
+    geom_vline(xintercept = 0, colour = scales::alpha("#555555", 0.6), size = 0.4, show.legend = FALSE) +
     geom_point(
       aes(
         size = plot_leading_edge,
@@ -149,6 +173,7 @@ bubble_plot <- function(
       )
     ) +
     scale_x_continuous(expand = expansion(mult = c(0.12, 0.12))) +
+    scale_y_discrete(position = "right") +
     labs(
       title = formatted_title,
       subtitle = formatted_subtitle,
@@ -157,9 +182,10 @@ bubble_plot <- function(
     ) +
     theme_bw() +
     theme(
-      axis.text.y = element_text(size = 6.6, face = "bold"),
+      axis.text.y = element_text(size = axis_text_y_size, face = "bold"),
       axis.text.x = element_text(size = 7.0),
-      plot.title = element_text(size = 10, face = "bold"),
+      plot.title = element_text(size = 10, face = "bold", hjust = 0),
+      plot.subtitle = element_text(hjust = 0),
       legend.position = "right"
     )
 
@@ -219,9 +245,20 @@ bubble_plot <- function(
   }
 
   panel_width_in <- 4.0
-  panel_height_in <- 3.4
+  # Compute height so each pathway row has reasonable space
+  n_pathways <- dplyr::n_distinct(sel$pathway)
+  text_scale <- axis_text_y_size / 6.6
+  per_row_in <- dplyr::case_when(
+    n_pathways <= 20 ~ 0.28,
+    n_pathways <= 60 ~ 0.25,
+    TRUE ~ 0.26
+  ) * text_scale
+  per_row_in <- max(min(per_row_in, 0.34), 0.18)
+  min_panel_height_in <- 3.2
+  facet_strip_pad_in <- 0.35
+  panel_height_in_calc <- max(min_panel_height_in, per_row_in * n_pathways + facet_strip_pad_in)
   total_width_in <- 2.2 + (panel_width_in * ncol)
-  total_height_in <- panel_height_in * nrow + (length(unique(sel$pathway))^1.1 / 8)
+  total_height_in <- panel_height_in_calc * nrow
 
   if (!is.null(save_func)) {
     save_result <- save_func(
@@ -265,6 +302,7 @@ all_bubble_plots <- function(
   results_list %>% purrr::imap(
     ~ {
       collection_name <- .y
+      collection_label <- format_source_label(collection_name)
       list_of_comparisons <- .x
       list_of_comparisons %>% purrr::imap(
         ~ {
@@ -313,11 +351,12 @@ all_bubble_plots <- function(
                 str_replace_all("_", " ") %>%
                 paste(collapse = ", ")
             }
-            subtitle_text <- if (!is.null(rank_label)) {
+            base_subtitle <- if (!is.null(rank_label)) {
               paste0("rank: ", rank_label, " • top ", .limit)
             } else {
               paste0("top ", .limit, " pathways")
             }
+            subtitle_text <- paste0(base_subtitle, " • source: ", collection_label)
 
             bubble_plot(
               sel,
@@ -349,6 +388,7 @@ do_combined_bubble_plots <- function(
 
   purrr::map(genesets, function(geneset_name) {
     fgsea_res_list <- results_list[[geneset_name]]
+    collection_label <- format_source_label(geneset_name)
 
     purrr::map(limit, function(.limit) {
       res <- fgsea_res_list %>% bind_rows(.id = "rankname")
@@ -382,7 +422,7 @@ do_combined_bubble_plots <- function(
       bubble_plot(
         res,
         title = geneset_name,
-        subtitle = paste0("top ", .limit, " pathways"),
+        subtitle = paste0("top ", .limit, " pathways • source: ", collection_label),
         save_func = local_save_func,
         facet_order = facet_order,
         nes_range = nes_range,
