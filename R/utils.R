@@ -154,6 +154,7 @@ clean_args <- function(params, root_dir = "/") {
   params$advanced$quiet <- params$advanced$quiet %||% FALSE
 
   params$advanced$parallel <- params$advanced$parallel %||% FALSE
+  params$advanced$exclude_samples_from_data <- params$advanced$exclude_samples_from_data %||% FALSE
 
   logfile <- params$advanced$logfile %||% file.path(params$savedir, "run.log")
   # browser()
@@ -302,6 +303,155 @@ normalize_limit_vector <- function(limit, fallback = c(10, 20, 30, 50)) {
   }
 
   sort(unique(limit))
+}
+
+
+normalize_sample_exclude <- function(sample_exclude, metadata = NULL, warn = TRUE) {
+  if (is.null(sample_exclude) ||
+    (is.logical(sample_exclude) && length(sample_exclude) == 1L && isFALSE(sample_exclude))) {
+    return(character(0))
+  }
+
+  spec <- sample_exclude
+  if (is.list(spec)) {
+    spec <- unlist(spec, use.names = FALSE)
+  }
+
+  if (is.null(spec)) {
+    return(character(0))
+  }
+
+  resolved <- character(0)
+
+  if (!is.null(metadata)) {
+    subset_rows <- tryCatch(
+      metadata[spec, , drop = FALSE],
+      error = function(e) NULL
+    )
+
+    if (!is.null(subset_rows) && nrow(subset_rows) > 0) {
+      resolved <- rownames(subset_rows)
+      resolved <- resolved[!is.na(resolved)]
+      resolved <- resolved[resolved != "NA"]
+    }
+  }
+
+  char_candidates <- unique(na.omit(trimws(as.character(spec))))
+  char_candidates <- char_candidates[nzchar(char_candidates)]
+  char_candidates <- setdiff(char_candidates, c("TRUE", "FALSE"))
+
+  if (!is.null(metadata)) {
+    metadata_rows <- rownames(metadata)
+    missing <- setdiff(char_candidates, metadata_rows)
+    if (length(missing) > 0 && warn) {
+      log_msg(warning = paste0(
+        "sample_exclude entries not present in metadata: ",
+        paste(missing, collapse = ", ")
+      ))
+    }
+    resolved <- unique(c(resolved, char_candidates))
+  } else {
+    resolved <- unique(char_candidates)
+  }
+
+  resolved <- resolved[!is.na(resolved)]
+  resolved <- resolved[resolved != "NA"]
+
+  resolved
+}
+
+filter_results_by_rankname <- function(results_list, sample_exclude = NULL) {
+  if (is.null(sample_exclude) || length(sample_exclude) == 0L) {
+    return(results_list)
+  }
+
+  if (!is.list(results_list)) {
+    return(results_list)
+  }
+
+  for (collection_name in names(results_list)) {
+    collection_results <- results_list[[collection_name]]
+    if (!is.list(collection_results) || is.null(names(collection_results))) {
+      next
+    }
+
+    keep <- setdiff(names(collection_results), sample_exclude)
+    removed <- setdiff(names(collection_results), keep)
+    if (length(removed) > 0) {
+      log_msg(info = paste0(
+        "sample_exclude: omitting ",
+        paste(removed, collapse = ", "),
+        " from collection ", collection_name
+      ))
+    }
+    results_list[[collection_name]] <- collection_results[keep]
+  }
+
+  results_list
+}
+
+filter_named_list <- function(named_list, sample_exclude = NULL) {
+  if (is.null(sample_exclude) || length(sample_exclude) == 0L) {
+    return(named_list)
+  }
+
+  if (!is.list(named_list) || is.null(names(named_list))) {
+    return(named_list)
+  }
+
+  keep <- setdiff(names(named_list), sample_exclude)
+  removed <- setdiff(names(named_list), keep)
+  if (length(removed) > 0) {
+    log_msg(info = paste0(
+      "sample_exclude: omitting ",
+      paste(removed, collapse = ", ")
+    ))
+  }
+
+  named_list[keep]
+}
+
+filter_gsea_results <- function(results_frames, sample_exclude = NULL) {
+  if (is.null(sample_exclude) || length(sample_exclude) == 0L) {
+    return(results_frames)
+  }
+
+  if (!is.list(results_frames)) {
+    return(results_frames)
+  }
+
+  for (collection_name in names(results_frames)) {
+    df <- results_frames[[collection_name]]
+    if (!is.data.frame(df) || !"rankname" %in% colnames(df)) {
+      next
+    }
+
+    before_n <- nrow(df)
+    df <- df[!(df$rankname %in% sample_exclude), , drop = FALSE]
+    after_n <- nrow(df)
+    if (before_n != after_n) {
+      log_msg(info = paste0(
+        "sample_exclude: removed ", before_n - after_n,
+        " rows from collection ", collection_name
+      ))
+    }
+    results_frames[[collection_name]] <- df
+  }
+
+  results_frames
+}
+
+filter_metadata_samples <- function(metadata, sample_exclude = NULL) {
+  if (is.null(metadata) || !is.data.frame(metadata)) {
+    return(metadata)
+  }
+
+  if (is.null(sample_exclude) || length(sample_exclude) == 0L) {
+    return(metadata)
+  }
+
+  keep <- setdiff(rownames(metadata), sample_exclude)
+  metadata[keep, , drop = FALSE]
 }
 
 

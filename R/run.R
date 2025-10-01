@@ -130,17 +130,41 @@ run <- function(params) {
   # =======  load gct
 
   log_msg(msg = params$gct_path)
-  sample_exclude <- params$sample_exclude %||% NULL
+  sample_exclude_spec <- params$sample_exclude %||% NULL
+  exclude_samples_from_data <- params$advanced$exclude_samples_from_data %||% FALSE
+  sample_exclude <- character(0)
   if (!is.null(params$gct_path) && file.exists(params$gct_path)) {
     log_msg(msg = paste0("reading gct file: ", params$gct_path))
     gct <- cmapR::parse_gctx(params$gct_path)
-    to_exclude <- rownames(gct@cdesc[sample_exclude, ])
-    to_keep <- setdiff(gct@cid, to_exclude)
-    if (length(to_exclude) > 0){
-        gct <- cmapR::subset_gct(gct, cid=to_keep)
+    sample_exclude <- util_tools$normalize_sample_exclude(sample_exclude_spec, gct@cdesc)
+    if (length(sample_exclude) > 0) {
+      log_msg(info = paste0(
+        "sample_exclude resolved to: ",
+        paste(sample_exclude, collapse = ", ")
+      ))
+    }
+
+    if (exclude_samples_from_data && length(sample_exclude) > 0) {
+      to_keep <- setdiff(gct@cid, sample_exclude)
+      removed <- setdiff(gct@cid, to_keep)
+      if (length(removed) > 0) {
+        log_msg(info = paste0(
+          "sample_exclude: dropping ",
+          paste(removed, collapse = ", "),
+          " from parsed GCT"
+        ))
+        gct <- cmapR::subset_gct(gct, cid = to_keep)
+      }
     }
   } else {
     gct <- NULL
+    sample_exclude <- util_tools$normalize_sample_exclude(sample_exclude_spec, NULL)
+    if (length(sample_exclude) > 0) {
+      log_msg(info = paste0(
+        "sample_exclude (no GCT metadata) resolved to: ",
+        paste(sample_exclude, collapse = ", ")
+      ))
+    }
   }
 
 
@@ -222,11 +246,22 @@ run <- function(params) {
         metadata <- NULL
       }
 
+      metadata_for_plots <- util_tools$filter_metadata_samples(metadata, sample_exclude)
+      results_list_for_plots <- util_tools$filter_results_by_rankname(results_list, sample_exclude)
+      all_gsea_results_for_plots <- util_tools$filter_gsea_results(all_gsea_results, sample_exclude)
+      ranks_list_for_plots <- util_tools$filter_named_list(ranks_list, sample_exclude)
+
+      if (length(sample_exclude) > 0) {
+        log_msg(info = paste0(
+          "sample_exclude: filtered plot inputs for ", length(sample_exclude), " sample(s)"
+        ))
+      }
+
       # pca
       # =============
       if (params$pca$do == TRUE) { # TODO: this fails if metadata not right and won't propagate rankname_order down
-        pca_objects <- all_gsea_results %>% pca_tools$do_all(
-          metadata = metadata
+        pca_objects <- all_gsea_results_for_plots %>% pca_tools$do_all(
+          metadata = metadata_for_plots
         )
 
         # log_msg(debug=paste0('pca colby is : ', params$pca$col_by))
@@ -246,7 +281,7 @@ run <- function(params) {
           # group_order = params$extra$facet_order %||% NULL
         )
 
-        all_gsea_results %>% purrr::imap(~ {
+        all_gsea_results_for_plots %>% purrr::imap(~ {
           collection_name <- .y
           pca_object <- pca_objects[[.y]]
           collection_dir <- util_tools$safe_path_component(collection_name)
@@ -280,7 +315,7 @@ run <- function(params) {
       # =======  barplots
       if (params$barplot$do_individual == TRUE) {
         log_msg(msg = "plotting individual barplots")
-        plts <- results_list %>% plot_tools$all_barplots_with_numbers(
+        plts <- results_list_for_plots %>% plot_tools$all_barplots_with_numbers(
           # sample_order = params$rankname_order %||% params$sample_order, # no t necessary to pass this here
           limit = params$barplot$limit %||% c(10, 20, 30, 50),
           save_func = save_func
@@ -292,7 +327,7 @@ run <- function(params) {
         plts <- tryCatch(
           {
             plot_tools$do_combined_barplots(
-              results_list,
+              results_list_for_plots,
               facet_order = NULL, # this isn't working properly
               save_func = save_func,
               limit = params$barplot$limit %||% c(10, 20, 30, 50)
@@ -317,7 +352,7 @@ run <- function(params) {
           ")"
         ))
         bubble_tools$all_bubble_plots(
-          results_list,
+          results_list_for_plots,
           limit = params$bubbleplot$limit,
           save_func = save_func,
           glyph = params$bubbleplot$glyph
@@ -335,7 +370,7 @@ run <- function(params) {
         bubble_combined_result <- tryCatch(
           {
             bubble_tools$do_combined_bubble_plots(
-              results_list,
+              results_list_for_plots,
               save_func = save_func,
               limit = params$bubbleplot$limit,
               glyph = params$bubbleplot$glyph
@@ -355,9 +390,9 @@ run <- function(params) {
       # ======= gsea level heatmap
       if (params$heatmap_gsea$do == TRUE) {
         log_msg(msg = "drawing all heatmaps. ")
-        hts <- all_gsea_results %>% plot_tools$plot_results_all_collections(
+        hts <- all_gsea_results_for_plots %>% plot_tools$plot_results_all_collections(
           # limit=20,
-          metadata = metadata,
+          metadata = metadata_for_plots,
           # pstat_cutoff = .25,
           pstat_cutoff = 1,
           limit = params$heatmap_gsea$limit %||% 20,
@@ -383,18 +418,18 @@ run <- function(params) {
       # it is used for plot_top_ES_across
       combine_by <- params$enplot$combine_by %||% params$combine_by %||% NULL
       combine_by_df <- NULL
-      if (!is.null(combine_by) && !is.null(metadata)) {
+      if (!is.null(combine_by) && !is.null(metadata_for_plots)) {
         combine_by_grid <- expand.grid(combine_by_val=combine_by, stringsAsFactors = FALSE)
         combine_by_grid %>% purrr::pmap(
         ~{
             params = list(...)
             combine_by_val <- params$combine_by_val
-            splits <- util_tools$process_cut_by(combine_by_val, metadata)
+            splits <- util_tools$process_cut_by(combine_by_val, metadata_for_plots)
             #if (!combine_by_val %in% colnames(metadata)) {
             if (is.null(splits)){
               combine_by_df <- NULL
             } else {
-              combine_by_df <- data.frame(id=rownames(metadata), facet=splits)
+              combine_by_df <- data.frame(id=rownames(metadata_for_plots), facet=splits)
               rownames(combine_by_df) <- combine_by_df$id
               if (!is.null(params$extra$rankname_order)) { # this will fail if not match exactly
                 combine_by_df <- combine_by_df %>%
@@ -413,7 +448,7 @@ run <- function(params) {
       if (!is.null(gct) && params$heatmap_gene$do == TRUE) {
         ht_edge_plots <- plot_tools$plot_heatmap_of_edges(
           gct,
-          results_list,
+          results_list_for_plots,
           scale = params$zscore_emat %||% params$heatmap_gene$scale %||% TRUE,
           scale_by = params$zscore_emat_groupby %||% params$heatmap_gene$scale_by %||% NULL,
           limit = params$heatmap_gene$limit %||% 10,
@@ -456,11 +491,11 @@ run <- function(params) {
         ~{
             params = list(...)
             combine_by_val <- params$combine_by_val
-            splits <- util_tools$process_cut_by(combine_by_val, metadata)
+            splits <- util_tools$process_cut_by(combine_by_val, metadata_for_plots)
             if (is.null(splits)){
               combine_by_df <- NULL
             } else {
-              combine_by_df <- data.frame(id=rownames(metadata), facet=splits)
+              combine_by_df <- data.frame(id=rownames(metadata_for_plots), facet=splits)
               rownames(combine_by_df) <- combine_by_df$id
               combine_by_df$rankname <- combine_by_df$id
             }
@@ -471,8 +506,8 @@ run <- function(params) {
             }
 
             print(paste0('limit is: ', .enplot_limit))
-            ._ <- plot_tools$plot_top_ES_across(all_gsea_results,
-              ranks_list = ranks_list,
+            ._ <- plot_tools$plot_top_ES_across(all_gsea_results_for_plots,
+              ranks_list = ranks_list_for_plots,
               genesets_list_of_lists,
               save_func = save_func,
               limit = .enplot_limit,
@@ -494,8 +529,8 @@ run <- function(params) {
 
 
       if (!is.null(params$enplot$do_individual) && params$enplot$do_individual == TRUE ) {
-        ._ <- plot_tools$plot_top_ES_across(all_gsea_results,
-          ranks_list = ranks_list,
+        ._ <- plot_tools$plot_top_ES_across(all_gsea_results_for_plots,
+          ranks_list = ranks_list_for_plots,
           genesets_list_of_lists,
           save_func = save_func,
           limit = params$enplot$limit %||% 10,

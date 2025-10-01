@@ -60,21 +60,25 @@ create_rnkfiles_from_emat <- function(
     apply_z_score = FALSE,
     zscore_groupby = FALSE,
     sample_exclude = NULL,
+    exclude_samples_from_data = FALSE,
     ...) {
   gct <- cmapR::parse_gctx(emat)
 
 
   #if ((!is.null(sample_exclude)) && (sample_exclude != FALSE)){
   # if (!is.null(sample_exclude) && !isFALSE(sample_exclude) && length(sample_exclude) > 0L) {
-  if (!is.null(sample_exclude) && # safer
-    !(is.logical(sample_exclude) && length(sample_exclude) == 1L && isFALSE(sample_exclude)) &&
-    length(sample_exclude) > 0L) {
+  sample_exclude_normalized <- util_tools$normalize_sample_exclude(sample_exclude, gct@cdesc)
 
-
-    to_exclude <- rownames(gct@cdesc[sample_exclude, ])
-    to_keep <- setdiff(rownames(gct@cdesc), to_exclude)
-    if (length(to_exclude) > 0){
-        gct <- cmapR::subset_gct(gct, cid=to_keep)
+  if (exclude_samples_from_data && length(sample_exclude_normalized) > 0L) {
+    to_keep <- setdiff(gct@cid, sample_exclude_normalized)
+    removed <- setdiff(gct@cid, to_keep)
+    if (length(removed) > 0) {
+      log_msg(info = paste0(
+        "sample_exclude: dropping ",
+        paste(removed, collapse = ", "),
+        " from expression matrix prior to rank creation"
+      ))
+      gct <- cmapR::subset_gct(gct, cid = to_keep)
     }
   }
 
@@ -410,13 +414,14 @@ load_and_process_ranks <- function(params) {
   volcanodir <- params$volcanodir
   gct_path <- params$gct_path
   ranks_from <- params$ranks_from
-  sample_exclude <- params$sample_exclude %||% FALSE
+  sample_exclude <- params$sample_exclude %||% NULL
   zscore_emat <- params$zscore_emat %||% TRUE
   zscore_emat_groupby <- ifelse(
     (!is.null(params$zscore_emat_groupby) && !is.na(params$zscore_emat_groupby ) && is.character(params$zscore_emat_groupby)),
     params$zscore_emat_groupby,
     FALSE
   )
+  exclude_samples_from_data <- params$advanced$exclude_samples_from_data %||% FALSE
 
 
   log_msg(msg = paste0("ranks from : ", ranks_from))
@@ -503,7 +508,13 @@ load_and_process_ranks <- function(params) {
   }
   if (ranks_from == "gct" && !is.null(gct_path)) {
     apply_z_score <- zscore_emat
-    rnkdfs <- create_rnkfiles_from_emat(gct_path, apply_z_score = apply_z_score, zscore_groupby = zscore_emat_groupby, sample_exclude=sample_exclude)
+    rnkdfs <- create_rnkfiles_from_emat(
+      gct_path,
+      apply_z_score = apply_z_score,
+      zscore_groupby = zscore_emat_groupby,
+      sample_exclude = sample_exclude,
+      exclude_samples_from_data = exclude_samples_from_data
+    )
 
     names(rnkdfs) <- names(rnkdfs) %>%
       fs::path_file() %>%

@@ -96,7 +96,23 @@ make_heatmap_fromgct <- function(
   }
 
   if (!is.null(sample_exclude)) {
-    gct <- cmapR::subset_gct(gct, cid = setdiff(gct@cid, sample_exclude))
+    keep_cid <- setdiff(gct@cid, sample_exclude)
+    removed <- setdiff(gct@cid, keep_cid)
+    if (length(removed) > 0) {
+      log_msg(debug = paste0(
+        "sample_exclude: removing ", paste(removed, collapse = ", "), " from heatmap"
+      ))
+    }
+    if (length(keep_cid) == 0) {
+      log_msg(warning = "sample_exclude removed all samples; skipping heatmap")
+      return(NULL)
+    }
+    gct <- cmapR::subset_gct(gct, cid = keep_cid)
+  }
+
+  if (ncol(gct@mat) == 0L) {
+    log_msg(warning = "heatmap skipped because no columns remain after filtering")
+    return(NULL)
   }
 
   default_meta_to_exclude <- c("recno", "runno", "searchno", "label", "expr_col", "expr_file", "assay", "tube", "Tube", "TubeLabel", "id")
@@ -275,6 +291,7 @@ plot_heatmap_of_edges <- function(
     meta_to_exclude = NULL,
     parallel = FALSE,
     pathways_of_interest = NULL, # TODO: implement this. this has started somewhere
+    sample_exclude = NULL,
     ...) {
   # transform for plotting
   .gct <- if (scale) util_tools$scale_gct(gct, group_by = scale_by) else gct
@@ -362,10 +379,15 @@ plot_heatmap_of_edges <- function(
     get_arg <- util_tools$get_arg
     param_grid %>% purrr::pmap( ~{
       params <- list(...)
-      path <- get_arg(save_func, "path")
-      collection_dir <- util_tools$safe_path_component(strip_pathway_leader(collection_name))
-      pathway_dir <- util_tools$safe_path_component(strip_pathway_leader(row$pathway), max_chars = 40)
-      newpath <- util_tools$safe_subdir(path, collection_dir, "heatmaps_gene", pathway_dir)
+      path <- NULL
+      newpath <- NULL
+      local_save_func <- save_func
+      if (!is.null(local_save_func)) {
+        path <- get_arg(local_save_func, "path")
+        collection_dir <- util_tools$safe_path_component(strip_pathway_leader(collection_name))
+        pathway_dir <- util_tools$safe_path_component(strip_pathway_leader(row$pathway), max_chars = 40)
+        newpath <- util_tools$safe_subdir(path, collection_dir, "heatmaps_gene", pathway_dir)
+      }
       cluster_rows <- params$cluster_rows %||% FALSE
       cluster_columns <- params$cluster_columns %||% FALSE
       cut_by_val <- params$cut_by
@@ -378,7 +400,7 @@ plot_heatmap_of_edges <- function(
       }
 
       filename <- util_tools$safe_filename(
-        get_arg(save_func, "filename"),
+        get_arg(local_save_func, "filename"),
         comparison_name,
         paste0("cr", ifelse(cluster_rows, "T", "F")),
         paste0("cc", ifelse(cluster_columns, "T", "F")),
@@ -386,12 +408,12 @@ plot_heatmap_of_edges <- function(
         paste0(nrow(subgct@mat), "x", ncol(subgct@mat)),
         fallback = "gene_heatmap"
       )
-      if (!is.null(save_func)) {
-        .save_func <- make_partial(save_func, filename = filename, path = newpath)
+      if (!is.null(local_save_func)) {
+        local_save_func <- make_partial(local_save_func, filename = filename, path = newpath)
       }
-      filepath <- file.path(newpath, paste0(filename, ".pdf"))
+      filepath <- if (!is.null(newpath)) file.path(newpath, paste0(filename, ".pdf")) else NULL
 
-      if (!replace && file.exists(filepath)) {
+      if (!replace && !is.null(filepath) && file.exists(filepath)) {
         log_msg(debug = paste0("skipping ", filename, " as it already exists"))
         return(NULL)
       }
@@ -401,7 +423,7 @@ plot_heatmap_of_edges <- function(
       tryCatch(
         make_heatmap_fromgct(
           subgct,
-          save_func = .save_func,
+          save_func = local_save_func,
           cluster_rows = cluster_rows,
           cluster_columns = cluster_columns,
           sample_order = sample_order,
@@ -410,6 +432,7 @@ plot_heatmap_of_edges <- function(
           cut_by = cut_by_val,
           meta_to_include = meta_to_include,
           meta_to_exclude = meta_to_exclude,
+          sample_exclude = sample_exclude,
           colorbar_title = colorbar_title
           # ...
         ),
@@ -1095,10 +1118,11 @@ plot_results_all_collections <- function(
             ""
           }
 
-          if (!is.null(save_func)) {
+          local_save_func <- save_func
+          if (!is.null(local_save_func)) {
             title_dir <- util_tools$safe_path_component(.title)
             filename <- util_tools$safe_filename(
-              get_arg(save_func, "filename"),
+              get_arg(local_save_func, "filename"),
               "gsea_heatmap",
               paste0("rc", ifelse(cluster_rows, "T", "F")),
               paste0("cc", ifelse(cluster_columns, "T", "F")),
@@ -1106,8 +1130,8 @@ plot_results_all_collections <- function(
               title_dir,
               fallback = "gsea_heatmap"
             )
-            path <- util_tools$safe_subdir(get_arg(save_func, "path"), title_dir, "heatmaps_gsea")
-            .save_func <- make_partial(save_func, filename = filename, path = path)
+            path <- util_tools$safe_subdir(get_arg(local_save_func, "path"), title_dir, "heatmaps_gsea")
+            local_save_func <- make_partial(local_save_func, filename = filename, path = path)
           }
 
           log_msg(info = paste0("cutting by ", .cut_by))
@@ -1120,7 +1144,7 @@ plot_results_all_collections <- function(
             pstat_usetype = pstat_usetype,
             cluster_rows = cluster_rows,
             cluster_columns = cluster_columns,
-            save_func = .save_func,
+            save_func = local_save_func,
             rankname_order = rankname_order,
             meta_to_include = meta_to_include,
             meta_to_exclude = meta_to_exclude,
