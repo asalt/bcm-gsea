@@ -136,6 +136,63 @@ No filtering is performed at this stage; if `collapse == TRUE` redundant pathway
 ### plot.R
 
 
+### Custom Colormap (Annotations)
+
+You can override default annotation colors with a JSON colormap file (preferred). Two JSON shapes are supported:
+
+- Object with `global` and `by_column` maps:
+
+```
+{
+  "global": {
+    "Responder": "#4DAF4A",
+    "NonResponder": "#984EA3"
+  },
+  "by_column": {
+    "group": {
+      "Treated": "#E41A1C",
+      "Control": "#377EB8"
+    },
+    "batch": {
+      "BatchA": "#1B9E77",
+      "BatchB": "#D95F02"
+    }
+  }
+}
+```
+
+- Array of entries with optional `column` field:
+
+```
+[
+  {"column": "group", "name": "Treated", "color": "#E41A1C"},
+  {"column": "group", "name": "Control", "color": "#377EB8"},
+  {"name": "Responder", "color": "#4DAF4A"},
+  {"name": "NonResponder", "color": "#984EA3"}
+]
+```
+
+Rules and tips:
+- Colors should be hex codes like `#1F77B4`; named R colors are also accepted and converted to hex.
+- Matching is exact and case sensitive on `column` and `name`.
+- Only discrete annotations use explicit mappings. Continuous annotations (numeric/decimal) use gradients automatically.
+
+You can copy the example files the CLI ships with:
+
+```
+bcm-gsea get-config --include-colormap
+```
+
+This writes `bcm-gsea.toml` and `colormap.example.json` to the current directory. Enable the mapping in your config (path is relative to run root):
+
+```
+[params.extra]
+colormap_file = "config/colormap.json"
+```
+
+Backward compatibility: If you point to a `.tsv`/`.csv` file, a two‑column (name,color) or three‑column (column,name,color) table is still supported.
+
+
 
 ### plot_bubble.R
 

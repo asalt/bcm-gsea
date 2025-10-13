@@ -49,24 +49,55 @@ def main():
     pass
 
 
+def _resolve_example(path_components: tuple[str, ...]) -> pathlib.Path:
+    base = pathlib.Path(__file__).resolve().parent.parent
+    candidate = base.joinpath(*path_components)
+    if candidate.exists():
+        return candidate
+    raise FileNotFoundError(f"{candidate} does not exist")
+
+
+def _copy_example(source: pathlib.Path, destination: pathlib.Path) -> bool:
+    if destination.exists():
+        click.echo(f"File {destination} already exists, not overwriting")
+        return False
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(source, destination)
+    click.echo(f"Writing {destination}")
+    return True
+
+
 @main.command()
-@click.option("-n", "--name", default="bcm-gsea.toml")
-def get_config(name):
-    config_file = (
-        pathlib.Path(__file__).absolute().parent.parent / "config" / "base.toml"
-    )  #  . exists()
-    if not config_file.exists():
-        raise FileNotFoundError(f"{config_file} does not exist")
+@click.option("-n", "--name", default="bcm-gsea.toml", help="Output filename for the example TOML config.")
+@click.option(
+    "--include-colormap/--skip-colormap",
+    default=False,
+    show_default=True,
+    help="Copy the example colormap JSON alongside the TOML config.",
+)
+@click.option(
+    "--colormap-name",
+    default="colormap.example.json",
+    help="Output filename for the optional colormap example.",
+)
+def get_config(name, include_colormap, colormap_name):
+    """Copy example configuration files into the current directory."""
+
+    config_file = _resolve_example(("config", "base.toml"))
     if not name.endswith(".toml"):
         name = name + ".toml"
-    new_file = pathlib.Path(".").absolute() / name
-    if new_file.exists():
-        print(f"File {new_file} already exists, not overwriting")
-        return
-    print(f"Writing {new_file} ")
-    shutil.copy(config_file, new_file)
+    config_dest = pathlib.Path.cwd() / name
 
-    print(f"done")
+    copied_any = _copy_example(config_file, config_dest)
+
+    if include_colormap:
+        colormap_source = _resolve_example(("config", "colormap.example.json"))
+        colormap_dest = pathlib.Path.cwd() / colormap_name
+        copied = _copy_example(colormap_source, colormap_dest)
+        copied_any = copied_any or copied
+
+    if copied_any:
+        click.echo("done")
 
 
 @main.command()
