@@ -264,5 +264,16 @@ test_that("create_rnkfiles_from_model fits limma contrasts", {
     expect_true(fs::dir_exists(file.path(expr_dir, "tables")))
     expect_true(fs::dir_exists(file.path(expr_dir, "volcano")))
     expect_true(fs::dir_exists(file.path(expr_dir, "volcano_plots")))
+
+    gct_updated <- cmapR::parse_gctx(gct_path)
+    expect_true("expr_Gene1" %in% colnames(gct_updated@cdesc))
+    gene_idx <- match("Gene1", gct@rid)
+    expect_false(is.na(gene_idx))
+    expected_expr <- as.numeric(gct@mat[gene_idx, gct@cid])
+    expect_equal(
+      as.numeric(gct_updated@cdesc[, "expr_Gene1"]),
+      expected_expr,
+      tolerance = 1e-4
+    )
   })
 })

@@ -24,6 +24,20 @@ sanitize_model_terms <- function(terms) {
   make.unique(sanitized, sep = "_")
 }
 
+sanitize_predictor_column_name <- function(token, existing_names = character(0)) {
+  base <- util_tools$safe_filename("expr", token, fallback = "expr")
+  if (!(base %in% existing_names)) {
+    return(base)
+  }
+  candidate <- base
+  counter <- 2
+  while (candidate %in% existing_names) {
+    candidate <- paste0(base, "_", counter)
+    counter <- counter + 1
+  }
+  candidate
+}
+
 parse_contrast_specs <- function(contrast_strings) {
   if (length(contrast_strings) == 0) {
     return(list())
@@ -176,6 +190,8 @@ create_rnkfiles_from_model <- function(
 
   expression_mat <- gct@mat[, rownames(metadata), drop = FALSE]
 
+  predictor_columns <- list()
+
   vars <- all.vars(design_formula)
   missing_vars <- setdiff(vars, colnames(metadata))
   if (length(missing_vars) > 0) {
@@ -185,6 +201,11 @@ create_rnkfiles_from_model <- function(
         stop("Formula variable '", token, "' not found in metadata or expression matrix.")
       }
       metadata[[token]] <- as.numeric(predictor[rownames(metadata)])
+      safe_name <- sanitize_predictor_column_name(
+        token,
+        existing_names = names(predictor_columns)
+      )
+      predictor_columns[[safe_name]] <- list(values = predictor, token = token)
     }
   }
 
@@ -375,6 +396,27 @@ create_rnkfiles_from_model <- function(
           ggplot2::theme_minimal(base_size = 11)
         ggplot2::ggsave(filename = volcano_pdf, plot = p, width = 7.2, height = 5.0)
       }
+    }
+  }
+
+  if (length(predictor_columns) > 0) {
+    updated_any <- FALSE
+    for (safe_name in names(predictor_columns)) {
+      predictor <- predictor_columns[[safe_name]]$values
+      aligned <- rep(NA_real_, length(gct@cid))
+      names(aligned) <- gct@cid
+      matches <- intersect(names(predictor), names(aligned))
+      aligned[matches] <- as.numeric(predictor[matches])
+      gct@cdesc[[safe_name]] <- aligned
+      updated_any <- TRUE
+    }
+    if (updated_any) {
+      cmapR::write_gct(gct, gct_path, appenddim = FALSE)
+      attr(output, "metadata_columns") <- names(predictor_columns)
+      log_msg(info = paste0(
+        "Augmented metadata in ", basename(gct_path),
+        " with predictors: ", paste(names(predictor_columns), collapse = ", ")
+      ))
     }
   }
 
