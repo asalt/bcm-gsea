@@ -21,6 +21,8 @@ close_con <- function(con){
 
 initialize_db <- function(db_path = file.path(here("sql"), "rankorder_data.db"), sql_file = file.path(here("sql"), "init_db.sql")) {
   log_msg(info="Initializing database...")
+  # Ensure parent directory exists for the db path
+  dir.create(dirname(db_path), recursive = TRUE, showWarnings = FALSE)
   con <- dbConnect(RSQLite::SQLite(), db_path)
   # Read the SQL commands from the file
   sql_commands <- readLines(sql_file)
@@ -45,22 +47,21 @@ initialize_db <- function(db_path = file.path(here("sql"), "rankorder_data.db"),
 
 # returns collection_id
 insert_collection <- function(con, collection_name){
-    res <- dbGetQuery(con, 'select collection_id from Collections where name = ?', params = c(collection_name))
+    res <- dbGetQuery(con, 'select collection_id from Collections where name = ?', params = collection_name)
     if (nrow(res) > 0) {
       warning(paste0(collection_name, " already exists, skipping"))
-      return(res[1,])
+      return(res$collection_id[1])
     }
 
     dbExecute(con, "INSERT INTO Collections (name) VALUES (?)", params = collection_name)
-    # dbExecute(con, "COMMIT")
-    res <- dbGetQuery(con, 'select collection_id from Collections where name = ?', params = c(collection_name))
-    return(res[1,])
+    res <- dbGetQuery(con, 'select collection_id from Collections where name = ?', params = collection_name)
+    return(res$collection_id[1])
 }
 
 get_pathway_id <- function(con, pathway_name){
-    res <- dbGetQuery(con, 'select pathway_id from Pathways where name = ?', params = c(pathway_name))
+    res <- dbGetQuery(con, 'select pathway_id from Pathways where name = ?', params = pathway_name)
     if (nrow(res) == 0) return(NULL)
-    return(res[1,])
+    return(res$pathway_id[1])
 }
 
 insert_pathway <- function(con, collection_id = NULL, collection_name = NULL, pathway_name = NULL, members = NULL, id_type = "entrez"){
@@ -77,11 +78,11 @@ insert_pathway <- function(con, collection_id = NULL, collection_name = NULL, pa
     }
 
     if (is.null(collection_id) && !is.null(collection_name)){
-      res <- dbGetQuery(con, 'select collection_id from Collections where name = ?', params = c(collection_name))
+      res <- dbGetQuery(con, 'select collection_id from Collections where name = ?', params = collection_name)
       if (nrow(res) == 0){ # then create
-          collection_id <- insert_collection(con, connection_name)
+          collection_id <- insert_collection(con, collection_name)
       } else{
-          collection_id <- insert_collection(con, 'empty')
+          collection_id <- res$collection_id[1]
       }
     }
 
@@ -95,29 +96,33 @@ insert_pathway <- function(con, collection_id = NULL, collection_name = NULL, pa
 }
 
 
-insert_results <- function(con, rank_id = NULL, rank_name = NULL, collection_id = NULL, collection_name = NULL, results = NULL){
+insert_results <- function(con, rankobj_id = NULL, rank_name = NULL, collection_id = NULL, collection_name = NULL, results = NULL){
 
+  if (is.null(results) || !is.data.frame(results)) stop("results must be a data.frame")
+
+  # Resolve rankobj_id
   if (is.null(rankobj_id)) {
-      if (is.null(rank_name)) stop("both rank_id and rank_name cannot be null")
-      sql <- "SELECT * from RankObjects where name == ? LIMIT 1"
+      if (is.null(rank_name)) stop("both rankobj_id and rank_name cannot be null")
+      sql <- "SELECT rankobj_id from RankObjects where name = ? LIMIT 1"
       res <- dbGetQuery(con, sql, params = rank_name)
       if (nrow(res) == 0){
         warning("no rank name found, creating")
-        rank_id <- insert_rankobj(con, rank_name)
+        rankobj_id <- insert_rankobj(con, rank_name)
       } else {
-        rank_id <- res[1,]
+        rankobj_id <- res$rankobj_id[1]
       }
   }
 
+  # Resolve collection_id
   if (is.null(collection_id)) {
       if (is.null(collection_name)) stop("both collection_id and collection_name cannot be null")
-      sql <- "SELECT * from Collections where name == ? LIMIT 1"
+      sql <- "SELECT collection_id from Collections where name = ? LIMIT 1"
       res <- dbGetQuery(con, sql, params = collection_name)
       if (nrow(res) == 0){
         warning("no collection name found, creating")
         collection_id <- insert_collection(con, collection_name)
       } else {
-        collection_id <- res[1,]
+        collection_id <- res$collection_id[1]
       }
   }
 
@@ -127,32 +132,35 @@ insert_results <- function(con, rank_id = NULL, rank_name = NULL, collection_id 
   }, add = TRUE)
 
   dbBegin(con)
-  stmt <- dbSendStatement(con, "INSERT INTO CollectionResults (rankobj_id, collection_id, pathway_id, pval, padj, log2err, es, nes, size, leadingEdge, mainpathway) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-  for (i in 1:nrow(results)) {
-    pathway_id <- get_pathway_id(con, results$pathway[i])
+  stmt <- dbSendStatement(
+    con,
+    "INSERT OR REPLACE INTO CollectionResults (rankobj_id, collection_id, pathway_id, pathway, pval, padj, log2err, es, nes, size, leadingEdge, mainpathway) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  )
+  for (i in seq_len(nrow(results))) {
+    pathway_name <- results$pathway[i]
+    pathway_id <- get_pathway_id(con, pathway_name)
     if (is.null(pathway_id)) {
-      pathway_id <- insert_pathway(con, collection_id=collection_id, pathway_name=results$pathway[i])
+      pathway_id <- insert_pathway(con, collection_id = collection_id, pathway_name = pathway_name)
     }
     dbBind(stmt,
-     list(
-      rankobj_id,
-      collection_id,
-      pathway_id,
-      results$pval[i],
-      results$padj[i],
-      results$log2err[i],
-      results$es[i],
-      results$nes[i],
-      results$size[i],
-      results$leadingEdge[i],
-      int(results$mainpathway[i]))
+      list(
+        rankobj_id,
+        collection_id,
+        pathway_id,
+        pathway_name,
+        results$pval[i],
+        results$padj[i],
+        results$log2err[i],
+        results$es[i],
+        results$nes[i],
+        results$size[i],
+        results$leadingEdge[i],
+        as.integer(results$mainpathway[i])
+      )
     )
-
-    # Optional: Show progress for large datasets
     if (i %% 1000 == 0) cat("Inserted row", i, "\n")
   }
 
-  # Clear the statement and commit the transaction
   dbClearResult(stmt)
   dbExecute(con, "COMMIT")
   message("Bulk insert with prepared statements completed.")
@@ -161,16 +169,14 @@ insert_results <- function(con, rank_id = NULL, rank_name = NULL, collection_id 
 }
 
 insert_rankobj <- function(con, rank_name){
-
-    res <- dbGetQuery(con, 'select rankobj_id from RankObjects where name = ?', params = c('second'))
+    res <- dbGetQuery(con, 'select rankobj_id from RankObjects where name = ?', params = rank_name)
     if (nrow(res) > 0) {
         warning(paste0("rankname ", rank_name, " already exists, cannot insert"))
-        return(res[1,])
+        return(res$rankobj_id[1])
     }
     dbExecute(con, "INSERT INTO RankObjects (name) VALUES (?)", params = rank_name)
-    # dbExecute(con, "COMMIT")
-    res <- dbGetQuery(con, 'select rankobj_id from RankObjects where name = ?', params = c('second'))
-    return(res[1,])
+    res <- dbGetQuery(con, 'select rankobj_id from RankObjects where name = ?', params = rank_name)
+    return(res$rankobj_id[1])
 }
 
 insert_ranks <- function(con, rankobj_id = NULL, rankobj_name = NULL, ranks_data = NULL) {
@@ -190,11 +196,9 @@ insert_ranks <- function(con, rankobj_id = NULL, rankobj_name = NULL, ranks_data
         warning("no rank name found, creating")
         rankobj_id <- insert_rankobj(con, rankobj_name)
       } else{
-        rankobj_id <- res[1,]
+        rankobj_id <- res$rankobj_id[1]
       }
   }
-
-  # ====
 
   on.exit({
     dbRollback(con)
@@ -246,7 +250,7 @@ insert_curve <- function(
         log_msg(warning="no rank name found, creating")
         rankobj_id <- insert_rankobj(con, rankobj_name)
       } else{
-        rankobj_id <- res[1,]
+        rankobj_id <- res$rankobj_id[1]
       }
   }
 
@@ -258,9 +262,8 @@ insert_curve <- function(
         warning("no pathway id found, ")
         log_msg(warning="no pathway id found, ")
         return()
-        # pathway_id <- insert_pathway(con, rankobj_name)
       } else{
-        pathway_id <- res[1,]
+        pathway_id <- res$pathway_id[1]
       }
   }
 
@@ -274,9 +277,8 @@ insert_curve <- function(
 
   dbBegin(con)
   stmt <- dbSendStatement(con, "INSERT INTO Curves (rankobj_id, pathway_id, rank, ES) VALUES (?, ?, ?, ?)")
-
   # Bind and execute for each row
-  for (i in 1:nrow(ranks_data)) {
+  for (i in seq_len(nrow(curve_data))) {
     dbBind(stmt, list(rankobj_id, pathway_id, curve_data$rank[i], curve_data$ES[i]))
     # Optional: Show progress for large datasets
     if (i %% 1000 == 0) cat("Inserted row", i, "\n")
@@ -328,7 +330,7 @@ get_plot_enrichmentdata_by_pathway <- function(
   rankdata %<>% rename(stat = value)
   rankdata %<>% arrange(rank)
 
-  curvedata <- dbGetQuery(con, "SELECT * FROM Curves WHERE rankobj_id = ? & pathway_id = ?", params = list(rankobj_id, pathway_id))
+  curvedata <- dbGetQuery(con, "SELECT * FROM Curves WHERE rankobj_id = ? AND pathway_id = ?", params = list(rankobj_id, pathway_id))
 
   pathway <- dbGetQuery(con, "SELECT * FROM Pathways WHERE pathway_id = ?", params = list(pathway_id))
   members <- pathway$ids %>% strsplit("/") %>% unlist()
