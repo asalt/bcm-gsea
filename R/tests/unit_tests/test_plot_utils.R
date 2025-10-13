@@ -11,6 +11,7 @@ util_tools <- new.env()
 source(file.path(src_dir, "./utils.R"), local = util_tools)
 make_partial <- util_tools$make_partial
 get_args <- util_tools$get_args
+get_arg <- util_tools$get_arg
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
 

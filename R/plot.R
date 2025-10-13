@@ -129,13 +129,22 @@ make_heatmap_fromgct <- function(
   cdesc_for_annot <- gct@cdesc %>% select(-any_of(meta_to_exclude))
 
   # would be better to do this earlier
+  # Prepare metadata columns for annotation: keep numeric as numeric (continuous),
+  # and coerce non-numeric to ordered factors.
   for (col in colnames(cdesc_for_annot)) {
     .col <- cdesc_for_annot[[col]]
-    .col <- replace(.col, is.na(.col), "NA")
-    if (!is.factor(.col)) {
-      .col <- util_tools$infer_ordered_factor(.col)
+    # Detect numeric-ish columns (including decimals stored as character)
+    if (plot_utils$is_numericish(.col)) {
+      # Preserve as numeric for continuous annotations; keep NA as NA
+      suppressWarnings({ cdesc_for_annot[[col]] <- as.numeric(as.character(.col)) })
+    } else {
+      # For categorical, replace NA with explicit label for consistent coloring
+      .col <- replace(.col, is.na(.col), "NA")
+      if (!is.factor(.col)) {
+        .col <- util_tools$infer_ordered_factor(.col)
+      }
+      cdesc_for_annot[[col]] <- .col
     }
-    cdesc_for_annot[[col]] <- .col
   }
   cdesc_for_annot <- cdesc_for_annot %>%
     arrange(across(everything()))
@@ -402,7 +411,7 @@ plot_heatmap_of_edges <- function(
       filename <- util_tools$safe_filename(
         get_arg(local_save_func, "filename"),
         comparison_name,
-        paste0("cr", ifelse(cluster_rows, "T", "F")),
+        paste0("rc", ifelse(cluster_rows, "T", "F")),
         paste0("cc", ifelse(cluster_columns, "T", "F")),
         cut_by_label,
         paste0(nrow(subgct@mat), "x", ncol(subgct@mat)),
@@ -1375,6 +1384,15 @@ plot_results_one_collection <- function(
   # it isn't strictly necessary to exclude these colum s here,
   # as they will be excluded upon creation of the column_annotation object
   metadata_for_colors <- metadata %>% dplyr::select(-any_of(c("id", "dummy")))
+  # Coerce numeric-like metadata (incl. decimals) to numeric for continuous annotations
+  if (ncol(metadata_for_colors) > 0) {
+    for (.colname in colnames(metadata_for_colors)) {
+      .col <- metadata_for_colors[[.colname]]
+      if (plot_utils$is_numericish(.col)) {
+        suppressWarnings({ metadata_for_colors[[.colname]] <- as.numeric(as.character(.col)) })
+      }
+    }
+  }
   if (ncol(metadata_for_colors) > 0) {
     # colors_list <- metadata_for_colors %>% colnames() %>%
     #   map(~{
@@ -1398,7 +1416,7 @@ plot_results_one_collection <- function(
     # log_msg(msg = paste0("color list ", as.character(colors_list)))
 
     column_annotation <- ComplexHeatmap::columnAnnotation(
-      df = metadata %>% dplyr::select(-any_of(c("id", "dummy"))),
+      df = metadata_for_colors,
       col = colors_list
     )
   } else {

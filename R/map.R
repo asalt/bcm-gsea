@@ -142,12 +142,21 @@ add_leadingedges_to_results_list <- function(fgsea_res_list, species = "Homo sap
     purrr::flatten_chr()
   entrez_ids <- unique(entrez_ids)
 
-  gene_symbol_mapping <- map_entrez_to_symbol(entrez_ids, species = species)
-  # now assign back
+  mapping <- tryCatch(
+    map_entrez_to_symbol(entrez_ids, species = species),
+    error = function(e) {
+      message("[map] failed to map entrez ids to symbols: ", conditionMessage(e))
+      NULL
+    }
+  )
+
+  if (is.null(mapping)) {
+    return(fgsea_res_list)
+  }
+
   output <- fgsea_res_list %>% purrr::map(~{
-    format_entrezids(.x, mapping = gene_symbol_mapping)
+    format_entrezids(.x, mapping = mapping)
   })
 
   return(output)
-
 }

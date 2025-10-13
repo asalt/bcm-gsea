@@ -181,6 +181,7 @@ is_numericish <- function(x) {
   if (is.numeric(x)) return(TRUE)
   x <- trimws(as.character(x))
   x <- x[nzchar(x)]                       # drop empty strings
+  if (length(x) == 0) return(FALSE)
   suppressWarnings(all(!is.na(as.numeric(x))))
 }
 
@@ -190,25 +191,129 @@ create_named_color_list <- function(df, columns, c=80) {
   color_list <- list()
 
   # Iterate over each column
+  user_map <- getOption("bcm_gsea_user_colormap", NULL)
   for (col_name in columns) {
-    df[[col_name]][is.na(df[[col_name]])] <- "NA"
+    col_data <- df[[col_name]]
 
-    unique_vals <- sort(unique(df[[col_name]]))
-    n_vals <- length(unique_vals)
+    # If numeric-like, build a continuous color mapping;
+    # otherwise create a discrete palette with explicit NA color.
+    if (is_numericish(col_data)) {
+      suppressWarnings({ vals <- as.numeric(as.character(col_data)) })
+      vals <- vals[is.finite(vals)]
+      n_unique <- length(unique(vals))
+      tol <- .Machine$double.eps^0.5
+      is_integerish <- length(vals) > 0 && all(abs(vals - round(vals)) < tol)
 
-    # Assign colors based on the number of unique values, recycling matplotlib colors if needed
-    # colors_assigned <- rep(matplotlib_colors, length.out = n_vals)
-    colors_assigned <- colorspace::qualitative_hcl(palette='Dynamic', n=n_vals, c=c)
+      # Treat small-cardinality integer-like as categorical; otherwise continuous
+      if (n_unique <= 5 && is_integerish) {
+        # Discrete palette for small integer sets (e.g., 0/1 groups)
+        unique_vals <- sort(unique(df[[col_name]]))
+        n_vals <- length(unique_vals)
+        colors_assigned <- colorspace::qualitative_hcl(palette='Dynamic', n=n_vals, c=c)
+        assigned <- setNames(colors_assigned, as.character(unique_vals))
+        # Apply user overrides (column-specific first, then global)
+        if (!is.null(user_map)) {
+          col_override <- tryCatch(user_map$by_column[[col_name]], error = function(e) NULL)
+          if (!is.null(col_override) && length(col_override) > 0) {
+            matches <- intersect(names(assigned), names(col_override))
+            assigned[matches] <- col_override[matches]
+          }
+          global_override <- tryCatch(user_map$global, error = function(e) NULL)
+          if (!is.null(global_override) && length(global_override) > 0) {
+            # apply only for values still not overridden
+            remaining <- setdiff(names(assigned), names(col_override))
+            matches2 <- intersect(remaining, names(global_override))
+            assigned[matches2] <- global_override[matches2]
+          }
+        }
+        if ("NA" %in% names(assigned)) assigned[["NA"]] <- "grey40"
+        if ("na" %in% names(assigned)) assigned[["na"]] <- "grey40"
+        color_list[[col_name]] <- assigned
+      } else if (length(vals) >= 2) {
+        minv <- min(vals, na.rm = TRUE)
+        maxv <- max(vals, na.rm = TRUE)
 
-
-    # Create a named vector for the unique values with corresponding colors
-    color_list[[col_name]] <- setNames(colors_assigned, unique_vals)
-    # rewrite this sometime
-    if ("NA" %in% names(color_list[[col_name]]) ){
-      color_list[[col_name]][["NA"]] <- "grey40"
-    }
-    if ("na" %in% names(color_list[[col_name]]) ){
-      color_list[[col_name]][["na"]] <- "grey40"
+        if (is.finite(minv) && is.finite(maxv) && minv != maxv) {
+          # Diverging if range spans zero; otherwise sequential
+          if (minv < 0 && maxv > 0) {
+            brks <- c(minv, 0, maxv)
+            cols <- c("#2166ac", "#f7f7f7", "#b2182b")
+          } else {
+            brks <- c(minv, maxv)
+            cols <- c("#eff3ff", "#08519c")
+          }
+          color_list[[col_name]] <- circlize::colorRamp2(brks, cols)
+          next
+        } else {
+          # Fallback for constant range
+          unique_vals <- sort(unique(df[[col_name]]))
+          n_vals <- length(unique_vals)
+          colors_assigned <- colorspace::qualitative_hcl(palette='Dynamic', n=n_vals, c=c)
+          assigned <- setNames(colors_assigned, as.character(unique_vals))
+          if (!is.null(user_map)) {
+            col_override <- tryCatch(user_map$by_column[[col_name]], error = function(e) NULL)
+            if (!is.null(col_override) && length(col_override) > 0) {
+              matches <- intersect(names(assigned), names(col_override))
+              assigned[matches] <- col_override[matches]
+            }
+            global_override <- tryCatch(user_map$global, error = function(e) NULL)
+            if (!is.null(global_override) && length(global_override) > 0) {
+              remaining <- setdiff(names(assigned), names(col_override))
+              matches2 <- intersect(remaining, names(global_override))
+              assigned[matches2] <- global_override[matches2]
+            }
+          }
+          if ("NA" %in% names(assigned)) assigned[["NA"]] <- "grey40"
+          if ("na" %in% names(assigned)) assigned[["na"]] <- "grey40"
+          color_list[[col_name]] <- assigned
+        }
+      } else {
+        # Not enough values to infer; treat as discrete
+        unique_vals <- sort(unique(df[[col_name]]))
+        n_vals <- length(unique_vals)
+        colors_assigned <- colorspace::qualitative_hcl(palette='Dynamic', n=n_vals, c=c)
+        assigned <- setNames(colors_assigned, as.character(unique_vals))
+        if (!is.null(user_map)) {
+          col_override <- tryCatch(user_map$by_column[[col_name]], error = function(e) NULL)
+          if (!is.null(col_override) && length(col_override) > 0) {
+            matches <- intersect(names(assigned), names(col_override))
+            assigned[matches] <- col_override[matches]
+          }
+          global_override <- tryCatch(user_map$global, error = function(e) NULL)
+          if (!is.null(global_override) && length(global_override) > 0) {
+            remaining <- setdiff(names(assigned), names(col_override))
+            matches2 <- intersect(remaining, names(global_override))
+            assigned[matches2] <- global_override[matches2]
+          }
+        }
+        if ("NA" %in% names(assigned)) assigned[["NA"]] <- "grey40"
+        if ("na" %in% names(assigned)) assigned[["na"]] <- "grey40"
+        color_list[[col_name]] <- assigned
+      }
+    } else {
+      # Discrete categorical mapping
+      col_data[is.na(col_data)] <- "NA"
+      unique_vals <- sort(unique(col_data))
+      n_vals <- length(unique_vals)
+      colors_assigned <- colorspace::qualitative_hcl(palette='Dynamic', n=n_vals, c=c)
+      assigned <- setNames(colors_assigned, as.character(unique_vals))
+      # Apply user overrides (column-specific first, then global)
+      if (!is.null(user_map)) {
+        col_override <- tryCatch(user_map$by_column[[col_name]], error = function(e) NULL)
+        if (!is.null(col_override) && length(col_override) > 0) {
+          matches <- intersect(names(assigned), names(col_override))
+          assigned[matches] <- col_override[matches]
+        }
+        global_override <- tryCatch(user_map$global, error = function(e) NULL)
+        if (!is.null(global_override) && length(global_override) > 0) {
+          remaining <- setdiff(names(assigned), names(col_override))
+          matches2 <- intersect(remaining, names(global_override))
+          assigned[matches2] <- global_override[matches2]
+        }
+      }
+      if ("NA" %in% names(assigned)) assigned[["NA"]] <- "grey40"
+      if ("na" %in% names(assigned)) assigned[["na"]] <- "grey40"
+      color_list[[col_name]] <- assigned
     }
   }
 
