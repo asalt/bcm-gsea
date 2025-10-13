@@ -436,8 +436,8 @@ make_heatmap_from_loadings <- function(
       filename <- util_tools$safe_filename(
         get_arg(save_func, "filename"),
         "gsea_heatmap_5pct",
-        paste0("rc", ifelse(cluster_rows, "T", "F")),
-        paste0("cc", ifelse(cluster_columns, "T", "F")),
+        util_tools$cluster_flag_token(cluster_rows, "rc"),
+        util_tools$cluster_flag_token(cluster_columns, "cc"),
         cut_by_label,
         fallback = "gsea_heatmap"
       )
@@ -492,8 +492,8 @@ make_heatmap_from_loadings <- function(
       filename <- util_tools$safe_filename(
         get_arg(save_func, "filename"),
         "gsea_heatmap_top5",
-        paste0("rc", ifelse(cluster_rows, "T", "F")),
-        paste0("cc", ifelse(cluster_columns, "T", "F")),
+        util_tools$cluster_flag_token(cluster_rows, "rc"),
+        util_tools$cluster_flag_token(cluster_columns, "cc"),
         cut_by_label,
         fallback = "gsea_heatmap"
       )

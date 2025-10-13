@@ -285,6 +285,26 @@ safe_filename <- function(..., fallback = "file", max_chars = 80, delim = "_") {
   return(candidate)
 }
 
+cluster_flag_token <- function(flag, prefix) {
+  value <- "NA"
+  if (length(flag) > 0) {
+    candidate <- flag[[1]]
+    if (isTRUE(candidate)) {
+      value <- "T"
+    } else if (identical(candidate, FALSE)) {
+      value <- "F"
+    } else {
+      logical_candidate <- suppressWarnings(as.logical(candidate))
+      if (isTRUE(logical_candidate)) {
+        value <- "T"
+      } else if (identical(logical_candidate, FALSE)) {
+        value <- "F"
+      }
+    }
+  }
+  paste0(prefix, value)
+}
+
 safe_subdir <- function(base, ..., max_chars = 60) {
   components <- list(...)
   if (length(components) == 0) {

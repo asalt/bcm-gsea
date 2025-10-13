@@ -410,9 +410,9 @@ plot_heatmap_of_edges <- function(
 
       filename <- util_tools$safe_filename(
         get_arg(local_save_func, "filename"),
+        util_tools$cluster_flag_token(cluster_rows, "rc"),
+        util_tools$cluster_flag_token(cluster_columns, "cc"),
         comparison_name,
-        paste0("rc", ifelse(cluster_rows, "T", "F")),
-        paste0("cc", ifelse(cluster_columns, "T", "F")),
         cut_by_label,
         paste0(nrow(subgct@mat), "x", ncol(subgct@mat)),
         fallback = "gene_heatmap"
@@ -1133,8 +1133,8 @@ plot_results_all_collections <- function(
             filename <- util_tools$safe_filename(
               get_arg(local_save_func, "filename"),
               "gsea_heatmap",
-              paste0("rc", ifelse(cluster_rows, "T", "F")),
-              paste0("cc", ifelse(cluster_columns, "T", "F")),
+              util_tools$cluster_flag_token(cluster_rows, "rc"),
+              util_tools$cluster_flag_token(cluster_columns, "cc"),
               cut_by_label,
               title_dir,
               fallback = "gsea_heatmap"
