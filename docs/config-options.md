@@ -1,10 +1,10 @@
-# BCM-GSEA Configuration Reference
+# Tackle2 Configuration Reference
 
-This document lists all supported keys in the bcm-gsea configuration TOML files, including default values and notes on behaviour. You can also explore the schema from the CLI, e.g.:
+This document lists all supported keys in the tackle2 configuration TOML files, including default values and notes on behaviour. You can also explore the schema from the CLI, e.g.:
 
 ```
-$ bcm-gsea describe
-$ bcm-gsea describe params.bubbleplot --json
+$ tackle2 describe
+$ tackle2 describe params.bubbleplot --json
 ```
 
 ## Top-level Structure

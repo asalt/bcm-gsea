@@ -5,6 +5,12 @@ suppressPackageStartupMessages(library(magrittr))
 suppressPackageStartupMessages(library(digest))
 # suppressPackageStartupMessages(library(dplyr))
 
+APP_NAME <- "tackle2"
+
+pkg_option_name <- function(suffix) {
+  paste0(APP_NAME, "_", suffix)
+}
+
 source(file.path(here("R"), "lazyloader.R"))
 # listen_tools <- get_tool_env("listen.R")
 # util_tools <- get_tool_env("utils")
@@ -159,8 +165,8 @@ clean_args <- function(params, root_dir = "/") {
   logfile <- params$advanced$logfile %||% file.path(params$savedir, "run.log")
   # browser()
   loglevel <- params$advanced$loglevel
-  options("bcm_gsea_log_msg_filename" = logfile)
-  options("bcm_gsea_loglevel" = loglevel)
+  options(structure(list(logfile), names = pkg_option_name("log_msg_filename")))
+  options(structure(list(loglevel), names = pkg_option_name("loglevel")))
   params$advanced$logfile <- logfile
 
   print(str(params))
@@ -175,7 +181,7 @@ clean_args <- function(params, root_dir = "/") {
     if (file.exists(full_cmap_path)) {
       cmap <- load_user_colormap(full_cmap_path)
       if (!is.null(cmap)) {
-        options("bcm_gsea_user_colormap" = cmap)
+        options(structure(list(cmap), names = pkg_option_name("user_colormap")))
         log_msg(info = paste0("loaded user colormap from ", full_cmap_path))
       }
     } else {
@@ -708,7 +714,7 @@ make_partial <- function(.f, ...) {
 
 
 
-globalloglevel <- options("bcm_gsea_loglevel")[[1]] %||% "INFO"
+globalloglevel <- options(pkg_option_name("loglevel"))[[1]] %||% "INFO"
 
 log_msg <- function(msg = NULL, info = NULL, debug = NULL, warning = NULL, warn = NULL, error = NULL, filename = NULL, end = "\n", shell = T, loglevel = loglevel, send_over_socket = TRUE, socket_port = 8765, ...) {
   level <- case_when(
@@ -735,12 +741,12 @@ log_msg <- function(msg = NULL, info = NULL, debug = NULL, warning = NULL, warn 
 
   prefix <- paste0(format(Sys.time(), "[%Y-%m-%d %H:%M:%S] "), level, ": ")
 
-  maybe_filename <- options("bcm_gsea_log_msg_filename")[[1]]
+  maybe_filename <- options(pkg_option_name("log_msg_filename"))[[1]]
   if (!is.null(maybe_filename)) {
     filename <- maybe_filename[[1]]
   }
   if (is.null(filename)) {
-    filename <- "bcm_gsea.log"
+    filename <- paste0(APP_NAME, ".log")
   }
 
   dir_path <- fs::path_dir(filename)

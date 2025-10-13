@@ -191,7 +191,7 @@ create_named_color_list <- function(df, columns, c=80) {
   color_list <- list()
 
   # Iterate over each column
-  user_map <- getOption("bcm_gsea_user_colormap", NULL)
+  user_map <- getOption(util_tools$pkg_option_name("user_colormap"), NULL)
   for (col_name in columns) {
     col_data <- df[[col_name]]
 

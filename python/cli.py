@@ -12,6 +12,8 @@ from pathlib import Path
 import click
 from collections import defaultdict
 
+APP_NAME = "tackle2"
+
 # from concurrent.futures import ProcessPoolExecutor, as_completed
 # from tqdm import tqdm
 import pandas as pd
@@ -68,7 +70,7 @@ def _copy_example(source: pathlib.Path, destination: pathlib.Path) -> bool:
 
 
 @main.command()
-@click.option("-n", "--name", default="bcm-gsea.toml", help="Output filename for the example TOML config.")
+@click.option("-n", "--name", default=f"{APP_NAME}.toml", help="Output filename for the example TOML config.")
 @click.option(
     "--include-colormap/--skip-colormap",
     default=False,
@@ -186,7 +188,7 @@ def launch_assistant(port):
     "-s",
     "--savedir",
     type=click.Path(exists=True, file_okay=False),
-    help="Directory containing bcm-gsea pipeline outputs",
+    help=f"Directory containing {APP_NAME} pipeline outputs",
 )
 @click.option(
     "-c",

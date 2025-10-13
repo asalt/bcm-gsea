@@ -81,12 +81,13 @@ run <- function(params) {
   species <- params$species %||% "Homo sapiens"
 
   logfile <- params$advanced$logfile %>% ifelse(!is.null(.), ., "run.log")
-  options("bcm_gsea_log_msg_filename" = logfile)
+  options(structure(list(logfile), names = util_tools$pkg_option_name("log_msg_filename")))
 
+  app_name <- util_tools$APP_NAME %||% "tackle2"
   log_msg <- util_tools$make_partial(util_tools$log_msg, filename = logfile)
-  log_msg(msg = paste0("===\n*starting bcm gsea*\n==="))
+  log_msg(msg = paste0("===\n*starting ", app_name, "*\n==="))
   if ((params$advanced$quiet %||% FALSE) == FALSE) {
-    voice_tools$speak_text("starting bcm g s e a")
+    voice_tools$speak_text(paste("starting", app_name))
   }
 
   # =======
@@ -181,9 +182,9 @@ run <- function(params) {
   genesets_for_iteration %>% purrr::walk(
     ~ {
       .msg <- paste0("running gsea for: ", .x)
-      # if (is.null(params$quiet) || params$quiet == FALSE) {
-      #   voice_tools$speak_text(text = paste0('running g s e a for ', .x))
-      # }
+      if (is.null(params$quiet) || params$quiet == FALSE) {
+        voice_tools$speak_text(text = paste0('running g s e a for ', .x))
+      }
 
       log_msg(msg = .msg)
       if (params$advanced$quiet != TRUE) voice_tools$speak_text(.x)
@@ -551,6 +552,6 @@ run <- function(params) {
 
   # end
   if (is.null(params$quiet) || params$quiet == FALSE) {
-    if (params$advanced$quiet != TRUE) voice_tools$speak_text("bcm g s e a is finished")
+    if (params$advanced$quiet != TRUE) voice_tools$speak_text("tackle is finished")
   }
 }

@@ -99,8 +99,8 @@ setup <- function(data_dir, output_dir, gct_path) {
 
 testthat::test_that("test main function with valid parameters", {
   testthat::with_mocked_bindings({
-    keep_artifacts <- identical(tolower(Sys.getenv("BCM_GSEA_KEEP_RUN_TEST_ARTIFACTS", "false")), "true")
-    root_dir <- fs::path(tempdir(), sprintf("bcm-gsea-run-%s-%04d",
+    keep_artifacts <- identical(tolower(Sys.getenv("TACKLE2_KEEP_RUN_TEST_ARTIFACTS", "false")), "true")
+    root_dir <- fs::path(tempdir(), sprintf("tackle2-run-%s-%04d",
       format(Sys.time(), "%Y%m%d%H%M%S"),
       sample.int(9999, 1)
     ))
@@ -109,7 +109,7 @@ testthat::test_that("test main function with valid parameters", {
     if (!keep_artifacts) {
       defer(fs::dir_delete(root_dir), envir = parent.frame())
     } else {
-      message("Keeping bcm-gsea run-loop test artifacts in ", root_dir)
+      message("Keeping tackle2 run-loop test artifacts in ", root_dir)
     }
 
     data_dir <- fs::path(root_dir, "data")

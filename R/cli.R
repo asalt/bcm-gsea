@@ -21,7 +21,7 @@ setMethod(
 )
 
 get_parser <- function() {
-  parser <- arg_parser("bcm-gsea")
+  parser <- arg_parser("tackle2")
   parser <- add_argument(parser, "config", help = "toml config file", type = "filetype")
   return(parser)
 }

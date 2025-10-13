@@ -1,0 +1,25 @@
+{
+  "global": {
+    "Responder": "#4DAF4A",
+    "NonResponder": "#984EA3",
+    "Case": "#377EB8",
+    "Control": "#E41A1C"
+  },
+  "by_column": {
+    "group": {
+      "Treated": "#E41A1C",
+      "Control": "#377EB8",
+      "Vehicle": "#999999"
+    },
+    "batch": {
+      "BatchA": "#1B9E77",
+      "BatchB": "#D95F02",
+      "BatchC": "#7570B3"
+    },
+    "sex": {
+      "Male": "#1F78B4",
+      "Female": "#E31A1C"
+    }
+  }
+}
+

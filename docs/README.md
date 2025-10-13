@@ -9,7 +9,7 @@ It mainly consists of a series of wrapper functions to perform the analysis and 
 
 clone the repository:
 ```bash
-git clone https://github.com/asalt/bcm-gsea
+git clone https://github.com/asalt/tackle2
 ```
 
 
@@ -50,10 +50,10 @@ When a GCT file is supplied, column metadata (`gct@cdesc`) is leveraged for grou
 Script main entry points are driven by python command line parsing and variable dispatch.
 
 ```
-## bcm-gsea example help
+## tackle2 example help
 
-~/t/bcm-gsea> bcm-gsea run --help
-Usage: bcm-gsea run [OPTIONS]
+~/t/tackle2> tackle2 run --help
+Usage: tackle2 run [OPTIONS]
 
 Options:
   -c, --config FILE               .toml file with additional parameters for
@@ -180,10 +180,10 @@ Rules and tips:
 You can copy the example files the CLI ships with:
 
 ```
-bcm-gsea get-config --include-colormap
+tackle2 get-config --include-colormap
 ```
 
-This writes `bcm-gsea.toml` and `colormap.example.json` to the current directory. Enable the mapping in your config (path is relative to run root):
+This writes `tackle2.toml` and `colormap.example.json` to the current directory. Enable the mapping in your config (path is relative to run root):
 
 ```
 [params.extra]

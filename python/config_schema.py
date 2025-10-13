@@ -1,4 +1,4 @@
-"""Configuration schema and helpers for bcm-gsea.
+"""Configuration schema and helpers for tackle2.
 
 Defines configuration structures using straightforward Python classes with
 inheritance and shared mixins. This keeps defaults, CLI descriptions, and

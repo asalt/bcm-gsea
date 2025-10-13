@@ -1,4 +1,4 @@
-"""Utilities for packaging BCM-GSEA analysis outputs for external delivery.
+"""Utilities for packaging tackle2 analysis outputs for external delivery.
 
 The packaging workflow is intended to run *after* the main analysis pipeline
 completes. It gathers the curated result artefacts (tables, plots, logs, and
@@ -9,20 +9,20 @@ customers.
 Typical usage (via the CLI integration):
 
 ```
-$ bcm-gsea package --config path/to/config.toml
+$ tackle2 package --config path/to/config.toml
 ```
 
 or, if the output directory is known:
 
 ```
-$ bcm-gsea package --savedir /path/to/results
+$ tackle2 package --savedir /path/to/results
 ```
 
 To avoid Windows path-length issues you can ask the packager to emit a
 directory containing per-folder ZIP files instead of a single archive:
 
 ```
-$ bcm-gsea package --config run_config.toml --split-components
+$ tackle2 package --config run_config.toml --split-components
 ```
 
 The module exposes `package_results` so it can be reused programmatically or
@@ -203,7 +203,7 @@ def _compose_export_stem(
     if base_token:
         tokens.append(base_token)
     else:
-        tokens.append(savedir.name or "bcm_gsea_results")
+        tokens.append(savedir.name or "tackle2_results")
 
     parent_name = savedir.parent.name
     if parent_name and parent_name not in ("", tokens[0]):
@@ -215,7 +215,7 @@ def _compose_export_stem(
     sanitized = [_sanitize_token(token) for token in tokens if token]
     sanitized = [token for token in sanitized if token]
     if not sanitized:
-        return "bcm_gsea_export"
+        return "tackle2_export"
     return "_".join(sanitized)
 
 
@@ -423,9 +423,9 @@ def package_results(
 
     version = "unknown"
     try:
-        version = importlib_metadata.version("bcm-gsea")
+        version = importlib_metadata.version("tackle2")
     except importlib_metadata.PackageNotFoundError:  # pragma: no cover
-        logger.debug("bcm-gsea package metadata not found; using 'unknown'")
+        logger.debug("tackle2 package metadata not found; using 'unknown'")
 
     total_size = sum(rec.size_bytes for rec in records)
 
