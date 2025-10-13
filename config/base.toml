@@ -1,9 +1,10 @@
 [params]
-ranks_from = ""  # choices are volcano and gct. must specify this
+ranks_from = ""  # choices are volcano, gct, or model. must specify this
 savedir = '' # this is the base directory all results will be saved within. paths are relative from where program is executed
 volcanodir = '' # use single quote for specifying paths
 rankfiledir = "savedir" # "savedir" special character string indicating to save rankfiles within the specified savedir
 gct_path = ''
+model_file = ""  # optional external TOML file containing a [model] block when ranks_from = "model"
 species = "Homo sapiens"  # Mus musculus, ..
 zscore_emat = true
 zscore_emat_groupby = false # change this to a metadata variable to zscore within. otherwise leave false
@@ -116,6 +117,11 @@ category = "C7"
 subcategory = "IMMUNESIGDB"
 collapse = true
 
+
+[params.model]
+type = "limma"
+design = ""  # e.g. "~ 0 + treat" or "~ scale(ERBB2)"
+contrasts = []  # e.g. ["treatDrug - treatControl", "MvF = (treatDrugsexMale + treatControlsexMale)/2 - (treatDrugsexFemale + treatControlsexFemale)/2"]
 
 
 [params.advanced]

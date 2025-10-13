@@ -26,15 +26,22 @@ $ tackle2 describe params.bubbleplot --json
 
 ## params
 
-- `ranks_from` (string, default `""`): Data source, `"volcano"` or `"gct"`.
+- `ranks_from` (string, default `""`): Data source, `"volcano"`, `"gct"`, or `"model"`.
 - `savedir` (string, default `./plots`): Root output directory (resolved relative to run cwd).
 - `volcanodir` (string): Folder containing volcano TSV files (required when `ranks_from = "volcano"`).
 - `rankfiledir` (string, default `"savedir"`): Where generated rank files are written; special value `"savedir"` puts them under `savedir/ranks`.
 - `gct_path` (string): Path to GCT file (required when `ranks_from = "gct"`).
+- `model_file` (string, default `""`): Path to a TOML file containing a `[model]` table (optional helper when `ranks_from = "model"`).
 - `species` (string, default `"Homo sapiens"`): Species name passed to msigdbr.
 - `zscore_emat` (bool, default `true`): Z-score expression matrix before analysis.
 - `zscore_emat_groupby` (string/bool, default `false`): Grouping column for Z-score normalisation.
 - `cut_by` (string, default `"group"`): Metadata column controlling chart faceting.
+  
+### params.model
+
+- `type` (string, default `"limma"`): Modelling backend used to generate rank files when `ranks_from = "model"`.
+- `design` (string): R formula describing the model matrix (for example `~ 0 + treat`).
+- `contrasts` (array of strings, default `[]`): Optional limma contrast expressions; entries may be unnamed (`"treatDrug - treatControl"`) or named (`"MvF = ..."`). When empty each design coefficient is exported.
 
 ## params.barplot
 

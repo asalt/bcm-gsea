@@ -99,6 +99,28 @@ clean_args <- function(params, root_dir = "/") {
     stop(paste0(params$gct_path, " does not exist, exiting.."))
   }
 
+  params$model_file <- params$model_file %||% ""
+  if (!is.null(params$model_file) && nzchar(params$model_file)) {
+    model_path <- file.path(root_dir, params$model_file)
+    if (!file.exists(model_path)) {
+      stop(paste0("Model file does not exist: ", model_path))
+    }
+    model_toml <- RcppTOML::parseTOML(model_path)
+    file_model <- model_toml$model %||% model_toml$Model %||% model_toml
+    params$model <- modifyList(file_model %||% list(), params$model %||% list())
+    params$model_file <- model_path
+  } else {
+    params$model_file <- NULL
+  }
+
+  params$model <- params$model %||% list()
+  params$model$type <- params$model$type %||% "limma"
+  params$model$design <- params$model$design %||% ""
+  params$model$contrasts <- params$model$contrasts %||% list()
+  if (is.character(params$model$contrasts)) {
+    params$model$contrasts <- as.list(params$model$contrasts)
+  }
+
   params$advanced$cache <- params$advanced$cache %||% TRUE
 
   # print(params$enplot$combine_by)
@@ -186,6 +208,15 @@ clean_args <- function(params, root_dir = "/") {
       }
     } else {
       log_msg(warning = paste0("colormap file not found: ", full_cmap_path))
+    }
+  }
+
+  if (identical(params$ranks_from, "model")) {
+    if (is.null(params$gct_path)) {
+      stop("params$gct_path must be provided when ranks_from = 'model'")
+    }
+    if (is.null(params$model$design) || !nzchar(params$model$design)) {
+      stop("params$model$design must be provided when ranks_from = 'model'")
     }
   }
 

@@ -13,6 +13,8 @@ suppressPackageStartupMessages(library(here))
 src_dir <- file.path(here("R"))
 io_tools <- new.env()
 source(file.path(src_dir, "./io.R"), local = io_tools)
+model_tools <- new.env()
+source(file.path(src_dir, "./modeling.R"), local = model_tools)
 
 test_that("ranks_dfs_to_lists returns correct list structure and naming", {
   # Create sample data frames
@@ -69,18 +71,17 @@ test_that("create_rnkfiles_from_volcano processes files rename", {
 
     # Test the function
     result <- io_tools$create_rnkfiles_from_volcano("volcano_test", id_col = "GeneID", value_col = "Value")
-    expect_true("test1" %in% names(result))
-    expect_true("test2" %in% names(result))
-    expect_equal(nrow(result[["test1"]]), 2)
-    expect_equal(nrow(result[["test2"]]), 2)
-    expect_true("value" %in% colnames(result[["test1"]]))
+    expect_true(stringr::str_detect(names(result), "test1") %>% any())
+    expect_true(stringr::str_detect(names(result), "test2") %>% any())
 
+    name1 <- names(result)[stringr::str_detect(names(result), "test1")][1]
+    name2 <- names(result)[stringr::str_detect(names(result), "test2")][1]
 
-    expect_true("id" %in% colnames(result[["test1"]]),
-      info = paste0(
-        colnames(result[["test1"]]) %>% as.character()
-      )
-    )
+    expect_false(is.na(name1))
+    expect_false(is.na(name2))
+    expect_equal(nrow(result[[name1]]), 2)
+    expect_equal(nrow(result[[name2]]), 2)
+    expect_true(all(c("id", "value") %in% colnames(result[[name1]])))
   })
 })
 
@@ -207,5 +208,49 @@ test_that("create_rnkfiles_from_gct object", {
     expect_true(all(means2 < .1), info = paste0("Means1: ", means1, " Means2: ", means2))
 
     # Check if the resulting object is a GCT class
+  })
+})
+
+test_that("create_rnkfiles_from_model fits limma contrasts", {
+  withr::with_tempdir({
+    gct <- io_tools$make_random_gct(12, 6)
+    gct@cdesc$group <- rep(c("Control", "Drug"), length.out = ncol(gct@mat))
+    gct@rid <- paste0("Gene", seq_len(nrow(gct@mat)))
+    gct@rdesc$id <- gct@rid
+    gct@rdesc$rdesc <- gct@rid
+    gct@rdesc$symbol <- gct@rid
+
+    gct_path <- file.path(getwd(), "model_test.gct")
+    cmapR::write_gct(gct, gct_path, appenddim = FALSE)
+
+    model_spec <- list(
+      type = "limma",
+      design = "~ 0 + group",
+      contrasts = list("groupDrug - groupControl")
+    )
+    rnkdfs <- model_tools$create_rnkfiles_from_model(
+      gct_path = gct_path,
+      model_spec = model_spec
+    )
+    expect_type(rnkdfs, "list")
+    expect_equal(length(rnkdfs), 1)
+    df <- rnkdfs[[1]]
+    expect_true(all(c("id", "value") %in% colnames(df)))
+    expect_gt(nrow(df), 0)
+    expect_false(anyNA(df$value))
+
+    expression_spec <- list(
+      type = "limma",
+      design = "~ scale(Gene1)"
+    )
+    rnk_expr <- model_tools$create_rnkfiles_from_model(
+      gct_path = gct_path,
+      model_spec = expression_spec
+    )
+    expect_true(length(rnk_expr) >= 1)
+    target_name <- names(rnk_expr)[stringr::str_detect(names(rnk_expr), "scaleGene1")][1]
+    expect_false(is.na(target_name))
+    expect_gt(nrow(rnk_expr[[target_name]]), 0)
+    expect_true(all(is.finite(rnk_expr[[target_name]]$value)))
   })
 })

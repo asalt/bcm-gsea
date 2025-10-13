@@ -2,7 +2,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from python.cli import main
+from python.cli import APP_NAME, main
 
 
 def test_get_config_creates_default_files():
@@ -12,7 +12,7 @@ def test_get_config_creates_default_files():
         assert result.exit_code == 0
         assert "Writing" in result.output
         assert "done" in result.output
-        assert (Path("bcm-gsea.toml")).exists()
+        assert (Path(f"{APP_NAME}.toml")).exists()
 
 
 def test_get_config_with_colormap():

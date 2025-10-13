@@ -290,12 +290,23 @@ class AdvancedConfig(ConfigSection):
     }
 
 
+class ModelConfig(ConfigSection):
+    """Model definition for ranks_from='model'."""
+
+    __fields__ = {
+        "type": FieldMeta(str, "limma", "Backend used to generate ranks (currently only 'limma')."),
+        "design": FieldMeta(str, "", "R formula describing the model matrix."),
+        "contrasts": FieldMeta(List[str], list, "Limma contrast strings; optionally name=expression."),
+    }
+
+
 class ParamsConfig(ConfigSection):
     """Top-level configuration controlling inputs and plotting."""
 
     class RankSource(str, Enum):
         VOLCANO = "volcano"
         GCT = "gct"
+        MODEL = "model"
 
     __fields__ = {
         "ranks_from": enum_field(
@@ -308,6 +319,7 @@ class ParamsConfig(ConfigSection):
         "volcanodir": FieldMeta(str, "", "Directory containing volcano TSV files."),
         "rankfiledir": FieldMeta(str, "savedir", "Where generated rank files are written; 'savedir' creates savedir/ranks."),
         "gct_path": FieldMeta(str, "", "Path to GCT file when ranks_from='gct'."),
+        "model_file": FieldMeta(str, "", "External TOML file containing a [model] block (optional)."),
         "species": FieldMeta(str, "Homo sapiens", "Species name passed to msigdbr."),
         "zscore_emat": FieldMeta(bool, True, "Whether to z-score the expression matrix."),
         "zscore_emat_groupby": FieldMeta(Union[str, bool], False, "Metadata column to group by during z-score normalisation (or false)."),
@@ -324,6 +336,7 @@ class ParamsConfig(ConfigSection):
         "pca": PCAConfig,
         "extra": ExtraConfig,
         "advanced": AdvancedConfig,
+        "model": ModelConfig,
     }
 
 

@@ -19,7 +19,7 @@ def test_describe_section_root_and_nested():
     root = config_schema.describe_section()
     assert root.path == "params"
     ranks_field = next(field for field in root.fields if field.name == "ranks_from")
-    assert "volcano" in (ranks_field.choices or [])
+    assert {"volcano", "gct", "model"}.issubset(set(ranks_field.choices or []))
 
     bubble = config_schema.describe_section("params.bubbleplot")
     bubble_fields = {field.name for field in bubble.fields}

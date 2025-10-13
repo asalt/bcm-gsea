@@ -19,6 +19,7 @@ util_tools <- get_tool_env("utils")
 # map_tools <- new.env()
 # source(file.path(here("R"), "./map.R"), local = map_tools)
 map_tools <- get_tool_env("map")
+model_tools <- get_tool_env("modeling")
 
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
@@ -492,6 +493,25 @@ load_and_process_ranks <- function(params) {
     log_msg(msg = "couldn't find any previously saved rnkfiles")
   }
   # ==
+  if (ranks_from == "model") {
+    if (is.null(gct_path) || !nzchar(gct_path)) {
+      stop("gct_path must be provided when ranks_from = 'model'")
+    }
+    log_msg(info = "Generating rank files from limma model specification")
+    rnkdfs <- model_tools$create_rnkfiles_from_model(
+      gct_path = gct_path,
+      model_spec = params$model,
+      sample_exclude = sample_exclude,
+      exclude_samples_from_data = exclude_samples_from_data
+    )
+    if (length(rnkdfs) == 0) {
+      stop("Model specification yielded no contrasts to export.")
+    }
+    rnkdfs %>% write_rnkfiles(dir = rankfiledir)
+    log_msg(msg = paste0("length of retrieved rankfiles: ", length(rnkdfs)))
+    ranks_list <- rnkdfs %>% ranks_dfs_to_lists()
+    return(ranks_list)
+  }
   if (ranks_from == "volcano") {
     if (is.null(volcanodir) || !file.exists(volcanodir)) {
       stop(paste0("improper volcanodir specification: ", volcanodir))

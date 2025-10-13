@@ -13,14 +13,14 @@ output:
     css: "custom.css"
 params:
   volcanodir: "/mnt/e/MSPC001161/results/MSPC001161_20240815/volcano/"
-  rankfiledir: "/mnt/e/MSPC001161/results/bcm_gsea_linregres/rnkfiles/"
+  rankfiledir: "/mnt/e/MSPC001161/results/tackle2_linregres/rnkfiles/"
   #gct_path: "../results/MSPC001128/export/MSPC001128_data_gct_all_1.0more_nonzero_normtype_median_n6x2995.gct"
   gct_path: "/mnt/e/MSPC001161/results/MSPC001161_20240815/export/MSPC001161_20240815_data_gct_all_0.66more_nonzero_normtype_median_n13x3317.gct"
   cut_by: none
   # ranks_from: "volcano"  # choices are volcano and gct
   ranks_from: "volcano"  # choices are volcano and gct
   species: "Rattus norvegicus"	
-  savedir: "/mnt/e/MSPC001161/results/bcm_gsea_linregres"
+  savedir: "/mnt/e/MSPC001161/results/tackle2_linregres"
   genesets_json: >
     [
       {"category": "H", "subcategory": "", "collapse" : "FALSE"},
@@ -110,7 +110,7 @@ save_func <- util_tools$make_partial(
 
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 # log_message <- make_partial(util_tools$log_message)
-log_msg(msg = paste0("===\n*starting bcm gsea*\n==="))
+log_msg(msg = paste0("===\n*starting tackle2*\n==="))
 
 TESTING <- FALSE
 ```

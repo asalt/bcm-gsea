@@ -1,0 +1,14 @@
+[model]
+# Model definitions used when params.ranks_from = "model".
+type = "limma"
+# Any valid R formula referencing sample metadata columns (and optionally expression features).
+design = "~ 0 + treat"
+contrasts = [
+  # Unnamed contrasts use the expression to derive a filename-friendly label.
+  "treatDrug - treatControl",
+  # Named contrasts help keep filenames succinct.
+  "treatMale = (treatDrugsexMale - treatControlsexMale)",
+  "treatMvF = (treatDrugsexMale - treatDrugsexFemale)",
+  # Expressions can also average groups.
+  "MvF = (treatDrugsexMale + treatControlsexMale)/2 - (treatDrugsexFemale + treatControlsexFemale)/2",
+]
