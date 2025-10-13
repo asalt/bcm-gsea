@@ -165,6 +165,24 @@ clean_args <- function(params, root_dir = "/") {
 
   print(str(params))
 
+  # Optional user-provided color map file (CSV/TSV) for categorical annotations
+  # Recognized keys: params$extra$colormap_file, params$extra$cmap_file,
+  #                  params$advanced$colormap_file, params$advanced$cmap_file
+  user_cmap_path <- params$extra$colormap_file %||% params$extra$cmap_file %||%
+    params$advanced$colormap_file %||% params$advanced$cmap_file
+  if (!is.null(user_cmap_path) && nzchar(user_cmap_path)) {
+    full_cmap_path <- file.path(root_dir, user_cmap_path)
+    if (file.exists(full_cmap_path)) {
+      cmap <- load_user_colormap(full_cmap_path)
+      if (!is.null(cmap)) {
+        options("bcm_gsea_user_colormap" = cmap)
+        log_msg(info = paste0("loaded user colormap from ", full_cmap_path))
+      }
+    } else {
+      log_msg(warning = paste0("colormap file not found: ", full_cmap_path))
+    }
+  }
+
   return(params)
 }
 
@@ -778,4 +796,221 @@ process_cut_by <- function(cut_by, cdesc) {
   print(cut_by_factor)
 
   return(cut_by_factor)
+}
+
+
+# ===================== User colormap support =====================
+
+.is_valid_hex <- function(x) {
+  if (is.na(x) || !nzchar(x)) return(FALSE)
+  grepl("^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$", x)
+}
+
+.normalize_color <- function(x) {
+  if (is.na(x) || !nzchar(x)) return(NA_character_)
+  x <- trimws(as.character(x))
+  if (.is_valid_hex(x)) return(toupper(x))
+  # try to convert named colors to hex
+  to_hex <- tryCatch({
+    rgb <- grDevices::col2rgb(x)
+    sprintf("#%02X%02X%02X", rgb[1, 1], rgb[2, 1], rgb[3, 1])
+  }, error = function(e) NA_character_)
+  if (.is_valid_hex(to_hex)) return(toupper(to_hex))
+  NA_character_
+}
+
+# load_user_colormap
+# Accepts a CSV/TSV with either:
+#  - 2 columns: name,color
+#  - 3 columns: column,name,color (applies only to the given metadata column)
+# Header names are flexible: column/col/field | name/value/level | color/hex
+# Lines starting with '#' are ignored.
+load_user_colormap_tabular <- function(path) {
+  # Helper to try different separators/headers
+  parse_with <- function(sep, header) {
+    utils::read.table(
+      file = path,
+      sep = sep,
+      header = header,
+      stringsAsFactors = FALSE,
+      comment.char = "#",
+      quote = "\"",
+      strip.white = TRUE,
+      fill = TRUE
+    )
+  }
+
+  df <- NULL
+  # Try TSV/CSV with and without headers
+  specs <- list(
+    list("\t", TRUE), list(",", TRUE),
+    list("\t", FALSE), list(",", FALSE)
+  )
+  for (sp in specs) {
+    df <- tryCatch(parse_with(sp[[1]], sp[[2]]), error = function(e) NULL)
+    if (!is.null(df) && ncol(df) %in% c(2L, 3L)) break
+  }
+
+  if (is.null(df) || !(ncol(df) %in% c(2L, 3L))) {
+    log_msg(warning = paste0("failed to parse colormap file (expected 2 or 3 columns): ", path))
+    return(NULL)
+  }
+
+  # Normalize to lower-case names if present
+  cn <- tolower(colnames(df))
+  if (ncol(df) == 3L) {
+    # Map to column,name,color
+    idx_col   <- which(cn %in% c("column", "col", "field"))
+    idx_name  <- which(cn %in% c("name", "value", "level"))
+    idx_color <- which(cn %in% c("color", "colour", "hex"))
+    if (length(idx_col) == 0L || length(idx_name) == 0L || length(idx_color) == 0L) {
+      idx_col <- 1L; idx_name <- 2L; idx_color <- 3L
+    }
+    sel <- c(idx_col[1], idx_name[1], idx_color[1])
+    df <- df[, sel, drop = FALSE]
+    colnames(df) <- c("column", "name", "color")
+  } else {
+    # 2-column: name,color
+    if (length(cn) >= 2L && all(c("name", "color") %in% cn)) {
+      name_idx  <- which(cn == "name")[1]
+      color_idx <- which(cn %in% c("color", "hex"))[1]
+      df <- df[, c(name_idx, color_idx), drop = FALSE]
+    } else if (length(cn) >= 2L && all(c("value", "hex") %in% cn)) {
+      df <- df[, c(which(cn == "value")[1], which(cn == "hex")[1]), drop = FALSE]
+    } else {
+      df <- df[, 1:2, drop = FALSE]
+    }
+    colnames(df) <- c("name", "color")
+  }
+
+  # Clean/validate
+  df$name  <- trimws(as.character(df$name))
+  df$color <- vapply(df$color, .normalize_color, character(1))
+  df <- df[nzchar(df$name) & !is.na(df$color), , drop = FALSE]
+
+  # Build result mapping
+  mapping <- list(global = character(0), by_column = list())
+  if (ncol(df) == 2L) {
+    keep <- !duplicated(df$name)
+    mapping$global <- stats::setNames(df$color[keep], df$name[keep])
+  } else {
+    df$column <- trimws(as.character(df$column))
+    df <- df[nzchar(df$column), , drop = FALSE]
+    split_list <- split(df, df$column)
+    mapping$by_column <- lapply(split_list, function(d) {
+      keep <- !duplicated(d$name)
+      stats::setNames(d$color[keep], d$name[keep])
+    })
+  }
+
+  mapping
+}
+
+# JSON loader: supports either
+# 1) {"global": {name: color, ...}, "by_column": { column: {name: color, ...}, ... }}
+# 2) {name: color, ...}  (treated as global)
+# 3) [ {column?: string, name: string, color: string}, ... ]
+load_user_colormap_json <- function(path) {
+  obj <- tryCatch(jsonlite::fromJSON(path, simplifyVector = FALSE), error = function(e) NULL)
+  if (is.null(obj)) {
+    log_msg(warning = paste0("failed to parse colormap JSON: ", path))
+    return(NULL)
+  }
+
+  mapping <- list(global = character(0), by_column = list())
+
+  # Case 1: object with global/by_column
+  if (is.list(obj) && !is.null(names(obj))) {
+    nm <- tolower(names(obj))
+    if ("global" %in% nm || "by_column" %in% nm) {
+      # global
+      if ("global" %in% nm) {
+        g <- obj[[which(nm == "global")[1]]]
+        if (is.list(g) && !is.null(names(g))) {
+          names_vec <- names(g)
+          cols_vec <- vapply(g, .normalize_color, character(1))
+          keep <- nzchar(names_vec) & !is.na(cols_vec)
+          mapping$global <- setNames(cols_vec[keep], names_vec[keep])
+        }
+      }
+      # by_column
+      if ("by_column" %in% nm) {
+        bc <- obj[[which(nm == "by_column")[1]]]
+        if (is.list(bc) && !is.null(names(bc))) {
+          for (colname in names(bc)) {
+            if (!nzchar(colname)) next
+            m <- bc[[colname]]
+            if (is.list(m) && !is.null(names(m))) {
+              nms <- names(m)
+              cols <- vapply(m, .normalize_color, character(1))
+              keep <- nzchar(nms) & !is.na(cols)
+              mapping$by_column[[colname]] <- setNames(cols[keep], nms[keep])
+            }
+          }
+        }
+      }
+      return(mapping)
+    }
+    # Case 2: object with name:color pairs (global)
+    if (length(obj) > 0 && all(vapply(obj, is.character, logical(1)))) {
+      names_vec <- names(obj)
+      cols_vec <- vapply(obj, .normalize_color, character(1))
+      keep <- nzchar(names_vec) & !is.na(cols_vec)
+      mapping$global <- setNames(cols_vec[keep], names_vec[keep])
+      return(mapping)
+    }
+  }
+
+  # Case 3: array of records
+  if (is.list(obj) && is.null(names(obj))) {
+    entries <- obj
+    # each entry expected to be list with name/color and optional column
+    for (e in entries) {
+      if (!is.list(e)) next
+      n <- e[["name"]] %||% e[["value"]] %||% e[["level"]]
+      col <- e[["color"]] %||% e[["hex"]]
+      colname <- e[["column"]] %||% e[["col"]] %||% e[["field"]]
+      n <- if (is.null(n)) NA_character_ else as.character(n)
+      col <- .normalize_color(col)
+      if (is.null(colname)) {
+        if (!is.na(n) && !is.na(col)) {
+          if (is.null(mapping$global[[n]])) mapping$global[[n]] <- col
+        }
+      } else {
+        colname <- as.character(colname)
+        if (!nzchar(colname)) next
+        if (!is.na(n) && !is.na(col)) {
+          if (is.null(mapping$by_column[[colname]])) mapping$by_column[[colname]] <- character(0)
+          if (is.null(mapping$by_column[[colname]][[n]])) mapping$by_column[[colname]][[n]] <- col
+        }
+      }
+    }
+    return(mapping)
+  }
+
+  log_msg(warning = paste0("unrecognized JSON structure in colormap: ", path))
+  NULL
+}
+
+# Wrapper that chooses JSON vs tabular parser
+load_user_colormap <- function(path) {
+  ext <- tolower(fs::path_ext(path))
+  # Prefer JSON if extension suggests it, otherwise sniff first non-space char
+  if (ext == "json") {
+    return(load_user_colormap_json(path))
+  }
+  # sniff
+  first <- tryCatch({
+    con <- file(path, "r"); on.exit(close(con))
+    repeat {
+      line <- readLines(con, n = 1, warn = FALSE)
+      if (length(line) == 0) break
+      trimmed <- trimws(line)
+      if (nzchar(trimmed) && substr(trimmed, 1, 1) != "#") {
+        return(if (grepl("^[\\[{]", trimmed)) load_user_colormap_json(path) else load_user_colormap_tabular(path))
+      }
+    }
+    load_user_colormap_tabular(path)
+  }, error = function(e) load_user_colormap_tabular(path))
+  first
 }
