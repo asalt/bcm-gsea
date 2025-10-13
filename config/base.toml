@@ -5,6 +5,7 @@ volcanodir = '' # use single quote for specifying paths
 rankfiledir = "savedir" # "savedir" special character string indicating to save rankfiles within the specified savedir
 gct_path = ''
 model_file = ""  # optional external TOML file containing a [model] block when ranks_from = "model"
+models = []  # optional inline array of model definitions when running multiple limma models
 species = "Homo sapiens"  # Mus musculus, ..
 zscore_emat = true
 zscore_emat_groupby = false # change this to a metadata variable to zscore within. otherwise leave false
@@ -119,10 +120,17 @@ collapse = true
 
 
 [params.model]
+name = "primary"
 type = "limma"
 design = ""  # e.g. "~ 0 + treat" or "~ scale(ERBB2)"
 contrasts = []  # e.g. ["treatDrug - treatControl", "MvF = (treatDrugsexMale + treatControlsexMale)/2 - (treatDrugsexFemale + treatControlsexFemale)/2"]
 
+
+# [[params.models]]
+# name = "secondary"
+# type = "limma"
+# design = "~ 0 + treat:sex"
+# contrasts = ["treatMale = treatDrugsexMale - treatControlsexMale"]
 
 [params.advanced]
 parallel = true

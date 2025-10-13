@@ -497,16 +497,43 @@ load_and_process_ranks <- function(params) {
     if (is.null(gct_path) || !nzchar(gct_path)) {
       stop("gct_path must be provided when ranks_from = 'model'")
     }
-    log_msg(info = "Generating rank files from limma model specification")
-    rnkdfs <- model_tools$create_rnkfiles_from_model(
-      gct_path = gct_path,
-      model_spec = params$model,
-      sample_exclude = sample_exclude,
-      exclude_samples_from_data = exclude_samples_from_data
-    )
-    if (length(rnkdfs) == 0) {
-      stop("Model specification yielded no contrasts to export.")
+    model_specs <- params$models %||% list()
+    if (length(model_specs) == 0) {
+      model_specs <- list(params$model %||% list())
     }
+    replace_outputs <- params$advanced$replace %||% FALSE
+    rnkdfs <- list()
+
+    for (idx in seq_along(model_specs)) {
+      spec <- model_specs[[idx]]
+      model_name <- spec$name %||% paste0("model", idx)
+      model_type <- tolower(spec$type %||% "limma")
+      model_dir <- file.path(
+        params$savedir,
+        "model",
+        model_type,
+        util_tools$safe_path_component(model_name, max_chars = 60)
+      )
+      log_msg(info = paste0("Generating rank files from model ", model_name, " (", model_type, ")"))
+      spec_ranks <- model_tools$create_rnkfiles_from_model(
+        gct_path = gct_path,
+        model_spec = spec,
+        sample_exclude = sample_exclude,
+        exclude_samples_from_data = exclude_samples_from_data,
+        output_dir = model_dir,
+        replace = replace_outputs,
+        model_index = idx
+      )
+      if (length(spec_ranks) == 0) {
+        next
+      }
+      rnkdfs <- c(rnkdfs, spec_ranks)
+    }
+
+    if (length(rnkdfs) == 0) {
+      stop("Model specifications yielded no contrasts to export.")
+    }
+
     rnkdfs %>% write_rnkfiles(dir = rankfiledir)
     log_msg(msg = paste0("length of retrieved rankfiles: ", length(rnkdfs)))
     ranks_list <- rnkdfs %>% ranks_dfs_to_lists()

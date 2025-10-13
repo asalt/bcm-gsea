@@ -100,25 +100,63 @@ clean_args <- function(params, root_dir = "/") {
   }
 
   params$model_file <- params$model_file %||% ""
-  if (!is.null(params$model_file) && nzchar(params$model_file)) {
-    model_path <- file.path(root_dir, params$model_file)
-    if (!file.exists(model_path)) {
-      stop(paste0("Model file does not exist: ", model_path))
+  global_model_file <- params$model_file
+
+  load_model_spec <- function(path) {
+    if (!file.exists(path)) {
+      stop(paste0("Model file does not exist: ", path))
     }
-    model_toml <- RcppTOML::parseTOML(model_path)
-    file_model <- model_toml$model %||% model_toml$Model %||% model_toml
-    params$model <- modifyList(file_model %||% list(), params$model %||% list())
-    params$model_file <- model_path
-  } else {
-    params$model_file <- NULL
+    model_toml <- RcppTOML::parseTOML(path)
+    model_toml$model %||% model_toml$Model %||% model_toml
   }
 
-  params$model <- params$model %||% list()
-  params$model$type <- params$model$type %||% "limma"
-  params$model$design <- params$model$design %||% ""
-  params$model$contrasts <- params$model$contrasts %||% list()
-  if (is.character(params$model$contrasts)) {
-    params$model$contrasts <- as.list(params$model$contrasts)
+  raw_models <- list()
+  if (!is.null(params$model) && length(params$model) > 0) {
+    raw_models <- c(raw_models, list(params$model))
+  }
+  if (!is.null(params$models) && length(params$models) > 0) {
+    if (!is.list(params$models)) {
+      stop("params$models must be a list of model definitions")
+    }
+    raw_models <- c(raw_models, params$models)
+  }
+  if (length(raw_models) == 0) {
+    raw_models <- list(list())
+  }
+
+  normalized_models <- vector("list", length(raw_models))
+  for (idx in seq_along(raw_models)) {
+    spec <- raw_models[[idx]]
+    if (is.null(spec) || (is.list(spec) && length(spec) == 0)) {
+      spec <- list()
+    }
+
+    spec_model_file <- spec$model_file %||% global_model_file
+    if (!is.null(spec_model_file) && nzchar(spec_model_file)) {
+      model_path <- file.path(root_dir, spec_model_file)
+      file_model <- load_model_spec(model_path)
+      spec <- modifyList(file_model %||% list(), spec)
+      spec$model_file <- model_path
+    } else {
+      spec$model_file <- NULL
+    }
+
+    spec$type <- spec$type %||% "limma"
+    spec$design <- spec$design %||% ""
+    spec$contrasts <- spec$contrasts %||% list()
+    if (is.character(spec$contrasts)) {
+      spec$contrasts <- as.list(spec$contrasts)
+    }
+    spec$name <- spec$name %||% spec$label %||% paste0("model", idx)
+    normalized_models[[idx]] <- spec
+  }
+
+  params$models <- normalized_models
+  params$model <- normalized_models[[1]]
+  if (!is.null(global_model_file) && nzchar(global_model_file)) {
+    params$model_file <- file.path(root_dir, global_model_file)
+  } else {
+    params$model_file <- NULL
   }
 
   params$advanced$cache <- params$advanced$cache %||% TRUE

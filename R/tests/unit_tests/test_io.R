@@ -224,13 +224,16 @@ test_that("create_rnkfiles_from_model fits limma contrasts", {
     cmapR::write_gct(gct, gct_path, appenddim = FALSE)
 
     model_spec <- list(
+      name = "demo",
       type = "limma",
       design = "~ 0 + group",
       contrasts = list("groupDrug - groupControl")
     )
+    output_dir <- file.path(getwd(), "model", "limma", "demo")
     rnkdfs <- model_tools$create_rnkfiles_from_model(
       gct_path = gct_path,
-      model_spec = model_spec
+      model_spec = model_spec,
+      output_dir = output_dir
     )
     expect_type(rnkdfs, "list")
     expect_equal(length(rnkdfs), 1)
@@ -238,19 +241,28 @@ test_that("create_rnkfiles_from_model fits limma contrasts", {
     expect_true(all(c("id", "value") %in% colnames(df)))
     expect_gt(nrow(df), 0)
     expect_false(anyNA(df$value))
+    expect_true(fs::dir_exists(file.path(output_dir, "tables")))
+    expect_true(fs::dir_exists(file.path(output_dir, "volcano")))
+    expect_true(fs::dir_exists(file.path(output_dir, "volcano_plots")))
 
     expression_spec <- list(
+      name = "expression",
       type = "limma",
       design = "~ scale(Gene1)"
     )
+    expr_dir <- file.path(getwd(), "model", "limma", "expression")
     rnk_expr <- model_tools$create_rnkfiles_from_model(
       gct_path = gct_path,
-      model_spec = expression_spec
+      model_spec = expression_spec,
+      output_dir = expr_dir
     )
     expect_true(length(rnk_expr) >= 1)
     target_name <- names(rnk_expr)[stringr::str_detect(names(rnk_expr), "scaleGene1")][1]
     expect_false(is.na(target_name))
     expect_gt(nrow(rnk_expr[[target_name]]), 0)
     expect_true(all(is.finite(rnk_expr[[target_name]]$value)))
+    expect_true(fs::dir_exists(file.path(expr_dir, "tables")))
+    expect_true(fs::dir_exists(file.path(expr_dir, "volcano")))
+    expect_true(fs::dir_exists(file.path(expr_dir, "volcano_plots")))
   })
 })

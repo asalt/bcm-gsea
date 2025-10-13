@@ -1,5 +1,6 @@
 [model]
 # Model definitions used when params.ranks_from = "model".
+name = "demo"
 type = "limma"
 # Any valid R formula referencing sample metadata columns (and optionally expression features).
 design = "~ 0 + treat"

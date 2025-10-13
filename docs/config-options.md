@@ -39,9 +39,15 @@ $ tackle2 describe params.bubbleplot --json
   
 ### params.model
 
+- `name` (string, default `"model1"`): Identifier used to label outputs under `model/<type>/<name>/`.
 - `type` (string, default `"limma"`): Modelling backend used to generate rank files when `ranks_from = "model"`.
 - `design` (string): R formula describing the model matrix (for example `~ 0 + treat`).
-- `contrasts` (array of strings, default `[]`): Optional limma contrast expressions; entries may be unnamed (`"treatDrug - treatControl"`) or named (`"MvF = ..."`). When empty each design coefficient is exported.
+- `contrasts` (array of strings, default `[]`): Optional limma contrast expressions; entries may be unnamed (`"treatDrug - treatControl"`) or named (`"MvF = ..."`). When empty, all non-intercept coefficients are exported.
+
+### params.models
+
+An optional array of additional model tables. Each entry accepts the same keys as `params.model` (`name`, `type`, `design`, `contrasts`, `model_file`). When both `params.model` and `params.models` are provided, all models are executed and their ranks concatenated.
+Generated limma summaries, volcano-ready tables, and PDF plots are stored under `savedir/model/<type>/<name>/` inside `tables/`, `volcano/`, and `volcano_plots/`.
 
 ## params.barplot
 

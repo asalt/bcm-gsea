@@ -1,5 +1,8 @@
 suppressPackageStartupMessages(library(here))
+suppressPackageStartupMessages(library(fs))
+suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(limma))
+suppressPackageStartupMessages(library(readr))
 suppressPackageStartupMessages(library(rlang))
 suppressPackageStartupMessages(library(splines))
 
@@ -117,7 +120,10 @@ create_rnkfiles_from_model <- function(
     gct_path,
     model_spec,
     sample_exclude = NULL,
-    exclude_samples_from_data = FALSE) {
+    exclude_samples_from_data = FALSE,
+    output_dir = NULL,
+    replace = FALSE,
+    model_index = 1) {
   if (is.null(gct_path) || !nzchar(gct_path)) {
     stop("gct_path must be provided when ranks_from='model'")
   }
@@ -126,6 +132,8 @@ create_rnkfiles_from_model <- function(
   }
 
   spec <- model_spec %||% list()
+  model_name <- spec$name %||% paste0("model", model_index)
+  model_label <- model_name
   model_type <- tolower(spec$type %||% "limma")
   if (!identical(model_type, "limma")) {
     stop("Unsupported model type '", spec$type, "'. Currently only 'limma' is supported.")
@@ -240,12 +248,21 @@ create_rnkfiles_from_model <- function(
       )
     }
   } else {
-    contrast_defs <- lapply(seq_along(sanitized_terms), function(idx) {
+    is_intercept <- sanitized_terms %in% c("(Intercept)", "Intercept", "XIntercept", "X.Intercept.")
+    base_terms <- sanitized_terms[!is_intercept]
+    if (length(base_terms) == 0) {
+      base_terms <- sanitized_terms
+    }
+    if (length(base_terms) == 0) {
+      stop("Design matrix contains no estimable terms after removing intercept.")
+    }
+    contrast_defs <- lapply(seq_along(base_terms), function(idx) {
+      term <- base_terms[[idx]]
       list(
-        alias = sanitized_terms[[idx]],
-        expression = sanitized_terms[[idx]],
+        alias = term,
+        expression = term,
         file_stub = util_tools$safe_filename(
-          sanitized_terms[[idx]],
+          term,
           fallback = paste0("coef_", idx)
         )
       )
@@ -267,12 +284,34 @@ create_rnkfiles_from_model <- function(
     colnames(t_stats) <- vapply(contrast_defs, function(def) def$alias, character(1))
   }
 
+  prefix <- util_tools$safe_filename(model_name, fallback = paste0("model", model_index))
+
+  tables_dir <- NULL
+  volcano_data_dir <- NULL
+  volcano_plot_dir <- NULL
+  if (!is.null(output_dir)) {
+    tables_dir <- fs::path(output_dir, "tables")
+    volcano_data_dir <- fs::path(output_dir, "volcano")
+    volcano_plot_dir <- fs::path(output_dir, "volcano_plots")
+    fs::dir_create(tables_dir, recurse = TRUE)
+    fs::dir_create(volcano_data_dir, recurse = TRUE)
+    fs::dir_create(volcano_plot_dir, recurse = TRUE)
+  }
+
   output <- vector("list", length(contrast_defs))
-  names(output) <- vapply(contrast_defs, function(def) def$file_stub, character(1))
+  result_tables <- vector("list", length(contrast_defs))
+  volcano_tables <- vector("list", length(contrast_defs))
+
+  names(output) <- vapply(
+    contrast_defs,
+    function(def) util_tools$safe_filename(prefix, def$file_stub),
+    character(1)
+  )
 
   for (idx in seq_along(contrast_defs)) {
     alias <- contrast_defs[[idx]]$alias
     stub <- contrast_defs[[idx]]$file_stub
+    output_name <- names(output)[[idx]]
     if (!alias %in% colnames(t_stats)) {
       stop("Contrast '", alias, "' was not found in the fitted model output.")
     }
@@ -283,8 +322,66 @@ create_rnkfiles_from_model <- function(
       stringsAsFactors = FALSE
     )
     df <- df[is.finite(df$value), , drop = FALSE]
-    output[[stub]] <- df
+    output[[output_name]] <- df
+
+    top_table <- limma::topTable(
+      fit,
+      coef = alias,
+      number = Inf,
+      sort.by = "none"
+    )
+    top_table$GeneID <- rownames(top_table)
+    top_table <- top_table[, c("GeneID", setdiff(colnames(top_table), "GeneID"))]
+    result_tables[[idx]] <- top_table
+
+    volcano_df <- top_table
+    volcano_df$signedlogP <- sign(volcano_df$logFC) * -log10(pmax(volcano_df$P.Value, .Machine$double.eps))
+    volcano_df$neg_log10_p <- -log10(pmax(volcano_df$P.Value, .Machine$double.eps))
+    volcano_tables[[idx]] <- volcano_df
+
+    if (!is.null(tables_dir)) {
+      table_path <- fs::path(tables_dir, paste0(stub, ".tsv"))
+      if (replace || !fs::file_exists(table_path)) {
+        readr::write_tsv(top_table, table_path)
+      }
+
+      volcano_tsv <- fs::path(volcano_data_dir, paste0(stub, ".tsv"))
+      if (replace || !fs::file_exists(volcano_tsv)) {
+        readr::write_tsv(volcano_df, volcano_tsv)
+      }
+
+      volcano_pdf <- fs::path(volcano_plot_dir, paste0(stub, ".pdf"))
+      if (replace || !fs::file_exists(volcano_pdf)) {
+        volcano_df$significant <- volcano_df$`adj.P.Val` < 0.05
+        plot_title <- paste(model_label, alias, sep = " - ")
+        p <- ggplot2::ggplot(volcano_df, ggplot2::aes(x = logFC, y = neg_log10_p)) +
+          ggplot2::geom_point(
+            ggplot2::aes(color = significant),
+            alpha = 0.7,
+            size = 1.3,
+            na.rm = TRUE
+          ) +
+          ggplot2::scale_color_manual(
+            values = c("FALSE" = "#888888", "TRUE" = "#d73027"),
+            guide = "none"
+          ) +
+          ggplot2::geom_vline(xintercept = 0, linetype = "dashed", colour = "#bbbbbb") +
+          ggplot2::geom_hline(yintercept = -log10(0.05), linetype = "dashed", colour = "#bbbbbb") +
+          ggplot2::labs(
+            title = plot_title,
+            x = "log2 Fold Change",
+            y = "-log10(P value)"
+          ) +
+          ggplot2::theme_minimal(base_size = 11)
+        ggplot2::ggsave(filename = volcano_pdf, plot = p, width = 7.2, height = 5.0)
+      }
+    }
   }
+
+  attr(output, "tables") <- setNames(result_tables, names(output))
+  attr(output, "volcano") <- setNames(volcano_tables, names(output))
+  attr(output, "model_name") <- model_name
+  attr(output, "model_type") <- model_type
 
   output
 }
