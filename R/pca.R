@@ -616,6 +616,14 @@ run_gene_pca_pipeline <- function(gct, params, savedir, replace = TRUE) {
   }
   expr <- expr[keep_genes, , drop = FALSE]
 
+  expr_scaled <- t(scale(t(expr), center = TRUE, scale = TRUE))
+  expr_scaled <- as.matrix(expr_scaled)
+  mask_non_finite <- !is.finite(expr_scaled)
+  if (any(mask_non_finite)) {
+    log_msg(info = paste0("Gene PCA: replacing ", sum(mask_non_finite), " non-finite scaled values with 0."))
+    expr_scaled[mask_non_finite] <- 0
+  }
+
   metadata_colors <- params$metadata_color
   valid_colors <- metadata_colors[metadata_colors %in% colnames(metadata)]
   if (length(valid_colors) < length(metadata_colors)) {
@@ -636,10 +644,10 @@ run_gene_pca_pipeline <- function(gct, params, savedir, replace = TRUE) {
     metadata_shape <- NULL
   }
 
-  pca_res <- PCAtools::pca(expr,
+  pca_res <- PCAtools::pca(expr_scaled,
     metadata = metadata,
-    center = TRUE,
-    scale = TRUE
+    center = FALSE,
+    scale = FALSE
   )
 
   pc_count <- max(2, min(params$components, length(pca_res$components)))
