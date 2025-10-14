@@ -34,6 +34,17 @@
     </div>
   </section>
 
+  {% if collection_pages %}
+  <nav class="collection-nav">
+    <h2>Collection Pages</h2>
+    <ul>
+      {% for page in collection_pages %}
+      <li><a href="{{ page.href }}">{{ page.name }}</a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+  {% endif %}
+
   {% if plots %}
   <section>
     <h2>Plots</h2>
@@ -41,9 +52,9 @@
     <ul class="file-list plots">
       {% for plot in plots %}
       <li>
-        <a href="{{ plot.path.as_posix() }}">{{ plot.name }}</a>
+        <a href="{{ savedir_relprefix }}/{{ plot.path.as_posix() }}">{{ plot.name }}</a>
         {% if plot.preview %}
-        <div class="preview"><a href="{{ plot.path.as_posix() }}"><img src="{{ plot.preview }}" alt="Preview of {{ plot.name }}"></a></div>
+        <div class="preview"><a href="{{ savedir_relprefix }}/{{ plot.path.as_posix() }}"><img src="{{ plot.preview }}" alt="Preview of {{ plot.name }}"></a></div>
         {% endif %}
       </li>
       {% endfor %}
@@ -63,7 +74,7 @@
               <h4>{{ comparison.display_name }}</h4>
               <p class="meta">
                 {{ comparison.significant_pathways }} significant of {{ comparison.total_pathways }} pathways
-                · <a href="{{ comparison.relative_path.as_posix() }}">Download table</a>
+                · <a href="{{ savedir_relprefix }}/{{ comparison.relative_path.as_posix() }}">Download table</a>
               </p>
             </header>
             {% if comparison.top_pathways %}
@@ -107,7 +118,7 @@
     <h2>Logs &amp; Notes</h2>
     <ul class="file-list">
       {% for log in logs %}
-      <li><a href="{{ log.path.as_posix() }}">{{ log.name }}</a></li>
+      <li><a href="{{ savedir_relprefix }}/{{ log.path.as_posix() }}">{{ log.name }}</a></li>
       {% endfor %}
     </ul>
   </section>

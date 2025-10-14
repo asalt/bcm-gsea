@@ -66,6 +66,21 @@ def test_generate_report_end_to_end(tmp_path):
     html = index_path.read_text(encoding="utf-8")
     assert "tackle2 Summary" in html
     assert "HALLMARK" in html
+    assert "Collection Pages" in html
+
+    collection_dir = index_path.parent / "collections"
+    assert collection_dir.exists()
+    detail_pages = list(collection_dir.glob("*.html"))
+    assert detail_pages, "Expected at least one collection detail page"
+    detail_html = detail_pages[0].read_text(encoding="utf-8")
+    assert "Back to Summary" in detail_html
+
+    comparison_dirs = list(collection_dir.glob("*/"))
+    assert comparison_dirs, "Expected comparison subdirectories"
+    first_comparison = sorted((comparison_dirs[0]).glob("*.html"))
+    assert first_comparison, "Expected comparison detail pages"
+    comparison_html = first_comparison[0].read_text(encoding="utf-8")
+    assert "Back to" in comparison_html
 
 
 @pytest.mark.integration
@@ -81,6 +96,9 @@ def test_cli_report_command(tmp_path):
     assert "Report written to" in result.output
     index_path = tmp_path / "web" / "index.html"
     assert index_path.exists()
+    collection_dir = index_path.parent / "collections"
+    assert any(collection_dir.glob("*.html"))
+    assert any(collection_dir.glob("*/*.html"))
 
 
 def test_prepare_plot_previews_handles_errors(tmp_path):

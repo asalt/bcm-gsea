@@ -10,7 +10,9 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 
-TEMPLATE_NAME = "index.html.j2"
+INDEX_TEMPLATE_NAME = "index.html.j2"
+COLLECTION_TEMPLATE_NAME = "collection.html.j2"
+COMPARISON_TEMPLATE_NAME = "comparison.html.j2"
 TEMPLATE_PACKAGE = __package__
 
 
@@ -27,7 +29,19 @@ def _environment() -> Environment:
 
 def render_report(context: dict) -> str:
     env = _environment()
-    template = env.get_template(TEMPLATE_NAME)
+    template = env.get_template(INDEX_TEMPLATE_NAME)
+    return template.render(**context)
+
+
+def render_collection(context: dict) -> str:
+    env = _environment()
+    template = env.get_template(COLLECTION_TEMPLATE_NAME)
+    return template.render(**context)
+
+
+def render_comparison(context: dict) -> str:
+    env = _environment()
+    template = env.get_template(COMPARISON_TEMPLATE_NAME)
     return template.render(**context)
 
 
@@ -35,9 +49,17 @@ def install_static_assets(destination: Path) -> None:
     base = resources.files(TEMPLATE_PACKAGE)
     static_dir = base / "static"
     target = Path(destination) / "static"
-    if target.exists():
-        shutil.rmtree(target)
-    shutil.copytree(static_dir, target)
+    target.mkdir(parents=True, exist_ok=True)
+
+    for entry in static_dir.iterdir():
+        dest = target / entry.name
+        if entry.is_dir():
+            if dest.exists():
+                shutil.rmtree(dest)
+            shutil.copytree(entry, dest)
+        else:
+            if not dest.exists():
+                shutil.copyfile(entry, dest)
 
 
-__all__ = ["render_report", "install_static_assets"]
+__all__ = ["render_report", "render_collection", "render_comparison", "install_static_assets"]
