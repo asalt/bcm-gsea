@@ -96,7 +96,7 @@ bubble_plot <- function(
     vapply(value, function(label) {
       label %>%
         str_replace_all("_", " ") %>%
-        str_wrap(width = 48)
+        str_wrap(width = 54)
     }, character(1))
   }
 
@@ -105,6 +105,20 @@ bubble_plot <- function(
       mutate(rankname = factor(rankname, levels = facet_order, ordered = TRUE)) %>%
       arrange(rankname)
   }
+
+  if ("rankname" %in% names(sel)) {
+    # right here we make a mapping and rename for display
+    # for facetted plots
+    name_map <- util_tools$make_name_map(unique(sel$rankname))
+    sel <- sel %>% dplyr::mutate(
+                          rankname=dplyr::recode(
+                                               rankname,
+                                               !!!name_map  # named vector
+                                               )
+                          )
+    }
+
+
 
   sel <- sel %>% mutate(plot_leading_edge = pmax(1, plot_leading_edge))
 
@@ -186,6 +200,7 @@ bubble_plot <- function(
       axis.text.x = element_text(size = 7.0),
       plot.title = element_text(size = 10, face = "bold", hjust = 0),
       plot.subtitle = element_text(hjust = 0),
+      strip.text = element_text(size = 10, face = "bold", hjust = 0.5),
       legend.position = "right"
     )
 

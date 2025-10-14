@@ -641,6 +641,7 @@ make_name_map <- function(strings,
   attr(cleaned, "removed_suffix") <- res$suffix
 
   # Optional: remove common lowercase stems at the start of tokens like 'cell', 'treat'
+  allow_stem_stripping <- FALSE # doesn't work yet
   if (allow_stem_stripping) {
     cleaned2 <- strip_common_token_stems(cleaned, min_stem_len = min_stem_len, delim = delim)
     if (!identical(cleaned2, cleaned)) {
@@ -652,6 +653,7 @@ make_name_map <- function(strings,
 
 # Remove common stems that appear as lowercase prefixes at the start of tokens across all strings.
 # Example tokens affected: 'cellOCI3' -> 'OCI3', 'treatControl' -> 'Control'.
+# this is not safe and shouldn't be used at the moment
 strip_common_token_stems <- function(strings, min_stem_len = 4, delim = "[._\\-\\s]") {
   strings <- as.character(strings)
   if (length(strings) < 2) return(strings)

@@ -770,7 +770,7 @@ barplot_with_numbers <- function(
     wrapped_labels <- sapply(value, function(label) {
       label %>%
         str_replace_all("_", " ") %>%
-        str_wrap(width = 48)
+        str_wrap(width = 54)
     })
     return(wrapped_labels)
   }
@@ -789,6 +789,18 @@ barplot_with_numbers <- function(
     sel <- sel %>%
       mutate(rankname = factor(rankname, levels = facet_order, ordered = T)) %>%
       arrange(rankname)
+  }
+
+  if ("rankname" %in% names(sel)) {
+    # right here we make a mapping and rename for display
+    # for facetted plots
+    name_map <- util_tools$make_name_map(unique(sel$rankname))
+    sel <- sel %>% dplyr::mutate(
+                          rankname=dplyr::recode(
+                                                 rankname,
+                                                 !!!name_map  # named vector
+                                                 )
+                          )
   }
 
   # Dynamically choose a single y-axis font size based on longest label
@@ -877,7 +889,8 @@ barplot_with_numbers <- function(
     theme_bw() + theme(
       axis.text.y = element_text(size = axis_text_y_size, face = "bold"),
       axis.text.x = element_text(size = 7.0),
-      plot.title = element_text(size = 10, face = "bold", hjust = 0),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0),
+      strip.text.x = element_text(size = 10, face = "bold", hjust = 0.5),
       plot.subtitle = element_text(hjust = 0)
     )
 
@@ -983,7 +996,7 @@ all_barplots_with_numbers <- function(
               nes_range <- c(-nes_max, nes_max)
               .limit <- .x
               sel <- fgsea_tools$select_topn(dataframe, limit = .limit, pstat_cutoff=1)
-              .title <- comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
+              .title <- comparison_label %||% comparison_name # %>% fs::path_file() %>% fs::path_ext_remove() #%>% gsub(pattern="_", replacement=" ", x=.)
 
               rank_label <- sel$rankname %>% na.omit() %>% unique()
               rank_label <- if (length(rank_label) == 0) NULL else rank_label %>%
@@ -1009,7 +1022,7 @@ all_barplots_with_numbers <- function(
                 )
                 filename <- util_tools$safe_filename(
                   "bar",
-                  paste0("top", .limit),
+                  #paste0("top", .limit), # this part not needed
                   paste0("n", nrow(sel)),
                   fallback = "bar"
                 )
@@ -1856,8 +1869,8 @@ plot_top_ES <- function(
             # problem
             return(NULL)
         }
-        wrap_width <- getOption(util_tools$pkg_option_name("enrichplot_title_wrap"), 40)
-        comp_title <- comparison %>% stringr::str_replace_all("_", " ") %>% stringr::str_wrap(width = wrap_width)
+        wrap_width <- getOption(util_tools$pkg_option_name("enrichplot_title_wrap"), 54)
+        comp_title <- comparison_label %>% stringr::str_replace_all("_", " ") %>% stringr::str_wrap(width = wrap_width)
         path_title <- pathway_name %>% stringr::str_replace_all("_", " ") %>% stringr::str_wrap(width = wrap_width)
         .title <- paste0(comp_title, "\n", path_title)
         .subtitle <- ""
