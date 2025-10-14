@@ -541,7 +541,7 @@ make_heatmap_from_loadings <- function(
 
 }
 
-plot_gene_loadings_heatmap <- function(pca_object, components, top_n = 25, save_func = NULL) {
+plot_gene_loadings_heatmap <- function(pca_object, components, top_n = 25, save_func = NULL, gct = NULL) {
   available <- intersect(components, colnames(pca_object$loadings))
   if (length(available) == 0) {
     log_msg(warning = "Gene PCA heatmap skipped: requested components missing from loadings matrix.")
@@ -561,35 +561,58 @@ plot_gene_loadings_heatmap <- function(pca_object, components, top_n = 25, save_
     head(rownames(loadings_mat)[ord], min(top_n, length(ord)))
   })))
 
-  heatmap_mat <- loadings_mat[gene_subset, , drop = FALSE]
-  heatmap_mat <- heatmap_mat[order(abs(heatmap_mat[, 1]), decreasing = TRUE), , drop = FALSE]
-  max_abs <- max(abs(heatmap_mat), na.rm = TRUE)
-  if (!is.finite(max_abs) || max_abs == 0) {
-    max_abs <- 1
+  if (length(gene_subset) == 0) {
+    log_msg(warning = "Gene PCA heatmap skipped: no genes selected for loadings heatmap.")
+    return(NULL)
   }
-  col_fun <- circlize::colorRamp2(c(-max_abs, 0, max_abs), c("#4575b4", "#f7f7f7", "#d73027"))
 
-  ht <- ComplexHeatmap::Heatmap(
-    heatmap_mat,
-    name = "loading",
-    col = col_fun,
+  if (is.null(gct)) {
+    log_msg(warning = "Gene PCA heatmap skipped: expression GCT not supplied.")
+    return(NULL)
+  }
+
+  missing_genes <- setdiff(gene_subset, gct@rid)
+  if (length(missing_genes) > 0) {
+    log_msg(info = paste0(
+      "Gene PCA heatmap: dropping ", length(missing_genes),
+      " genes absent from expression matrix: ",
+      paste(missing_genes, collapse = ", ")
+    ))
+  }
+
+  ordered_genes <- gene_subset[gene_subset %in% gct@rid]
+  if (length(ordered_genes) == 0) {
+    log_msg(warning = "Gene PCA heatmap skipped: selected genes missing from expression matrix.")
+    return(NULL)
+  }
+
+  gct_subset <- tryCatch(
+    {
+      cmapR::subset_gct(gct, rid = ordered_genes)
+    },
+    error = function(e) {
+      log_msg(error = paste0("Gene PCA heatmap subset failed: ", conditionMessage(e)))
+      return(NULL)
+    }
+  )
+  if (is.null(gct_subset)) {
+    return(NULL)
+  }
+
+  row_title <- paste0("Top Loadings (", paste(available, collapse = ", "), ")")
+  filename <- util_tools$safe_filename("gene_loadings_heatmap", paste0(available, collapse = "_"))
+
+  plot_tools$make_heatmap_fromgct(
+    gct = gct_subset,
+    row_title = row_title,
+    column_title = "Scaled expression",
+    save_func = if (!is.null(save_func)) make_partial(save_func, filename = filename) else NULL,
     cluster_rows = TRUE,
     cluster_columns = FALSE,
-    column_title = paste0("Gene Loadings (", paste(available, collapse = ", "), ")"),
-    row_names_side = "left"
+    colorbar_title = "zscore"
   )
 
-  if (!is.null(save_func)) {
-    filename <- util_tools$safe_filename("gene_loadings_heatmap", paste0(available, collapse = "_"))
-    save_func(
-      plot_code = function() ComplexHeatmap::draw(ht, heatmap_legend_side = "right"),
-      filename = filename
-    )
-  } else {
-    ComplexHeatmap::draw(ht, heatmap_legend_side = "right")
-  }
-
-  invisible(ht)
+  invisible(gct_subset)
 }
 
 run_gene_pca_pipeline <- function(gct, params, savedir, replace = TRUE) {
@@ -615,6 +638,7 @@ run_gene_pca_pipeline <- function(gct, params, savedir, replace = TRUE) {
     return(NULL)
   }
   expr <- expr[keep_genes, , drop = FALSE]
+  gct_filtered <- cmapR::subset_gct(gct, rid = rownames(expr))
 
   expr_scaled <- t(scale(t(expr), center = TRUE, scale = TRUE))
   expr_scaled <- as.matrix(expr_scaled)
@@ -623,6 +647,8 @@ run_gene_pca_pipeline <- function(gct, params, savedir, replace = TRUE) {
     log_msg(info = paste0("Gene PCA: replacing ", sum(mask_non_finite), " non-finite scaled values with 0."))
     expr_scaled[mask_non_finite] <- 0
   }
+  gct_scaled <- gct_filtered
+  gct_scaled@mat <- expr_scaled
 
   metadata_colors <- params$metadata_color
   valid_colors <- metadata_colors[metadata_colors %in% colnames(metadata)]
@@ -695,7 +721,8 @@ run_gene_pca_pipeline <- function(gct, params, savedir, replace = TRUE) {
       pca_res,
       components = components,
       top_n = params$top_loadings,
-      save_func = heatmap_save
+      save_func = heatmap_save,
+      gct = gct_scaled
     )
   }
 
