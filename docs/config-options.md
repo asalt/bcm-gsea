@@ -112,6 +112,9 @@ Generated limma summaries, volcano-ready tables, and PDF plots are stored under 
 - `metadata_shape` (string, default `""`): Metadata column used for point shapes.
 - `top_loadings` (int, default `25`): Number of genes rendered in the loadings heatmap.
 - `heatmap` (bool, default `true`): Emit a heatmap of top loading genes.
+- `cluster_rows` (bool, default `true`): Cluster genes in the PCA loadings heatmap.
+- `cluster_columns` (array of bool, default `[false,true]`): Emit heatmaps with column clustering disabled/enabled.
+- `cut_by` (string, default `""`): Metadata column used to split the loadings heatmap (leave empty to disable).
 - `labSize` / `pointSize` / `sizeLoadingsNames` (floats): Text and point sizes reused for PCA biplots.
 - Gene PCA runs once using the parsed GCT matrix; it skips automatically if no GCT was provided.
 

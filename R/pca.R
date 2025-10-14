@@ -541,7 +541,15 @@ make_heatmap_from_loadings <- function(
 
 }
 
-plot_gene_loadings_heatmap <- function(pca_object, components, top_n = 25, save_func = NULL, gct = NULL) {
+plot_gene_loadings_heatmap <- function(
+    pca_object,
+    components,
+    top_n = 25,
+    save_func = NULL,
+    gct = NULL,
+    cluster_rows = TRUE,
+    cluster_columns = c(FALSE, TRUE),
+    cut_by = NULL) {
   available <- intersect(components, colnames(pca_object$loadings))
   if (length(available) == 0) {
     log_msg(warning = "Gene PCA heatmap skipped: requested components missing from loadings matrix.")
@@ -599,18 +607,98 @@ plot_gene_loadings_heatmap <- function(pca_object, components, top_n = 25, save_
     return(NULL)
   }
 
-  row_title <- paste0("Top Loadings (", paste(available, collapse = ", "), ")")
-  filename <- util_tools$safe_filename("gene_loadings_heatmap", paste0(available, collapse = "_"))
+  loadings_subset <- loadings_mat[ordered_genes, available, drop = FALSE]
+  membership_raw <- apply(loadings_subset, 1, function(row) {
+    if (all(!is.finite(row))) {
+      return(NA_character_)
+    }
+    available[[which.max(abs(row))]]
+  })
+  membership_levels <- available
+  include_none <- any(is.na(membership_raw))
+  membership_factor <- if (include_none) {
+    factor(ifelse(is.na(membership_raw), "none", membership_raw), levels = c(membership_levels, "none"))
+  } else {
+    factor(membership_raw, levels = membership_levels)
+  }
 
-  plot_tools$make_heatmap_fromgct(
-    gct = gct_subset,
-    row_title = row_title,
-    column_title = "Scaled expression",
-    save_func = if (!is.null(save_func)) make_partial(save_func, filename = filename) else NULL,
-    cluster_rows = TRUE,
-    cluster_columns = FALSE,
-    colorbar_title = "zscore"
+  palette <- colorspace::qualitative_hcl(length(membership_levels), palette = "Dark 3")
+  if (length(palette) < length(membership_levels)) {
+    palette <- grDevices::rainbow(length(membership_levels))
+  }
+  names(palette) <- membership_levels
+  if (include_none) {
+    palette <- c(palette, none = "#bfbfbf")
+  }
+
+  row_annotation <- ComplexHeatmap::rowAnnotation(
+    PC = membership_factor,
+    col = list(PC = palette),
+    show_annotation_name = FALSE
   )
+
+  gct_subset@rdesc$gene_pca_component <- as.character(membership_factor)
+
+  cluster_rows_vals <- as.logical(cluster_rows)
+  cluster_rows_vals <- cluster_rows_vals[!is.na(cluster_rows_vals)]
+  if (length(cluster_rows_vals) == 0) {
+    cluster_rows_vals <- TRUE
+  }
+  cluster_columns_vals <- as.logical(cluster_columns)
+  cluster_columns_vals <- cluster_columns_vals[!is.na(cluster_columns_vals)]
+  if (length(cluster_columns_vals) == 0) {
+    cluster_columns_vals <- FALSE
+  }
+
+  cut_by_value <- cut_by
+  if (is.character(cut_by_value)) {
+    cut_by_value <- cut_by_value[nzchar(cut_by_value)]
+  }
+  if (length(cut_by_value) > 0) {
+    cut_by_value <- cut_by_value[[1]]
+  } else {
+    cut_by_value <- NULL
+  }
+  if (is.logical(cut_by_value) && !isTRUE(cut_by_value)) {
+    cut_by_value <- NULL
+  }
+
+  row_title <- paste0("Top Loadings (", paste(available, collapse = ", "), ")")
+  cut_label <- if (!is.null(cut_by_value)) {
+    paste0("cut_", util_tools$safe_path_component(cut_by_value, max_chars = 32))
+  } else {
+    NULL
+  }
+
+  param_grid <- expand.grid(
+    cluster_rows = unique(cluster_rows_vals),
+    cluster_columns = unique(cluster_columns_vals),
+    stringsAsFactors = FALSE
+  )
+
+  for (idx in seq_len(nrow(param_grid))) {
+    cluster_rows_flag <- isTRUE(param_grid$cluster_rows[[idx]])
+    cluster_columns_flag <- isTRUE(param_grid$cluster_columns[[idx]])
+    filename <- util_tools$safe_filename(
+      "gene_loadings_heatmap",
+      util_tools$cluster_flag_token(cluster_rows_flag, "rc"),
+      util_tools$cluster_flag_token(cluster_columns_flag, "cc"),
+      cut_label
+    )
+    save_target <- if (!is.null(save_func)) make_partial(save_func, filename = filename) else NULL
+
+    plot_tools$make_heatmap_fromgct(
+      gct = gct_subset,
+      row_title = row_title,
+      column_title = "Scaled expression",
+      save_func = save_target,
+      cluster_rows = cluster_rows_flag,
+      cluster_columns = cluster_columns_flag,
+      colorbar_title = "zscore",
+      cut_by = cut_by_value,
+      row_annotation = row_annotation
+    )
+  }
 
   invisible(gct_subset)
 }
@@ -710,6 +798,21 @@ run_gene_pca_pipeline <- function(gct, params, savedir, replace = TRUE) {
   }
 
   if (isTRUE(params$heatmap)) {
+    heatmap_cluster_rows <- params$cluster_rows %||% TRUE
+    heatmap_cluster_columns <- params$cluster_columns %||% c(FALSE, TRUE)
+    heatmap_cut_by <- params$cut_by %||% NULL
+    if (is.character(heatmap_cut_by)) {
+      heatmap_cut_by <- heatmap_cut_by[nzchar(heatmap_cut_by)]
+    }
+    if (length(heatmap_cut_by) > 0) {
+      heatmap_cut_by <- heatmap_cut_by[[1]]
+    } else {
+      heatmap_cut_by <- NULL
+    }
+    if (is.logical(heatmap_cut_by) && !isTRUE(heatmap_cut_by)) {
+      heatmap_cut_by <- NULL
+    }
+
     heatmap_save <- util_tools$make_partial(
       plot_utils$plot_and_save,
       path = util_tools$safe_subdir(base_dir, "heatmaps"),
@@ -722,7 +825,10 @@ run_gene_pca_pipeline <- function(gct, params, savedir, replace = TRUE) {
       components = components,
       top_n = params$top_loadings,
       save_func = heatmap_save,
-      gct = gct_scaled
+      gct = gct_scaled,
+      cluster_rows = heatmap_cluster_rows,
+      cluster_columns = heatmap_cluster_columns,
+      cut_by = heatmap_cut_by
     )
   }
 

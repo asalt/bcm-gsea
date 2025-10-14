@@ -68,6 +68,7 @@ make_heatmap_fromgct <- function(
     colorbar_title = "zscore",
     cluster_column_slices = TRUE,
     sample_exclude = NULL,
+    row_annotation = NULL,
     # scale = T
     ...) {
   # gct <- subgct
@@ -216,6 +217,17 @@ make_heatmap_fromgct <- function(
 
   # print(paste0("nrow of mat: ", nrow(.mat)))
 
+  if (!is.null(row_annotation) && !"HeatmapAnnotation" %in% class(row_annotation)) {
+    if (is.data.frame(row_annotation)) {
+      row_annotation <- do.call(ComplexHeatmap::rowAnnotation, c(list(df = row_annotation), list(show_annotation_name = FALSE)))
+    } else if (is.vector(row_annotation) || is.factor(row_annotation)) {
+      row_annotation <- ComplexHeatmap::rowAnnotation(annotation = row_annotation, show_annotation_name = FALSE)
+    } else {
+      log_msg(warning = "row_annotation must be a ComplexHeatmap::HeatmapAnnotation, data.frame, or vector; ignoring.")
+      row_annotation <- NULL
+    }
+  }
+
   ht <- ComplexHeatmap::Heatmap(
     .mat,
     width = heatmap_matrix_width,
@@ -242,6 +254,7 @@ make_heatmap_fromgct <- function(
     column_names_gp = grid::gpar(fontsize = 7, fontface="bold"),
     cluster_column_slices = cluster_column_slices,
     column_names_side = "top",
+    left_annotation = row_annotation
   )
 
 

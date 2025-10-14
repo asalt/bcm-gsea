@@ -99,6 +99,40 @@ clean_args <- function(params, root_dir = "/") {
   params$pca_gene$labSize <- params$pca_gene$labSize %||% 1.8
   params$pca_gene$pointSize <- params$pca_gene$pointSize %||% 4.0
   params$pca_gene$sizeLoadingsNames <- params$pca_gene$sizeLoadingsNames %||% 1.4
+  cluster_rows <- params$pca_gene$cluster_rows
+  if (is.null(cluster_rows)) {
+    cluster_rows <- TRUE
+  }
+  cluster_rows <- as.logical(cluster_rows)
+  cluster_rows <- cluster_rows[!is.na(cluster_rows)]
+  if (length(cluster_rows) == 0) {
+    cluster_rows <- TRUE
+  }
+  params$pca_gene$cluster_rows <- unique(cluster_rows)
+
+  cluster_columns <- params$pca_gene$cluster_columns
+  if (is.null(cluster_columns)) {
+    cluster_columns <- c(FALSE, TRUE)
+  }
+  cluster_columns <- as.logical(cluster_columns)
+  cluster_columns <- cluster_columns[!is.na(cluster_columns)]
+  if (length(cluster_columns) == 0) {
+    cluster_columns <- c(FALSE, TRUE)
+  }
+  params$pca_gene$cluster_columns <- unique(cluster_columns)
+
+  cut_by <- params$pca_gene$cut_by %||% NULL
+  if (is.character(cut_by)) {
+    cut_by <- cut_by[nzchar(trimws(cut_by))]
+    if (length(cut_by) > 0) {
+      cut_by <- cut_by[[1]]
+    } else {
+      cut_by <- NULL
+    }
+  } else if (is.logical(cut_by) && !isTRUE(cut_by)) {
+    cut_by <- NULL
+  }
+  params$pca_gene$cut_by <- cut_by
 
   params$umap_gene <- params$umap_gene %||% list()
   params$umap_gene$do <- params$umap_gene$do %||% FALSE
