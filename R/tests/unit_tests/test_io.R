@@ -298,6 +298,7 @@ test_that("run_gene_umap_pipeline produces embeddings and plots", {
       metric = "euclidean",
       seed = 123,
       scale = TRUE,
+      point_type = "sample",
       metadata_color = list("group", "nonexistent"),
       metadata_shape = "",
       variants = list(
@@ -310,17 +311,61 @@ test_that("run_gene_umap_pipeline produces embeddings and plots", {
       params = params,
       savedir = getwd(),
       replace = TRUE,
-      cachedir = file.path(getwd(), "cache")
+      cachedir = file.path(getwd(), "cache"),
+      ranks = NULL
     )
 
     expect_true(is.list(result))
     expect_true(all(c("UMAP1", "UMAP2") %in% colnames(result[[1]])))
-    expect_true(fs::dir_exists(fs::path(getwd(), "umap_gene", "default", "plots")))
-    expect_true(fs::dir_exists(fs::path(getwd(), "umap_gene", "tight", "plots")))
-    expect_true(fs::file_exists(fs::path(getwd(), "umap_gene", "default", "tables", "gene_umap_embedding.tsv")))
-    expect_true(fs::file_exists(fs::path(getwd(), "umap_gene", "tight", "tables", "gene_umap_embedding.tsv")))
+    expect_true(fs::dir_exists(fs::path(getwd(), "umap_gene", "default_sample", "plots")))
+    expect_true(fs::dir_exists(fs::path(getwd(), "umap_gene", "tight_sample", "plots")))
+    expect_true(fs::file_exists(fs::path(getwd(), "umap_gene", "default_sample", "tables", "sample_umap_embedding.tsv")))
+    expect_true(fs::file_exists(fs::path(getwd(), "umap_gene", "tight_sample", "tables", "sample_umap_embedding.tsv")))
     cache_dir <- file.path(getwd(), "cache")
     cache_files <- if (fs::dir_exists(cache_dir)) fs::dir_ls(cache_dir) else character(0)
     expect_true(any(grepl("umap_", basename(cache_files))))
+  })
+})
+
+test_that("run_gene_umap_pipeline supports gene orientation with rank colouring", {
+  withr::with_tempdir({
+    gct <- io_tools$make_random_gct(12, 4)
+    gct@rid <- paste0("Gene", seq_len(nrow(gct@mat)))
+    gct@rdesc$id <- gct@rid
+    gct@rdesc$GeneSymbol <- paste0("GS", seq_len(nrow(gct@mat)))
+    rownames(gct@rdesc) <- gct@rid
+
+    ranks <- list(test_rank = setNames(seq_len(nrow(gct@mat)), gct@rid))
+
+    params <- list(
+      do = TRUE,
+      width = 6.2,
+      height = 5.2,
+      n_neighbors = 6,
+      min_dist = 0.15,
+      metric = "euclidean",
+      seed = 99,
+      scale = TRUE,
+      point_type = "gene",
+      rank_name = "test_rank",
+      metadata_color = list()
+    )
+
+    result <- umap_tools$run_gene_umap_pipeline(
+      gct = gct,
+      params = params,
+      savedir = getwd(),
+      replace = TRUE,
+      cachedir = file.path(getwd(), "cache"),
+      ranks = ranks
+    )
+
+    expect_true("default_gene" %in% names(result))
+    embedding <- result[["default_gene"]]
+    expect_true(all(c("gene", "UMAP1", "UMAP2") %in% colnames(embedding)))
+    expect_true("rank_test_rank" %in% colnames(embedding))
+    expect_false(all(is.na(embedding$rank_test_rank)))
+    expect_true(fs::dir_exists(fs::path(getwd(), "umap_gene", "default_gene", "plots")))
+    expect_true(fs::file_exists(fs::path(getwd(), "umap_gene", "default_gene", "tables", "gene_umap_embedding.tsv")))
   })
 })

@@ -85,6 +85,8 @@ scale = true
 metadata_color = []
 metadata_shape = ""
 variants = []
+point_type = "gene"
+rank_name = ""
 
 [params.extra]
 rankname_order = []

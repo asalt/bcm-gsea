@@ -152,6 +152,26 @@ clean_args <- function(params, root_dir = "/") {
   }
   params$umap_gene$metadata_color <- unique(as.character(umap_colors))
   params$umap_gene$metadata_shape <- params$umap_gene$metadata_shape %||% ""
+  point_type <- params$umap_gene$point_type %||% "gene"
+  if (length(point_type) == 0 || is.na(point_type)) {
+    point_type <- "gene"
+  }
+  point_type <- tolower(as.character(point_type[[1]]))
+  if (!point_type %in% c("gene", "sample")) {
+    log_msg(warning = paste0("params.umap_gene.point_type '", point_type, "' not recognised; defaulting to 'gene'."))
+    point_type <- "gene"
+  }
+  params$umap_gene$point_type <- point_type
+  rank_name <- params$umap_gene$rank_name %||% ""
+  if (is.list(rank_name)) {
+    rank_name <- unlist(rank_name, use.names = FALSE)
+  }
+  if (length(rank_name) > 0) {
+    rank_name <- trimws(as.character(rank_name[[1]]))
+  } else {
+    rank_name <- ""
+  }
+  params$umap_gene$rank_name <- rank_name
   variants_raw <- params$umap_gene$variants %||% list()
   if (!is.list(variants_raw)) {
     variants_raw <- list(variants_raw)
@@ -173,6 +193,25 @@ clean_args <- function(params, root_dir = "/") {
       }
       variant$metadata_color <- unique(as.character(colors))
       variant$metadata_shape <- variant$metadata_shape %||% ""
+      variant_point_type <- variant$point_type %||% point_type
+      if (length(variant_point_type) == 0 || is.na(variant_point_type)) {
+        variant_point_type <- point_type
+      }
+      variant_point_type <- tolower(as.character(variant_point_type[[1]]))
+      if (!variant_point_type %in% c("gene", "sample")) {
+        variant_point_type <- point_type
+      }
+      variant$point_type <- variant_point_type
+      variant_rank <- variant$rank_name %||% rank_name
+      if (is.list(variant_rank)) {
+        variant_rank <- unlist(variant_rank, use.names = FALSE)
+      }
+      if (length(variant_rank) > 0) {
+        variant_rank <- trimws(as.character(variant_rank[[1]]))
+      } else {
+        variant_rank <- ""
+      }
+      variant$rank_name <- variant_rank
       normalized_variants[[length(normalized_variants) + 1]] <- variant
     }
   }

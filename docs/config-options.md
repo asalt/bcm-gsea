@@ -130,6 +130,8 @@ Generated limma summaries, volcano-ready tables, and PDF plots are stored under 
 - `metadata_color` (array of strings, default `[]`): Metadata columns used for colouring (plots generated per entry).
 - `metadata_shape` (string, default `""`): Metadata column used for point shapes.
 - `variants` (array of tables, default `[]`): Optional parameter set overrides (each entry may include `name`, `n_neighbors`, `min_dist`, `metadata_color`, etc.).
+- `point_type` (string, default `"gene"`): Choose `"gene"` to embed genes or `"sample"` to embed samples.
+- `rank_name` (string, default `""`): When `point_type` is `"gene"`, colour genes by the specified rank/comparison (requires matching `.rnk` data).
 
 ## params.extra
 

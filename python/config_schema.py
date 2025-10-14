@@ -285,6 +285,8 @@ class GeneUMAPConfig(ConfigSection):
         "metadata_color": FieldMeta(List[str], list, "Metadata columns used to colour samples."),
         "metadata_shape": FieldMeta(str, "", "Metadata column used for point shapes."),
         "variants": FieldMeta(List[Dict[str, Any]], list, "Optional list of parameter overrides."),
+        "point_type": FieldMeta(str, "gene", 'Point type for UMAP output ("gene" or "sample").'),
+        "rank_name": FieldMeta(str, "", "Rank/comparison used to colour genes when point_type='gene'."),
     }
 
 

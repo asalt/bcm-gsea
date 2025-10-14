@@ -190,7 +190,8 @@ run <- function(params) {
         params = params$umap_gene,
         savedir = params$savedir,
         replace = params$advanced$replace %||% TRUE,
-        cachedir = cachedir
+        cachedir = cachedir,
+        ranks = ranks_list
       )
     }
   }
