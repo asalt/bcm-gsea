@@ -379,7 +379,8 @@ all_bubble_plots <- function(
 
             bubble_plot(
               sel,
-              title = comparison_name,
+              # title = comparison_name,
+              title = comparison_label,
               subtitle = subtitle_text,
               save_func = local_save_func,
               facet_order = facet_order,

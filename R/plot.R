@@ -263,9 +263,7 @@ make_heatmap_fromgct <- function(
   do_draw <- function() {
     draw(ht,
       heatmap_legend_side = "bottom",
-      column_title = column_title %>%
-       stringr::str_replace_all("_", " ") %>%
-       stringr::str_wrap(width = 40),
+      column_title = column_title,
       column_title_gp = gpar(fontsize = 13, fontface = "bold", just = "left"),
 
       padding = unit(c(2, 24, 2, 24), "mm"), # top, left, bottom, right
@@ -455,7 +453,7 @@ plot_heatmap_of_edges <- function(
           cluster_columns = cluster_columns,
           sample_order = sample_order,
           row_title = .row_title,
-          column_title = paste0(.id, "\n", comparison_name),
+          column_title = paste0(.id, "\n", str_wrap(str_replace_all(comparison_label, "_", " "), width=64)),
           cut_by = cut_by_val,
           meta_to_include = meta_to_include,
           meta_to_exclude = meta_to_exclude,
@@ -691,6 +689,7 @@ prepare_data_for_barplot <- function(df) {
     dplyr::mutate(pathway = stringr::str_remove(pathway, "KEGG_")) %>%
     # Strip vendor-specific prefixes if present
     dplyr::mutate(pathway = stringr::str_remove_all(pathway, stringr::regex("(?i)MEDICUS_?"))) %>%
+    dplyr::mutate(pathway = stringr::str_remove_all(pathway, stringr::regex("(?i)REFERENCE_?"))) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "GOMF_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "REACTOME_")) %>%
     dplyr::mutate(pathway = stringr::str_remove(pathway, "GOBP_")) %>%
