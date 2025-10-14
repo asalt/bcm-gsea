@@ -217,6 +217,7 @@ create_rnkfiles_from_model <- function(
   )
 
   sample_ids <- rownames(model_frame)
+  metadata <- metadata[sample_ids, , drop = FALSE]
   if (length(sample_ids) == 0) {
     stop("No samples remain after constructing the model frame (check missing values).")
   }
@@ -399,25 +400,24 @@ create_rnkfiles_from_model <- function(
     }
   }
 
+  updated_metadata <- list()
   if (length(predictor_columns) > 0) {
-    updated_any <- FALSE
     for (safe_name in names(predictor_columns)) {
       predictor <- predictor_columns[[safe_name]]$values
-      aligned <- rep(NA_real_, length(gct@cid))
-      names(aligned) <- gct@cid
+      aligned <- rep(NA_real_, length(metadata$.sample_id))
+      names(aligned) <- metadata$.sample_id
       matches <- intersect(names(predictor), names(aligned))
       aligned[matches] <- as.numeric(predictor[matches])
-      gct@cdesc[[safe_name]] <- aligned
-      updated_any <- TRUE
+      metadata[[safe_name]] <- aligned
+      updated_metadata[[safe_name]] <- aligned
     }
-    if (updated_any) {
-      cmapR::write_gct(gct, gct_path, appenddim = FALSE)
-      attr(output, "metadata_columns") <- names(predictor_columns)
-      log_msg(info = paste0(
-        "Augmented metadata in ", basename(gct_path),
-        " with predictors: ", paste(names(predictor_columns), collapse = ", ")
-      ))
-    }
+    attr(output, "metadata_columns") <- names(updated_metadata)
+    attr(output, "metadata_values") <- updated_metadata
+    log_msg(info = paste0(
+      "Captured predictor metadata columns for model ",
+      model_name, ": ",
+      paste(names(updated_metadata), collapse = ", ")
+    ))
   }
 
   attr(output, "tables") <- setNames(result_tables, names(output))

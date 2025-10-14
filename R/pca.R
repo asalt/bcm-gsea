@@ -5,6 +5,8 @@ suppressPackageStartupMessages(library(stringr))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(colorspace))
+suppressPackageStartupMessages(library(ComplexHeatmap))
+suppressPackageStartupMessages(library(circlize))
 
 src_dir <- file.path(here("R"))
 
@@ -537,4 +539,168 @@ make_heatmap_from_loadings <- function(
   #   ) # end of tryCatch
   # })
 
+}
+
+plot_gene_loadings_heatmap <- function(pca_object, components, top_n = 25, save_func = NULL) {
+  available <- intersect(components, colnames(pca_object$loadings))
+  if (length(available) == 0) {
+    log_msg(warning = "Gene PCA heatmap skipped: requested components missing from loadings matrix.")
+    return(NULL)
+  }
+
+  loadings_mat <- pca_object$loadings[, available, drop = FALSE]
+  loadings_mat <- loadings_mat[apply(loadings_mat, 1, function(x) any(is.finite(x))), , drop = FALSE]
+  if (nrow(loadings_mat) == 0) {
+    log_msg(warning = "Gene PCA heatmap skipped: no finite loadings available.")
+    return(NULL)
+  }
+
+  gene_subset <- unique(unlist(lapply(seq_along(available), function(idx) {
+    pc <- available[[idx]]
+    ord <- order(abs(loadings_mat[, pc]), decreasing = TRUE)
+    head(rownames(loadings_mat)[ord], min(top_n, length(ord)))
+  })))
+
+  heatmap_mat <- loadings_mat[gene_subset, , drop = FALSE]
+  heatmap_mat <- heatmap_mat[order(abs(heatmap_mat[, 1]), decreasing = TRUE), , drop = FALSE]
+  max_abs <- max(abs(heatmap_mat), na.rm = TRUE)
+  if (!is.finite(max_abs) || max_abs == 0) {
+    max_abs <- 1
+  }
+  col_fun <- circlize::colorRamp2(c(-max_abs, 0, max_abs), c("#4575b4", "#f7f7f7", "#d73027"))
+
+  ht <- ComplexHeatmap::Heatmap(
+    heatmap_mat,
+    name = "loading",
+    col = col_fun,
+    cluster_rows = TRUE,
+    cluster_columns = FALSE,
+    column_title = paste0("Gene Loadings (", paste(available, collapse = ", "), ")"),
+    row_names_side = "left"
+  )
+
+  if (!is.null(save_func)) {
+    filename <- util_tools$safe_filename("gene_loadings_heatmap", paste0(available, collapse = "_"))
+    save_func(
+      plot_code = function() ComplexHeatmap::draw(ht, heatmap_legend_side = "right"),
+      filename = filename
+    )
+  } else {
+    ComplexHeatmap::draw(ht, heatmap_legend_side = "right")
+  }
+
+  invisible(ht)
+}
+
+run_gene_pca_pipeline <- function(gct, params, savedir, replace = TRUE) {
+  if (is.null(gct) || ncol(gct@mat) < 2) {
+    log_msg(warning = "Gene PCA skipped: GCT is NULL or has fewer than 2 samples.")
+    return(NULL)
+  }
+
+  expr <- gct@mat
+  if (!is.matrix(expr)) {
+    expr <- as.matrix(expr)
+  }
+
+  sample_ids <- colnames(expr)
+  metadata <- as.data.frame(gct@cdesc, stringsAsFactors = FALSE)
+  metadata <- metadata[sample_ids, , drop = FALSE]
+  rownames(metadata) <- sample_ids
+
+  variance <- apply(expr, 1, stats::var, na.rm = TRUE)
+  keep_genes <- which(!is.na(variance) & variance > 0)
+  if (length(keep_genes) < 2) {
+    log_msg(warning = "Gene PCA skipped: fewer than two genes with non-zero variance.")
+    return(NULL)
+  }
+  expr <- expr[keep_genes, , drop = FALSE]
+
+  metadata_colors <- params$metadata_color
+  valid_colors <- metadata_colors[metadata_colors %in% colnames(metadata)]
+  if (length(valid_colors) < length(metadata_colors)) {
+    missing <- setdiff(metadata_colors, valid_colors)
+    if (length(missing) > 0) {
+      log_msg(warning = paste0("Gene PCA: metadata_color entries not found; ignoring: ", paste(missing, collapse = ", ") ))
+    }
+  }
+  if (length(valid_colors) == 0) {
+    valid_colors <- NA_character_
+  }
+
+  metadata_shape <- params$metadata_shape
+  if (!nzchar(metadata_shape) || !metadata_shape %in% colnames(metadata)) {
+    if (nzchar(params$metadata_shape)) {
+      log_msg(warning = paste0("Gene PCA: metadata_shape '", params$metadata_shape, "' not found; ignoring."))
+    }
+    metadata_shape <- NULL
+  }
+
+  pca_res <- PCAtools::pca(expr,
+    metadata = metadata,
+    center = TRUE,
+    scale = TRUE
+  )
+
+  pc_count <- max(2, min(params$components, length(pca_res$components)))
+  components <- paste0("PC", seq_len(pc_count))
+
+  base_dir <- util_tools$safe_subdir(savedir, "pca_gene")
+
+  biplot_save <- util_tools$make_partial(
+    plot_utils$plot_and_save,
+    path = util_tools$safe_subdir(base_dir, "biplots"),
+    replace = replace,
+    width = params$width,
+    height = params$height
+  )
+
+  for (color_col in valid_colors) {
+    colour_label <- if (is.na(color_col)) "none" else color_col
+    biplot_save_col <- make_partial(
+      biplot_save,
+      filename = util_tools$safe_filename("gene_pca_biplot", colour_label)
+    )
+    plot_biplot(
+      pca_res,
+      top_pc = pc_count,
+      showLoadings = TRUE,
+      labSize = params$labSize,
+      pointSize = params$pointSize,
+      sizeLoadingsNames = params$sizeLoadingsNames,
+      colby = if (is.na(color_col)) NULL else color_col,
+      shape = metadata_shape,
+      title = paste0("Gene Expression PCA", if (is.na(color_col)) "" else paste0(" - ", color_col)),
+      save_func = biplot_save_col
+    )
+  }
+
+  if (isTRUE(params$heatmap)) {
+    heatmap_save <- util_tools$make_partial(
+      plot_utils$plot_and_save,
+      path = util_tools$safe_subdir(base_dir, "heatmaps"),
+      replace = replace,
+      width = 7,
+      height = max(4, params$top_loadings * 0.22 + 2)
+    )
+    plot_gene_loadings_heatmap(
+      pca_res,
+      components = components,
+      top_n = params$top_loadings,
+      save_func = heatmap_save
+    )
+  }
+
+  tables_dir <- util_tools$safe_subdir(base_dir, "tables")
+  fs::dir_create(tables_dir, recurse = TRUE)
+  loadings_tbl <- as.data.frame(pca_res$loadings[, components, drop = FALSE])
+  loadings_tbl <- cbind(gene = rownames(loadings_tbl), loadings_tbl)
+  scores_tbl <- as.data.frame(pca_res$rotated[, components, drop = FALSE])
+  scores_tbl <- cbind(sample = rownames(scores_tbl), scores_tbl)
+  readr::write_tsv(loadings_tbl, fs::path(tables_dir, "gene_pca_loadings.tsv"))
+  readr::write_tsv(scores_tbl, fs::path(tables_dir, "gene_pca_scores.tsv"))
+
+  log_msg(info = paste0("Gene PCA outputs written to ", base_dir))
+
+  invisible(pca_res)
 }

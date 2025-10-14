@@ -35,6 +35,7 @@ run <- function(params) {
   plot_utils <- get_tool_env("plot_utils")
   bubble_tools <- get_tool_env("plot_bubble")
   pca_tools <- get_tool_env("pca")
+  umap_tools <- get_tool_env("umap")
   voice_tools <- get_tool_env("voice")
 
   # io_tools <- new.env()
@@ -165,6 +166,32 @@ run <- function(params) {
         "sample_exclude (no GCT metadata) resolved to: ",
         paste(sample_exclude, collapse = ", ")
       ))
+    }
+  }
+
+  if (isTRUE(params$pca_gene$do)) {
+    if (is.null(gct)) {
+      log_msg(warning = "pca_gene$do is TRUE but no GCT was loaded; skipping gene PCA.")
+    } else {
+      pca_tools$run_gene_pca_pipeline(
+        gct = gct,
+        params = params$pca_gene,
+        savedir = params$savedir,
+        replace = params$advanced$replace %||% TRUE
+      )
+    }
+  }
+
+  if (isTRUE(params$umap_gene$do)) {
+    if (is.null(gct)) {
+      log_msg(warning = "umap_gene$do is TRUE but no GCT was loaded; skipping gene UMAP.")
+    } else {
+      umap_tools$run_gene_umap_pipeline(
+        gct = gct,
+        params = params$umap_gene,
+        savedir = params$savedir,
+        replace = params$advanced$replace %||% TRUE
+      )
     }
   }
 

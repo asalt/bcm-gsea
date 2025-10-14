@@ -82,6 +82,42 @@ clean_args <- function(params, root_dir = "/") {
   params$heatmap_gsea$do <- params$heatmap_gsea$do %||% TRUE
   params$heatmap_gene$do <- params$heatmap_gene$do %||% TRUE
   params$pca$do <- params$pca$do %||% TRUE
+  params$pca_gene <- params$pca_gene %||% list()
+  params$pca_gene$do <- params$pca_gene$do %||% FALSE
+  params$pca_gene$components <- params$pca_gene$components %||% 3
+  pca_gene_colors <- params$pca_gene$metadata_color %||% list()
+  if (is.character(pca_gene_colors)) {
+    pca_gene_colors <- pca_gene_colors[nzchar(pca_gene_colors)]
+  }
+  if (is.list(pca_gene_colors)) {
+    pca_gene_colors <- unlist(pca_gene_colors, use.names = FALSE)
+  }
+  params$pca_gene$metadata_color <- unique(as.character(pca_gene_colors))
+  params$pca_gene$metadata_shape <- params$pca_gene$metadata_shape %||% ""
+  params$pca_gene$top_loadings <- params$pca_gene$top_loadings %||% 25
+  params$pca_gene$heatmap <- params$pca_gene$heatmap %||% TRUE
+  params$pca_gene$labSize <- params$pca_gene$labSize %||% 1.8
+  params$pca_gene$pointSize <- params$pca_gene$pointSize %||% 4.0
+  params$pca_gene$sizeLoadingsNames <- params$pca_gene$sizeLoadingsNames %||% 1.4
+
+  params$umap_gene <- params$umap_gene %||% list()
+  params$umap_gene$do <- params$umap_gene$do %||% FALSE
+  params$umap_gene$width <- params$umap_gene$width %||% 7.2
+  params$umap_gene$height <- params$umap_gene$height %||% 6.4
+  params$umap_gene$n_neighbors <- params$umap_gene$n_neighbors %||% 15
+  params$umap_gene$min_dist <- params$umap_gene$min_dist %||% 0.1
+  params$umap_gene$metric <- params$umap_gene$metric %||% "euclidean"
+  params$umap_gene$seed <- params$umap_gene$seed %||% 42
+  params$umap_gene$scale <- params$umap_gene$scale %||% TRUE
+  umap_colors <- params$umap_gene$metadata_color %||% list()
+  if (is.character(umap_colors)) {
+    umap_colors <- umap_colors[nzchar(umap_colors)]
+  }
+  if (is.list(umap_colors)) {
+    umap_colors <- unlist(umap_colors, use.names = FALSE)
+  }
+  params$umap_gene$metadata_color <- unique(as.character(umap_colors))
+  params$umap_gene$metadata_shape <- params$umap_gene$metadata_shape %||% ""
 
 
   if (!is.null(params$volcanodir)) {
@@ -100,7 +136,7 @@ clean_args <- function(params, root_dir = "/") {
   }
 
   params$model_file <- params$model_file %||% ""
-  global_model_file <- params$model_file
+  global_model_file <- params$model_file %||% ""
 
   load_model_spec <- function(path) {
     if (!file.exists(path)) {
@@ -110,6 +146,8 @@ clean_args <- function(params, root_dir = "/") {
     model_toml$model %||% model_toml$Model %||% model_toml
   }
 
+  # Normalize several ways the config can provide model definitions (single model,
+  # list of models, or nothing) into a single list we can iterate.
   raw_models <- list()
   if (!is.null(params$model) && length(params$model) > 0) {
     raw_models <- c(raw_models, list(params$model))
@@ -129,6 +167,16 @@ clean_args <- function(params, root_dir = "/") {
     spec <- raw_models[[idx]]
     if (is.null(spec) || (is.list(spec) && length(spec) == 0)) {
       spec <- list()
+    } else if (!is.list(spec)) {
+      if (is.character(spec) && length(spec) == 1) {
+        if (nzchar(spec)) {
+          spec <- list(model_file = spec)
+        } else {
+          spec <- list()
+        }
+      } else {
+        stop("Model definitions must be provided as lists or single file paths")
+      }
     }
 
     spec_model_file <- spec$model_file %||% global_model_file
@@ -150,6 +198,8 @@ clean_args <- function(params, root_dir = "/") {
     spec$name <- spec$name %||% spec$label %||% paste0("model", idx)
     normalized_models[[idx]] <- spec
   }
+  # Each entry in raw_models may be a full spec list, a single filename, or empty.
+  # Convert them into normalized spec lists with defaults applied.
 
   params$models <- normalized_models
   params$model <- normalized_models[[1]]

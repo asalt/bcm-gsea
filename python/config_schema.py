@@ -249,6 +249,42 @@ class PCAConfig(ConfigSection):
     }
 
 
+class GenePCAConfig(ConfigSection):
+    """Gene-level PCA plotting controls."""
+
+    __fields__ = {
+        "do": FieldMeta(bool, False, "Run PCA on the expression matrix."),
+        "width": FieldMeta(float, 7.8, "Figure width (inches)."),
+        "height": FieldMeta(float, 7.4, "Figure height (inches)."),
+        "components": FieldMeta(int, 3, "Number of principal components to include in biplots."),
+        "metadata_color": FieldMeta(List[str], list, "Metadata columns used to colour samples."),
+        "metadata_shape": FieldMeta(str, "", "Metadata column used to shape samples."),
+        "top_loadings": FieldMeta(int, 25, "Number of genes to highlight in loadings heatmaps."),
+        "heatmap": FieldMeta(bool, True, "Whether to generate top-loading heatmaps."),
+        "labSize": FieldMeta(float, 1.8, "Label size for gene loadings."),
+        "pointSize": FieldMeta(float, 4.0, "Point size for samples."),
+        "sizeLoadingsNames": FieldMeta(float, 1.4, "Font size for loading names."),
+    }
+
+
+class GeneUMAPConfig(ConfigSection):
+    """Gene-level UMAP controls."""
+
+    __fields__ = {
+        "do": FieldMeta(bool, False, "Run UMAP on the expression matrix."),
+        "width": FieldMeta(float, 7.2, "Figure width (inches)."),
+        "height": FieldMeta(float, 6.4, "Figure height (inches)."),
+        "n_neighbors": FieldMeta(int, 15, "Number of neighbors used by UMAP."),
+        "min_dist": FieldMeta(float, 0.1, "UMAP min_dist parameter."),
+        "metric": FieldMeta(str, "euclidean", "Distance metric passed to UMAP."),
+        "seed": FieldMeta(int, 42, "Random seed for reproducibility."),
+        "scale": FieldMeta(bool, True, "Z-score features before embedding."),
+        "metadata_color": FieldMeta(List[str], list, "Metadata columns used to colour samples."),
+        "metadata_shape": FieldMeta(str, "", "Metadata column used for point shapes."),
+    }
+
+
+
 class ExtraConfig(ConfigSection):
     """Extra ordering hints for plotting."""
 
@@ -336,6 +372,8 @@ class ParamsConfig(ConfigSection):
         "heatmap_gsea": HeatmapGSEAConfig,
         "heatmap_gene": HeatmapGeneConfig,
         "pca": PCAConfig,
+        "pca_gene": GenePCAConfig,
+        "umap_gene": GeneUMAPConfig,
         "extra": ExtraConfig,
         "advanced": AdvancedConfig,
         "model": ModelConfig,

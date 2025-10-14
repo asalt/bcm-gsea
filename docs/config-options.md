@@ -92,16 +92,39 @@ Generated limma summaries, volcano-ready tables, and PDF plots are stored under 
 - `do` (bool, default `true`)
 - `limit` (int, default `10`)
 
-## params.pca
+## params.pca (GSEA)
 
 - `do` (bool, default `false`)
 - `width` (float, default `7.8`)
 - `height` (float, default `7.4`)
-- `col_by` (string)
-- `mark_by` (string)
-- `top_pc` (int)
-- `max_pc` (int)
+- `col_by` (string, default `""`)
+- `mark_by` (string, default `""`)
+- `top_pc` (int, default `3`)
+- `max_pc` (int, default `3`)
 - `labSize`, `pointSize`, `sizeLoadingsNames` (floats)
+
+## params.pca_gene
+
+- `do` (bool, default `false`): Enable PCA on the expression matrix.
+- `width`/`height` (floats): Figure dimensions for PCA plots.
+- `components` (int, default `3`): Number of principal components kept for biplots.
+- `metadata_color` (array of strings, default `[]`): One or more metadata columns used to colour samples (one biplot per entry).
+- `metadata_shape` (string, default `""`): Metadata column used for point shapes.
+- `top_loadings` (int, default `25`): Number of genes rendered in the loadings heatmap.
+- `heatmap` (bool, default `true`): Emit a heatmap of top loading genes.
+- `labSize` / `pointSize` / `sizeLoadingsNames` (floats): Text and point sizes reused for PCA biplots.
+
+## params.umap_gene
+
+- `do` (bool, default `false`): Enable UMAP on the expression matrix.
+- `width`/`height` (floats): Figure dimensions for UMAP scatter plots.
+- `n_neighbors` (int, default `15`): UMAP neighborhood size.
+- `min_dist` (float, default `0.1`): Minimum distance between embedded points.
+- `metric` (string, default `"euclidean"`): Distance metric passed to `uwot::umap`.
+- `seed` (int, default `42`): Random seed for reproducibility.
+- `scale` (bool, default `true`): Z-score features per sample before embedding.
+- `metadata_color` (array of strings, default `[]`): Metadata columns used for colouring (plots generated per entry).
+- `metadata_shape` (string, default `""`): Metadata column used for point shapes.
 
 ## params.extra
 

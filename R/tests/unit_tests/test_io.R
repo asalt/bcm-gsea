@@ -15,6 +15,8 @@ io_tools <- new.env()
 source(file.path(src_dir, "./io.R"), local = io_tools)
 model_tools <- new.env()
 source(file.path(src_dir, "./modeling.R"), local = model_tools)
+umap_tools <- new.env()
+source(file.path(src_dir, "./umap.R"), local = umap_tools)
 
 test_that("ranks_dfs_to_lists returns correct list structure and naming", {
   # Create sample data frames
@@ -265,15 +267,51 @@ test_that("create_rnkfiles_from_model fits limma contrasts", {
     expect_true(fs::dir_exists(file.path(expr_dir, "volcano")))
     expect_true(fs::dir_exists(file.path(expr_dir, "volcano_plots")))
 
-    gct_updated <- cmapR::parse_gctx(gct_path)
-    expect_true("expr_Gene1" %in% colnames(gct_updated@cdesc))
+    metadata_cols <- attr(rnk_expr, "metadata_columns")
+    expect_true("expr_Gene1" %in% metadata_cols)
+    metadata_values <- attr(rnk_expr, "metadata_values")
+    expect_true("expr_Gene1" %in% names(metadata_values))
     gene_idx <- match("Gene1", gct@rid)
     expect_false(is.na(gene_idx))
     expected_expr <- as.numeric(gct@mat[gene_idx, gct@cid])
     expect_equal(
-      as.numeric(gct_updated@cdesc[, "expr_Gene1"]),
+      as.numeric(metadata_values[["expr_Gene1"]]),
       expected_expr,
       tolerance = 1e-4
     )
+  })
+})
+
+test_that("run_gene_umap_pipeline produces embeddings and plots", {
+  withr::with_tempdir({
+    gct <- io_tools$make_random_gct(10, 5)
+    gct@cdesc$group <- rep(c("Control", "Drug", "Placebo"), length.out = ncol(gct@mat))
+    gct@rid <- paste0("Gene", seq_len(nrow(gct@mat)))
+    gct@rdesc$id <- gct@rid
+
+    params <- list(
+      do = TRUE,
+      width = 6.8,
+      height = 5.6,
+      n_neighbors = 5,
+      min_dist = 0.2,
+      metric = "euclidean",
+      seed = 123,
+      scale = TRUE,
+      metadata_color = list("group"),
+      metadata_shape = ""
+    )
+
+    result <- umap_tools$run_gene_umap_pipeline(
+      gct = gct,
+      params = params,
+      savedir = getwd(),
+      replace = TRUE
+    )
+
+    expect_s3_class(result, "data.frame")
+    expect_true(all(c("UMAP1", "UMAP2") %in% colnames(result)))
+    expect_true(fs::dir_exists(fs::path(getwd(), "umap_gene", "plots")))
+    expect_true(fs::file_exists(fs::path(getwd(), "umap_gene", "tables", "gene_umap_embedding.tsv")))
   })
 })

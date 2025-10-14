@@ -57,6 +57,31 @@ labSize = 1.8
 pointSize = 4.0
 sizeLoadingsNames = 1.4
 
+[params.pca_gene]
+do = false
+width = 7.8
+height = 7.4
+components = 3
+metadata_color = []
+metadata_shape = ""
+top_loadings = 25
+heatmap = true
+labSize = 1.8
+pointSize = 4.0
+sizeLoadingsNames = 1.4
+
+[params.umap_gene]
+do = false
+width = 7.2
+height = 6.4
+n_neighbors = 15
+min_dist = 0.1
+metric = "euclidean"
+seed = 42
+scale = true
+metadata_color = []
+metadata_shape = ""
+
 [params.extra]
 rankname_order = []
 samplename_order = []
