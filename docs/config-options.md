@@ -113,7 +113,7 @@ Generated limma summaries, volcano-ready tables, and PDF plots are stored under 
 - `top_loadings` (int, default `25`): Number of genes rendered in the loadings heatmap.
 - `heatmap` (bool, default `true`): Emit a heatmap of top loading genes.
 - `labSize` / `pointSize` / `sizeLoadingsNames` (floats): Text and point sizes reused for PCA biplots.
-- `variants` (array of tables, default `[]`): Optional overrides for running multiple PCA configurations (each entry may specify `name`, `metadata_color`, `metadata_shape`, etc.).
+- Gene PCA runs once using the parsed GCT matrix; it skips automatically if no GCT was provided.
 
 ## params.umap_gene
 

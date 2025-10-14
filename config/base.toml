@@ -64,7 +64,6 @@ height = 7.4
 components = 3
 metadata_color = []
 metadata_shape = ""
-variants = []
 top_loadings = 25
 heatmap = true
 labSize = 1.8
