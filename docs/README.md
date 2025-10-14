@@ -20,6 +20,24 @@ Python Integration: Python manages the database, hosts APIs, and stores results.
 Testing: Comprehensive testing using pytest for Python and testthat for R.
 Visualization: Utilizes ggplot2 for high-quality plots, including faceted barplots, heatmaps, PCA plots, and bubble plots summarizing pathway directionality.
 
+## Output Naming & Shortening
+
+Outputs now use length‑safe, informative filenames. Two strategies keep names concise while preserving the important bits:
+
+- Common prefix/suffix stripping: For a set of comparisons within a collection, shared leading or trailing text is removed (on token boundaries like `_`, `-`, `.`, or spaces). This preserves the unique part of each label. When combined with hashing, filenames stay portable across filesystems.
+- Optional token‑stem stripping: If every label contains lowercase stems at the start of tokens (e.g., `cellOCI3`, `treatControl`), those stems (like `cell`, `treat`) are dropped, keeping `OCI3`, `Control`, etc. This is conservative and only applies when the pattern is present across the whole set.
+
+Pathway prefixes (e.g., `HALLMARK_`, `KEGG_`, `REACTOME_`, `GOBP_`, `GOMF_`, `GOCC_`, `MEDICUS_`) are removed from directory and filename components when the collection already encodes this context in the folder structure.
+
+Title readability: Enrichment plot titles replace underscores with spaces and are wrapped to a configurable width.
+
+Advanced R options:
+
+- `options(tackle2_enrichplot_title_wrap = 40)` controls the wrap width for enrichplot titles (defaults to `40`).
+- `options(tackle2_name_map_strip_stems = TRUE)` toggles the optional token‑stem stripping used in filename shortening (defaults to `TRUE`).
+
+These options are read at runtime by the R plotting helpers; set them at the top of your session or within your analysis script before plotting.
+
 ## Ordering Samples & Comparisons
 
 The order in which comparisons appear determines how combined plots, heatmaps, and PCA overlays read. You can control this in two complementary ways:

@@ -304,10 +304,14 @@ all_bubble_plots <- function(
       collection_name <- .y
       collection_label <- format_source_label(collection_name)
       list_of_comparisons <- .x
+      # Build a friendly mapping to strip shared affixes from comparison names
+      comparison_names <- names(list_of_comparisons)
+      name_map <- util_tools$make_name_map(comparison_names)
       list_of_comparisons %>% purrr::imap(
         ~ {
           dataframe <- .x
           comparison_name <- .y
+          comparison_label <- name_map[[comparison_name]] %||% comparison_name
 
           purrr::map(limit, function(.limit) {
             sel <- fgsea_tools$select_topn(dataframe, limit = .limit, pstat_cutoff = 1)
@@ -324,7 +328,7 @@ all_bubble_plots <- function(
             save_path <- NULL
             if (!is.null(local_save_func)) {
               collection_dir <- util_tools$safe_path_component(collection_name)
-              comparison_dir <- util_tools$safe_path_component(comparison_name)
+              comparison_dir <- util_tools$safe_path_component(comparison_label)
               filename <- util_tools$safe_filename(
                 "bubble",
                 paste0("top", .limit),

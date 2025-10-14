@@ -338,6 +338,10 @@ plot_heatmap_of_edges <- function(
   process_collection <- function(collection_name, results_list) {
     collection_results <- results_list[[collection_name]]
 
+    # Build a friendly mapping for comparison names to strip shared affixes
+    comparison_names <- names(collection_results)
+    name_map <- util_tools$make_name_map(comparison_names)
+
     if (!is.null(combine_by)) {
       ranknames <- names(results_list[[collection_name]])
       facets <- combine_by[ranknames, "facet"] %>% unique()
@@ -360,7 +364,8 @@ plot_heatmap_of_edges <- function(
     }
 
     purrr::map(names(collection_results), function(comparison_name) {
-      process_comparison(collection_name, comparison_name, collection_results[[comparison_name]], .gct)
+      comparison_label <- name_map[[comparison_name]] %||% comparison_name
+      process_comparison(collection_name, comparison_name, comparison_label, collection_results[[comparison_name]], .gct)
     })
     #
   }
@@ -370,7 +375,7 @@ plot_heatmap_of_edges <- function(
 
 
   # Process each row
-  process_row <- function(row, collection_name, comparison_name, gct) {
+  process_row <- function(row, collection_name, comparison_name, comparison_label, gct) {
     # expected row names: pathway, pval, padj, NES, leadingEdge
     expected_row_names <- c("pathway", "pval", "padj", "NES", "leadingEdge")
     if (!all(expected_row_names %in% colnames(row))) {
@@ -425,7 +430,7 @@ plot_heatmap_of_edges <- function(
         get_arg(local_save_func, "filename"),
         util_tools$cluster_flag_token(cluster_rows, "rc"),
         util_tools$cluster_flag_token(cluster_columns, "cc"),
-        comparison_name,
+        comparison_label,
         cut_by_label,
         paste0(nrow(subgct@mat), "x", ncol(subgct@mat)),
         fallback = "gene_heatmap"
@@ -465,7 +470,7 @@ plot_heatmap_of_edges <- function(
   }
 
   # Process each comparison
-  process_comparison <- function(collection_name, comparison_name, result, gct) {
+  process_comparison <- function(collection_name, comparison_name, comparison_label, result, gct) {
 
     xtra <- NULL
     if (!is.null(pathways_of_interest)){ # an input argument list, or NULL
@@ -505,7 +510,7 @@ plot_heatmap_of_edges <- function(
     map_func(seq_len(nrow(forplot)), function(row_index) {
       tryCatch({
       row = forplot[row_index, ]
-      process_row(row, collection_name, comparison_name, gct)
+      process_row(row, collection_name, comparison_name, comparison_label, gct)
       }, error = function(e) {
       message("Error at row_index=", row_index, ": ", e$message)
         NULL
@@ -651,18 +656,28 @@ plot_heatmap_of_edges <- function(
 
 
 
-strip_pathway_leader <- function(df) {
-  if (!"pathway" %in% colnames(df)) {
-      return(df) }
-  # TODO: add the rest
-  df %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "HALLMARK_")) %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "KEGG_")) %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "MEDICUS_")) %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "REACTOME_")) %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "GOMF_")) %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "GOBP_")) %>%
-    dplyr::mutate(pathway = stringr::str_remove(pathway, "GOCC_"))
+strip_pathway_leader <- function(x) {
+  # Accepts either a character vector of pathway names or a data.frame with a 'pathway' column.
+  remove_tokens <- function(v) {
+    v %>%
+      stringr::str_remove("^HALLMARK_") %>%
+      stringr::str_remove("^KEGG_") %>%
+      stringr::str_remove("^REACTOME_") %>%
+      stringr::str_remove("^MEDICUS_") %>%
+      stringr::str_remove("^GOMF_") %>%
+      stringr::str_remove("^GOBP_") %>%
+      stringr::str_remove("^GOCC_")
+  }
+
+  if (is.character(x)) {
+    return(remove_tokens(x))
+  }
+  if (is.data.frame(x)) {
+    if (!"pathway" %in% colnames(x)) return(x)
+    x <- dplyr::mutate(x, pathway = remove_tokens(.data$pathway))
+    return(x)
+  }
+  x
 }
 
 # Function: prepare_data_for_barplot
@@ -953,10 +968,14 @@ all_barplots_with_numbers <- function(
       collection_name <- .y
       collection_label <- format_source_label(collection_name)
       list_of_comparisons <- .x
+      # Shorten comparison names by stripping shared affixes for path components
+      comparison_names <- names(list_of_comparisons)
+      name_map <- util_tools$make_name_map(comparison_names)
       plts <- list_of_comparisons %>% imap(
         ~ {
           dataframe <- .x
           comparison_name <- .y
+          comparison_label <- name_map[[comparison_name]] %||% comparison_name
           .plts <- limit %>% purrr::map(
             ~ {
 
@@ -981,7 +1000,7 @@ all_barplots_with_numbers <- function(
               save_path <- NULL
               if (!is.null(local_save_func)) {
                 collection_dir <- util_tools$safe_path_component(collection_name)
-                comparison_dir <- util_tools$safe_path_component(comparison_name)
+                comparison_dir <- util_tools$safe_path_component(comparison_label)
                 save_path <- util_tools$safe_subdir(
                   get_arg(local_save_func, "path"),
                   collection_dir,
@@ -1660,9 +1679,9 @@ plot_top_ES_across <- function(
         path <- get_arg(save_func, "path")
         collection_dir <- util_tools$safe_path_component(collection_name)
         newpath <- util_tools$safe_subdir(path, collection_dir, "enrichplots")
+        # Avoid duplicating collection info in filename; directory already encodes it
         filename <- util_tools$safe_filename(
           get_arg(save_func, "filename"),
-          collection_dir,
           fallback = "enrichplots"
         )
         save_func <- make_partial(save_func, path = newpath, filename = filename)
@@ -1768,17 +1787,19 @@ plot_top_ES <- function(
       log_msg(msg = paste0("plotting combined ", pathway_name))
       log_msg(msg = paste0("show ticks: ", combined_show_ticks))
 
+      wrap_width <- getOption(util_tools$pkg_option_name("enrichplot_title_wrap"), 40)
       .plt <- plotES_combined(rankorder,
-        title = pathway_name %>% str_replace_all("_", " ") %>% str_wrap(width = 40),
+        title = pathway_name %>% str_replace_all("_", " ") %>% str_wrap(width = wrap_width),
         show_ticks = combined_show_ticks,
         label_size = combined_label_size,
       ) # will be faceted if "facet" in .x
 
 
       if (!is.null(save_func)) {
+        pathway_label <- strip_pathway_leader(pathway_name)
         newdir <- util_tools$safe_filename(
           get_arg(save_func, "filename"),
-          pathway_name,
+          pathway_label,
           fallback = "combined_dir",
           max_chars = 60
         )
@@ -1823,16 +1844,22 @@ plot_top_ES <- function(
     purrr::imap(~ {
       rankorders <- .x
       pathway_name <- .y
+      # Build name mapping for comparison labels within this pathway's rankorders
+      name_map <- util_tools$make_name_map(names(rankorders))
 
       rankorders %>% purrr::imap(~ {
         rankorder <- .x
         comparison <- .y
+        comparison_label <- name_map[[comparison]] %||% comparison
         .stats <- df %>% dplyr::filter(pathway == pathway_name, rankname == comparison)
         if (nrow(.stats) == 0 ) {
             # problem
             return(NULL)
         }
-        .title <- paste0(comparison, "\n", pathway_name)
+        wrap_width <- getOption(util_tools$pkg_option_name("enrichplot_title_wrap"), 40)
+        comp_title <- comparison %>% stringr::str_replace_all("_", " ") %>% stringr::str_wrap(width = wrap_width)
+        path_title <- pathway_name %>% stringr::str_replace_all("_", " ") %>% stringr::str_wrap(width = wrap_width)
+        .title <- paste0(comp_title, "\n", path_title)
         .subtitle <- ""
         if (nrow(.stats) == 1) {
           .subtitle <- paste0(
@@ -1853,7 +1880,7 @@ plot_top_ES <- function(
             max_chars = 60
           )
           newpath <- util_tools$safe_subdir(get_arg(save_func, "path"), newdir)
-          newfilename <- util_tools$safe_filename(comparison, fallback = "comparison")
+          newfilename <- util_tools$safe_filename(comparison_label, fallback = "comparison")
           save_func <- make_partial(save_func, path = newpath, filename = newfilename)
           # and now call it
           save_func(

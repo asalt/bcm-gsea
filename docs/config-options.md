@@ -161,3 +161,13 @@ Each entry defines a gene-set collection:
 - `loglevel` (string, default `"INFO"`)
 - `pivot_gsea_results` (bool, default `false`)
 - `quiet` (bool, default `false`)
+
+## R Options (advanced)
+
+These are R session options that influence naming and presentation. Set them with `options(...)` in your R session before running plots.
+
+- `tackle2_enrichplot_title_wrap` (int, default `40`)
+  - Controls the word‑wrap width for enrichplot titles after underscores are replaced with spaces.
+
+- `tackle2_name_map_strip_stems` (bool, default `TRUE`)
+  - Enables conservative removal of common lowercase token stems (e.g., `cell` in `cellOCI3`, `treat` in `treatControl`) across a set of labels when generating shorter filenames. Disable if you prefer to keep stems.

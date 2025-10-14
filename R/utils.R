@@ -502,6 +502,207 @@ safe_filename <- function(..., fallback = "file", max_chars = 80, delim = "_") {
   return(candidate)
 }
 
+# --- Smart label shortening helpers ------------------------------------
+
+# Compute the longest common prefix among a character vector
+.longest_common_prefix <- function(strings) {
+  strings <- as.character(strings)
+  strings <- strings[!is.na(strings)]
+  if (length(strings) < 2) return("")
+  pref <- strings[[1]]
+  for (s in strings[-1]) {
+    maxlen <- min(nchar(pref), nchar(s))
+    while (maxlen > 0 && substr(pref, 1, maxlen) != substr(s, 1, maxlen)) {
+      maxlen <- maxlen - 1
+    }
+    pref <- substr(pref, 1, maxlen)
+    if (maxlen == 0) break
+  }
+  pref
+}
+
+# Reverse a string (ASCII-safe)
+.rev_str <- function(s) paste(rev(strsplit(s, NULL, fixed = FALSE)[[1]]), collapse = "")
+
+# Compute the longest common suffix among a character vector
+.longest_common_suffix <- function(strings) {
+  strings <- as.character(strings)
+  strings <- strings[!is.na(strings)]
+  if (length(strings) < 2) return("")
+  rev_strings <- vapply(strings, .rev_str, character(1))
+  rev_pref <- .longest_common_prefix(rev_strings)
+  if (!nzchar(rev_pref)) return("")
+  .rev_str(rev_pref)
+}
+
+# Trim an affix to a sensible token boundary (prefix keeps up to last delimiter; suffix drops from first delimiter)
+.trim_prefix_to_boundary <- function(prefix, delim = "[._\\-\\s]") {
+  if (!nzchar(prefix)) return("")
+  locs <- gregexpr(delim, prefix, perl = TRUE)[[1]]
+  if (length(locs) == 1 && locs[1] == -1) return("")
+  last_pos <- max(locs[locs > 0])
+  if (is.finite(last_pos) && last_pos > 0) substr(prefix, 1, last_pos) else ""
+}
+
+.trim_suffix_to_boundary <- function(suffix, delim = "[._\\-\\s]") {
+  if (!nzchar(suffix)) return("")
+  locs <- gregexpr(delim, suffix, perl = TRUE)[[1]]
+  if (length(locs) == 1 && locs[1] == -1) return("")
+  first_pos <- min(locs[locs > 0])
+  if (is.finite(first_pos) && first_pos > 0) substr(suffix, first_pos, nchar(suffix)) else ""
+}
+
+# Strip common leading/trailing tokens from a vector of labels
+strip_common_affixes <- function(strings,
+                                 min_affix_chars = 4,
+                                 min_remaining = 6,
+                                 delim = "[._\\-\\s]") {
+  strings <- as.character(strings)
+  if (length(strings) < 2) {
+    return(list(values = strings, prefix = "", suffix = ""))
+  }
+
+  lcp_raw <- .longest_common_prefix(strings)
+  lcs_raw <- .longest_common_suffix(strings)
+
+  pref <- .trim_prefix_to_boundary(lcp_raw, delim = delim)
+  suf  <- .trim_suffix_to_boundary(lcs_raw, delim = delim)
+
+  # discard tiny affixes
+  if (nchar(pref) < min_affix_chars) pref <- ""
+  if (nchar(suf)  < min_affix_chars) suf  <- ""
+
+  # Helper to apply selected affixes
+  apply_affix <- function(x, use_pref = TRUE, use_suf = TRUE) {
+    y <- x
+    if (use_pref && nzchar(pref)) {
+      y <- ifelse(startsWith(y, pref), substr(y, nchar(pref) + 1L, nchar(y)), y)
+    }
+    if (use_suf && nzchar(suf)) {
+      y <- ifelse(endsWith(y, suf), substr(y, 1L, nchar(y) - nchar(suf)), y)
+    }
+    y
+  }
+
+  # Try both, then fall back to only one side if needed
+  cand_both <- apply_affix(strings, TRUE, TRUE)
+  if (all(nchar(cand_both) >= min_remaining & nzchar(cand_both))) {
+    cleaned <- cand_both
+    used_pref <- pref
+    used_suf  <- suf
+  } else {
+    cand_pref <- apply_affix(strings, TRUE, FALSE)
+    cand_suf  <- apply_affix(strings, FALSE, TRUE)
+    if (nzchar(pref) && all(nchar(cand_pref) >= min_remaining & nzchar(cand_pref))) {
+      cleaned <- cand_pref
+      used_pref <- pref
+      used_suf <- ""
+    } else if (nzchar(suf) && all(nchar(cand_suf) >= min_remaining & nzchar(cand_suf))) {
+      cleaned <- cand_suf
+      used_pref <- ""
+      used_suf <- suf
+    } else {
+      cleaned <- strings
+      used_pref <- ""
+      used_suf <- ""
+    }
+  }
+
+  list(values = cleaned, prefix = used_pref, suffix = used_suf)
+}
+
+# Build a name mapping: original -> cleaned (with attributes noting removed parts)
+make_name_map <- function(strings,
+                          min_affix_chars = 4,
+                          min_remaining = 6,
+                          delim = "[._\\-\\s]",
+                          allow_stem_stripping = TRUE,
+                          min_stem_len = 4) {
+  # Allow runtime toggle via option tackle2_name_map_strip_stems
+  allow_stem_stripping <- getOption(pkg_option_name("name_map_strip_stems"), allow_stem_stripping)
+  strings <- as.character(strings)
+  res <- strip_common_affixes(strings,
+                              min_affix_chars = min_affix_chars,
+                              min_remaining = min_remaining,
+                              delim = delim)
+  cleaned <- res$values
+  names(cleaned) <- strings
+  # Log once if anything changed
+  if (!identical(strings, cleaned)) {
+    msg <- paste0(
+      "shortened labels by stripping",
+      if (nzchar(res$prefix)) paste0(" prefix '", res$prefix, "'") else "",
+      if (nzchar(res$suffix)) paste0(" suffix '", res$suffix, "'") else "",
+      "."
+    )
+    log_msg(info = msg)
+  }
+  attr(cleaned, "removed_prefix") <- res$prefix
+  attr(cleaned, "removed_suffix") <- res$suffix
+
+  # Optional: remove common lowercase stems at the start of tokens like 'cell', 'treat'
+  if (allow_stem_stripping) {
+    cleaned2 <- strip_common_token_stems(cleaned, min_stem_len = min_stem_len, delim = delim)
+    if (!identical(cleaned2, cleaned)) {
+      cleaned <- cleaned2
+    }
+  }
+  cleaned
+}
+
+# Remove common stems that appear as lowercase prefixes at the start of tokens across all strings.
+# Example tokens affected: 'cellOCI3' -> 'OCI3', 'treatControl' -> 'Control'.
+strip_common_token_stems <- function(strings, min_stem_len = 4, delim = "[._\\-\\s]") {
+  strings <- as.character(strings)
+  if (length(strings) < 2) return(strings)
+
+  # Tokenize
+  split_tokens <- function(s) unlist(strsplit(s, delim, perl = TRUE), use.names = FALSE)
+  toks_list <- lapply(strings, split_tokens)
+
+  # Extract candidate stems present in each string: lowercase prefix before Uppercase/Digit
+  extract_stems <- function(tokens) {
+    stems <- vapply(tokens, function(tok) {
+      m <- regexpr(paste0("^([a-z]{", min_stem_len, ",})(?=[A-Z0-9])"), tok, perl = TRUE)
+      if (m[1] > 0) substr(tok, m[1], m[1] + attr(m, "match.length") - 1) else ""
+    }, character(1))
+    unique(stems[nzchar(stems)])
+  }
+  per_string_stems <- lapply(toks_list, extract_stems)
+  if (any(lengths(per_string_stems) == 0)) return(strings)
+
+  common_stems <- Reduce(intersect, per_string_stems)
+  # Exclude trivial stems or ones we shouldn't touch explicitly, "vs", "minus", "dv"
+  common_stems <- setdiff(common_stems, c("vs", "minus", "dv"))
+  if (length(common_stems) == 0) return(strings)
+
+  # Apply removal conservatively
+  cleaned <- vapply(seq_along(strings), function(i) {
+    tokens <- toks_list[[i]]
+    out_tokens <- vapply(tokens, function(tok) {
+      replaced <- tok
+      for (stem in common_stems) {
+        if (startsWith(replaced, stem)) {
+          rest <- substr(replaced, nchar(stem) + 1L, nchar(replaced))
+          # Only drop the stem if remainder remains meaningful
+          if (nzchar(rest)) {
+            replaced <- rest
+          }
+        }
+      }
+      replaced
+    }, character(1))
+    paste(out_tokens[out_tokens != ""], collapse = "_")
+  }, character(1))
+
+  # Log once
+  if (!identical(strings, cleaned)) {
+    log_msg(info = paste0("shortened labels by removing common token stems: ", paste(common_stems, collapse = ", "))) }
+
+  names(cleaned) <- names(strings)
+  cleaned
+}
+
 cluster_flag_token <- function(flag, prefix) {
   value <- "NA"
   if (length(flag) > 0) {

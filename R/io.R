@@ -308,11 +308,15 @@ log_msg(msg = paste0("length results list :", length(results_list)))
   results_list_towrite <- results_list %>% purrr::imap(~{
     result_list  <- .x #%>% map_tools$add_leadingedges_to_results_list()
     collection_name <- .y
+    # Construct a comparison name map to shorten labels for files within this collection
+    comparison_names <- names(result_list)
+    name_map <- util_tools$make_name_map(comparison_names)
     result_list %>% purrr::imap(~{
       result <- .x
       comparison_name <- .y
+      comparison_label <- name_map[[comparison_name]] %||% comparison_name
       filename <- paste0(
-        util_tools$safe_filename(collection_name, comparison_name, fallback = "gsea_result"),
+        util_tools$safe_filename(collection_name, comparison_label, fallback = "gsea_result"),
         ".tsv"
       )
       outf <- file.path(savedir, filename)
