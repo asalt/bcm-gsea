@@ -66,6 +66,8 @@ def generate_report(
     artefacts = catalog.scan_savedir(paths.savedir)
     context = summary.build_context(paths.savedir, artefacts, config_path=paths.config_path)
 
+    templating.install_static_assets(paths.output_dir)
+
     previews = assets.prepare_plot_previews(artefacts.plot_files, paths.savedir, paths.output_dir)
     if previews:
         for plot in context.get("plots", []):
@@ -76,8 +78,6 @@ def generate_report(
     index_html = templating.render_report(context)
     output_path = paths.output_dir / "index.html"
     output_path.write_text(index_html, encoding="utf-8")
-
-    templating.install_static_assets(paths.output_dir)
 
     return output_path
 
