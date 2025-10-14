@@ -278,8 +278,21 @@ def package(
 @click.option("--serve/--no-serve", default=False, show_default=True, help="Launch a static web server after generation")
 @click.option("--port", default=8000, show_default=True, help="Port for --serve")
 @click.option("--no-browser", is_flag=True, help="Do not auto-open the browser when serving")
-def report(savedir, config, output, serve, port, no_browser):
+@click.option(
+    "--log-level",
+    type=click.Choice(["debug", "info", "warning", "error", "critical"], case_sensitive=False),
+    default="warning",
+    show_default=True,
+    help="Logging verbosity for report generation.",
+)
+def report(savedir, config, output, serve, port, no_browser, log_level):
     """Generate an HTML report summarising analysis outputs."""
+
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper(), logging.WARNING),
+        format="%(levelname)s:%(name)s:%(message)s",
+        force=True,
+    )
 
     try:
         index_path = generate_report(
