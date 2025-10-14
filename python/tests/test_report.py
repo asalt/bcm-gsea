@@ -87,3 +87,37 @@ def test_prepare_plot_previews_handles_errors(tmp_path):
     dummy_pdf = tmp_path / "plot.pdf"
     previews = assets.prepare_plot_previews([dummy_pdf], tmp_path, tmp_path)
     assert previews == {}
+
+
+def test_prepare_plot_previews_prioritises_pdfs(tmp_path, monkeypatch):
+    pdf_path = tmp_path / "plot.pdf"
+    png_path = tmp_path / "plot.png"
+    pdf_path.touch()
+    png_path.touch()
+
+    calls = []
+
+    def fake_run(cmd, check, capture_output):
+        from pathlib import Path
+        calls.append(cmd)
+        prefix = Path(cmd[-1])
+        prefix.with_suffix(".png").write_bytes(b"")
+        import subprocess
+
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(assets.subprocess, "run", fake_run)
+    monkeypatch.setattr(assets.shutil, "which", lambda name: "/usr/bin/pdftoppm")
+
+    previews = assets.prepare_plot_previews(
+        [png_path, pdf_path],
+        savedir=tmp_path,
+        output_dir=tmp_path,
+        limit=1,
+    )
+
+    assert len(previews) == 1
+    key = next(iter(previews))
+    assert key == pdf_path.relative_to(tmp_path)
+    assert (tmp_path / previews[key]).exists()
+    assert len(calls) == 1

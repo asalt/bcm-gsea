@@ -34,7 +34,8 @@ def prepare_plot_previews(
     preview_root.mkdir(parents=True, exist_ok=True)
 
     previews: dict[Path, Path] = {}
-    for path in list(plot_files)[:limit]:
+    converted = 0
+    for path in plot_files:
         if path.suffix.lower() != ".pdf":
             continue
 
@@ -58,6 +59,9 @@ def prepare_plot_previews(
         except ValueError:
             rel = path
         previews[rel] = preview_path.relative_to(output_dir)
+        converted += 1
+        if converted >= limit:
+            break
 
     return previews
 
