@@ -705,6 +705,129 @@ strip_common_token_stems <- function(strings, min_stem_len = 4, delim = "[._\\-\
   cleaned
 }
 
+# this is also considered unsafe and untested 
+strip_common_token_stems2 <- function(
+  strings,
+  min_stem_len      = 4,
+  delim             = "[._\\-\\s]",
+  min_frac          = 1.0,            # fraction of strings (0..1) that must share a stem/token
+  min_remainder_len = 2,              # require >= this many chars after a trim
+  protect           = c("vs"),        # tokens/stems to never drop
+  drop_identical_tokens = FALSE       # optional; see notes
+) {
+  strings <- as.character(strings)
+  if (length(strings) < 2L) return(strings)
+
+  # --- tokenization ---
+  split_tokens <- function(s) unlist(strsplit(s, delim, perl = TRUE), use.names = FALSE)
+  toks_list <- lapply(strings, split_tokens)
+
+  # --- helper: longest common head/tail runs of tokens ---
+  common_run <- function(lst, from_end = FALSE) {
+    if (from_end) lst <- lapply(lst, rev)
+    maxk <- min(lengths(lst))
+    out  <- character(0)
+    for (k in seq_len(maxk)) {
+      col <- vapply(lst, `[`, character(1), k)
+      if (length(unique(col)) == 1L) out <- c(out, col[1]) else break
+    }
+    if (from_end) rev(out) else out
+  }
+
+  # drop common head/tail runs outright (safe shortening)
+  head_run <- common_run(toks_list, FALSE)
+  tail_run <- common_run(toks_list, TRUE)
+  trim_runs <- function(x) {
+    a <- length(head_run); b <- length(tail_run); n <- length(x)
+    i <- a + 1L; j <- n - b
+    if (i > j) character(0) else x[i:j]
+  }
+  core <- lapply(toks_list, trim_runs)
+
+  # --- generalized stem extraction ---
+  extract_stem <- function(tok) {
+    # alpha -> digit (e.g., rep1, KRAS12)
+    m1 <- regexpr(paste0("^([[:alpha:]]{", min_stem_len, ",})(?=[[:digit:]])"), tok, perl = TRUE)
+    if (m1[1] > 0) return(substr(tok, m1[1], m1[1] + attr(m1, "match.length") - 1))
+    # lower -> UPPER hump (e.g., sampleA, mapkErk)
+    m2 <- regexpr(paste0("^([[:lower:]]{", min_stem_len, ",})(?=[[:upper:]])"), tok, perl = TRUE)
+    if (m2[1] > 0) return(substr(tok, m2[1], m2[1] + attr(m2, "match.length") - 1))
+    # UPPER -> digit (e.g., KRAS12, HIF1A)
+    m3 <- regexpr(paste0("^([[:upper:]]{", min_stem_len, ",})(?=[[:digit:]])"), tok, perl = TRUE)
+    if (m3[1] > 0) return(substr(tok, m3[1], m3[1] + attr(m3, "match.length") - 1))
+    ""
+  }
+
+  per_string_stems <- lapply(core, function(tokens) {
+    unique(Filter(nzchar, vapply(tokens, extract_stem, character(1))))
+  })
+
+  # find common stems (robust to 1-row/1-col cases)
+  stem_universe <- unique(unlist(per_string_stems, use.names = FALSE))
+  common_stems  <- character(0)
+  if (length(stem_universe)) {
+    present <- vapply(per_string_stems,
+                      function(x) stem_universe %in% x,
+                      FUN.VALUE = rep_len(FALSE, length(stem_universe)))
+    if (is.null(dim(present))) present <- matrix(present, nrow = length(stem_universe))
+    freq <- rowMeans(present)
+    common_stems <- setdiff(stem_universe[freq >= min_frac], protect)
+    # avoid prefix-of-prefix interference
+    common_stems <- common_stems[order(-nchar(common_stems))]
+  }
+
+  # --- apply stem removals conservatively ---
+  cleaned_core <- lapply(core, function(tokens) {
+    if (!length(tokens)) return(character(0))
+    vapply(tokens, function(tok) {
+      replaced <- tok
+      if (length(common_stems)) {
+        for (stem in common_stems) {
+          if (startsWith(replaced, stem)) {
+            rest <- substr(replaced, nchar(stem) + 1L, nchar(replaced))
+            # only drop if the remainder looks meaningful
+            if (nchar(rest) >= min_remainder_len && grepl("[[:alnum:]]", rest, perl = TRUE)) {
+              replaced <- rest
+              break  # stop after first match to avoid over-trimming
+            }
+          }
+        }
+      }
+      replaced
+    }, character(1))
+  })
+
+  # --- optionally drop identical tokens AFTER stem trimming ---
+  if (isTRUE(drop_identical_tokens)) {
+    universe <- unique(unlist(lapply(cleaned_core, unique), use.names = FALSE))
+    universe <- setdiff(universe, protect)
+    if (length(universe)) {
+      present <- vapply(cleaned_core,
+                        function(x) universe %in% unique(x),
+                        FUN.VALUE = rep_len(FALSE, length(universe)))
+      if (is.null(dim(present))) present <- matrix(present, nrow = length(universe))
+      freq <- rowMeans(present)
+      common_tok <- universe[freq >= min_frac]
+      if (length(common_tok)) {
+        cleaned_core <- lapply(cleaned_core, function(x) {
+          for (t in common_tok) {
+            pos <- match(t, x)
+            if (!is.na(pos)) x <- x[-pos]  # drop one occurrence
+          }
+          x
+        })
+      }
+    }
+  }
+
+  # --- reassemble ---
+  cleaned <- vapply(cleaned_core, function(tok) paste(tok[tok != ""], collapse = "_"), character(1))
+
+  names(cleaned) <- names(strings)
+  cleaned
+}
+
+
 cluster_flag_token <- function(flag, prefix) {
   value <- "NA"
   if (length(flag) > 0) {
