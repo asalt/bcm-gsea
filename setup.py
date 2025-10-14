@@ -8,6 +8,7 @@ setup(
     install_requires=[
         "Click",
         "ollama",
+        "jinja2",
     ],
     entry_points={
         "console_scripts": [

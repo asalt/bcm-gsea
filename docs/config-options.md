@@ -113,6 +113,7 @@ Generated limma summaries, volcano-ready tables, and PDF plots are stored under 
 - `top_loadings` (int, default `25`): Number of genes rendered in the loadings heatmap.
 - `heatmap` (bool, default `true`): Emit a heatmap of top loading genes.
 - `labSize` / `pointSize` / `sizeLoadingsNames` (floats): Text and point sizes reused for PCA biplots.
+- `variants` (array of tables, default `[]`): Optional overrides for running multiple PCA configurations (each entry may specify `name`, `metadata_color`, `metadata_shape`, etc.).
 
 ## params.umap_gene
 
@@ -125,6 +126,7 @@ Generated limma summaries, volcano-ready tables, and PDF plots are stored under 
 - `scale` (bool, default `true`): Z-score features per sample before embedding.
 - `metadata_color` (array of strings, default `[]`): Metadata columns used for colouring (plots generated per entry).
 - `metadata_shape` (string, default `""`): Metadata column used for point shapes.
+- `variants` (array of tables, default `[]`): Optional parameter set overrides (each entry may include `name`, `n_neighbors`, `min_dist`, `metadata_color`, etc.).
 
 ## params.extra
 

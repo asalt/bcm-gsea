@@ -20,6 +20,11 @@ import pandas as pd
 
 from . import export_packager
 from . import config_schema
+from .report.generator import (
+    ReportGenerationError,
+    generate_report,
+    serve_directory,
+)
 
 # from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -250,6 +255,48 @@ def package(
     click.echo(f"Files packaged: {manifest['file_count']}")
     click.echo(f"Total size: {manifest['total_size_bytes']:,} bytes")
 
+
+@main.command()
+@click.option(
+    "-s",
+    "--savedir",
+    type=click.Path(exists=True, file_okay=False),
+    help=f"Directory containing {APP_NAME} pipeline outputs",
+)
+@click.option(
+    "-c",
+    "--config",
+    type=click.Path(exists=True, dir_okay=False),
+    help="TOML configuration file used for the run",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(file_okay=False, dir_okay=True),
+    help="Directory where the report should be written (defaults to <savedir>/report)",
+)
+@click.option("--serve/--no-serve", default=False, show_default=True, help="Launch a static web server after generation")
+@click.option("--port", default=8000, show_default=True, help="Port for --serve")
+@click.option("--no-browser", is_flag=True, help="Do not auto-open the browser when serving")
+def report(savedir, config, output, serve, port, no_browser):
+    """Generate an HTML report summarising analysis outputs."""
+
+    try:
+        index_path = generate_report(
+            savedir=Path(savedir) if savedir else None,
+            config=Path(config) if config else None,
+            output=Path(output) if output else None,
+        )
+    except ReportGenerationError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Report written to {index_path}")
+
+    if serve:
+        try:
+            serve_directory(index_path.parent, port=port, open_browser=not no_browser)
+        except ReportGenerationError as exc:
+            raise click.ClickException(str(exc)) from exc
 
 def _serialize_default(value):
     if isinstance(value, (dict, list)):

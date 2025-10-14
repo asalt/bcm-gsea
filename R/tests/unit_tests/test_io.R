@@ -298,20 +298,29 @@ test_that("run_gene_umap_pipeline produces embeddings and plots", {
       metric = "euclidean",
       seed = 123,
       scale = TRUE,
-      metadata_color = list("group"),
-      metadata_shape = ""
+      metadata_color = list("group", "nonexistent"),
+      metadata_shape = "",
+      variants = list(
+        list(name = "tight", n_neighbors = 3, min_dist = 0.05)
+      )
     )
 
     result <- umap_tools$run_gene_umap_pipeline(
       gct = gct,
       params = params,
       savedir = getwd(),
-      replace = TRUE
+      replace = TRUE,
+      cachedir = file.path(getwd(), "cache")
     )
 
-    expect_s3_class(result, "data.frame")
-    expect_true(all(c("UMAP1", "UMAP2") %in% colnames(result)))
-    expect_true(fs::dir_exists(fs::path(getwd(), "umap_gene", "plots")))
-    expect_true(fs::file_exists(fs::path(getwd(), "umap_gene", "tables", "gene_umap_embedding.tsv")))
+    expect_true(is.list(result))
+    expect_true(all(c("UMAP1", "UMAP2") %in% colnames(result[[1]])))
+    expect_true(fs::dir_exists(fs::path(getwd(), "umap_gene", "default", "plots")))
+    expect_true(fs::dir_exists(fs::path(getwd(), "umap_gene", "tight", "plots")))
+    expect_true(fs::file_exists(fs::path(getwd(), "umap_gene", "default", "tables", "gene_umap_embedding.tsv")))
+    expect_true(fs::file_exists(fs::path(getwd(), "umap_gene", "tight", "tables", "gene_umap_embedding.tsv")))
+    cache_dir <- file.path(getwd(), "cache")
+    cache_files <- if (fs::dir_exists(cache_dir)) fs::dir_ls(cache_dir) else character(0)
+    expect_true(any(grepl("umap_", basename(cache_files))))
   })
 })

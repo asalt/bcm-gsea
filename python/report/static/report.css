@@ -1,0 +1,136 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  background: #101322;
+  color: #eef1ff;
+}
+
+body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1.2rem 4rem;
+}
+
+a {
+  color: #8cb4ff;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+header h1 {
+  margin-bottom: 0.2rem;
+}
+
+.subtitle {
+  color: #9aa7d0;
+  margin: 0;
+}
+
+.meta {
+  color: #7f8bb1;
+  margin: 0.2rem 0 0;
+  font-size: 0.92rem;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.stat {
+  padding: 1rem;
+  background: rgba(82, 96, 179, 0.2);
+  border: 1px solid rgba(140, 180, 255, 0.3);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.stat .value {
+  font-size: 2.1rem;
+  font-weight: 600;
+}
+
+.stat .label {
+  font-size: 0.9rem;
+  color: #a9b5df;
+}
+
+section {
+  margin: 2.4rem 0;
+}
+
+.collection {
+  margin-bottom: 2rem;
+}
+
+.comparison {
+  padding: 1.2rem;
+  border: 1px solid rgba(140, 180, 255, 0.2);
+  border-radius: 10px;
+  margin-bottom: 1.2rem;
+  background: rgba(27, 31, 58, 0.6);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.8rem;
+}
+
+th,
+td {
+  border: 1px solid rgba(140, 180, 255, 0.18);
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+  font-size: 0.92rem;
+}
+
+th {
+  background: rgba(82, 96, 179, 0.25);
+  font-weight: 600;
+}
+
+tbody tr:nth-child(every 2) {
+  background: rgba(82, 96, 179, 0.08);
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.file-list li {
+  margin: 0.7rem 0;
+}
+
+.file-list.plots li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.file-list .preview {
+  max-width: 320px;
+}
+
+.file-list .preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid rgba(140, 180, 255, 0.25);
+  border-radius: 8px;
+  background: rgba(20, 26, 48, 0.6);
+}
+
+footer {
+  margin-top: 3rem;
+  color: #7080aa;
+  font-size: 0.85rem;
+}

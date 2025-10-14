@@ -264,6 +264,7 @@ class GenePCAConfig(ConfigSection):
         "labSize": FieldMeta(float, 1.8, "Label size for gene loadings."),
         "pointSize": FieldMeta(float, 4.0, "Point size for samples."),
         "sizeLoadingsNames": FieldMeta(float, 1.4, "Font size for loading names."),
+        "variants": FieldMeta(List[Dict[str, Any]], list, "Optional list of PCA parameter overrides."),
     }
 
 
@@ -281,6 +282,7 @@ class GeneUMAPConfig(ConfigSection):
         "scale": FieldMeta(bool, True, "Z-score features before embedding."),
         "metadata_color": FieldMeta(List[str], list, "Metadata columns used to colour samples."),
         "metadata_shape": FieldMeta(str, "", "Metadata column used for point shapes."),
+        "variants": FieldMeta(List[Dict[str, Any]], list, "Optional list of parameter overrides."),
     }
 
 

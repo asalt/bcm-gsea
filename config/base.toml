@@ -64,6 +64,7 @@ height = 7.4
 components = 3
 metadata_color = []
 metadata_shape = ""
+variants = []
 top_loadings = 25
 heatmap = true
 labSize = 1.8
@@ -81,6 +82,7 @@ seed = 42
 scale = true
 metadata_color = []
 metadata_shape = ""
+variants = []
 
 [params.extra]
 rankname_order = []

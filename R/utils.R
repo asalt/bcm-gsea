@@ -118,6 +118,31 @@ clean_args <- function(params, root_dir = "/") {
   }
   params$umap_gene$metadata_color <- unique(as.character(umap_colors))
   params$umap_gene$metadata_shape <- params$umap_gene$metadata_shape %||% ""
+  variants_raw <- params$umap_gene$variants %||% list()
+  if (!is.list(variants_raw)) {
+    variants_raw <- list(variants_raw)
+  }
+  normalized_variants <- list()
+  if (length(variants_raw) > 0) {
+    for (idx in seq_along(variants_raw)) {
+      candidate <- variants_raw[[idx]]
+      if (!is.list(candidate)) {
+        next
+      }
+      variant <- candidate
+      colors <- variant$metadata_color %||% list()
+      if (is.character(colors)) {
+        colors <- colors[nzchar(colors)]
+      }
+      if (is.list(colors)) {
+        colors <- unlist(colors, use.names = FALSE)
+      }
+      variant$metadata_color <- unique(as.character(colors))
+      variant$metadata_shape <- variant$metadata_shape %||% ""
+      normalized_variants[[length(normalized_variants) + 1]] <- variant
+    }
+  }
+  params$umap_gene$variants <- normalized_variants
 
 
   if (!is.null(params$volcanodir)) {

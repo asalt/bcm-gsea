@@ -77,7 +77,6 @@ run <- function(params) {
 
   savedir <- params$savedir
   cachedir <- params$advanced$cachedir
-  print(cachedir)
   rankfiledir <- params$rankfiledir
   species <- params$species %||% "Homo sapiens"
 
@@ -190,7 +189,8 @@ run <- function(params) {
         gct = gct,
         params = params$umap_gene,
         savedir = params$savedir,
-        replace = params$advanced$replace %||% TRUE
+        replace = params$advanced$replace %||% TRUE,
+        cachedir = cachedir
       )
     }
   }
