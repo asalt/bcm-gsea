@@ -3,7 +3,11 @@
 name = "demo"
 type = "limma"
 # Any valid R formula referencing sample metadata columns (and optionally expression features).
+# Example continuous gene regression: '~ 0 + scale(ERBB2)' or median split '~ 0 + factor(I(ERBB2 > median(ERBB2)))'.
 design = "~ 0 + treat"
+# Optional volcano tuning per model.
+volcano_padj_cutoff = 0.05
+volcano_top_n = 35
 contrasts = [
   # Unnamed contrasts use the expression to derive a filename-friendly label.
   "treatDrug - treatControl",
@@ -13,3 +17,10 @@ contrasts = [
   # Expressions can also average groups.
   "MvF = (treatDrugsexMale + treatControlsexMale)/2 - (treatDrugsexFemale + treatControlsexFemale)/2",
 ]
+
+[[models]]
+name = "gene_split"
+type = "limma"
+design = "~ 0 + factor(I(CPT1B > median(CPT1B)))"
+volcano_padj_cutoff = 0.1
+volcano_top_n = 25

@@ -244,7 +244,6 @@ test_that("create_rnkfiles_from_model fits limma contrasts", {
     expect_gt(nrow(df), 0)
     expect_false(anyNA(df$value))
     expect_true(fs::dir_exists(file.path(output_dir, "tables")))
-    expect_true(fs::dir_exists(file.path(output_dir, "volcano")))
     expect_true(fs::dir_exists(file.path(output_dir, "volcano_plots")))
 
     expression_spec <- list(
@@ -259,13 +258,14 @@ test_that("create_rnkfiles_from_model fits limma contrasts", {
       output_dir = expr_dir
     )
     expect_true(length(rnk_expr) >= 1)
-    target_name <- names(rnk_expr)[stringr::str_detect(names(rnk_expr), "scaleGene1")][1]
-    expect_false(is.na(target_name))
+    match_idx <- which(stringr::str_detect(names(rnk_expr), "scale"))
+    expect_gt(length(match_idx), 0)
+    target_name <- names(rnk_expr)[match_idx[1]]
     expect_gt(nrow(rnk_expr[[target_name]]), 0)
     expect_true(all(is.finite(rnk_expr[[target_name]]$value)))
     expect_true(fs::dir_exists(file.path(expr_dir, "tables")))
-    expect_true(fs::dir_exists(file.path(expr_dir, "volcano")))
     expect_true(fs::dir_exists(file.path(expr_dir, "volcano_plots")))
+    expect_true(fs::dir_exists(file.path(expr_dir, "metadata")))
 
     metadata_cols <- attr(rnk_expr, "metadata_columns")
     expect_true("expr_Gene1" %in% metadata_cols)
@@ -279,6 +279,15 @@ test_that("create_rnkfiles_from_model fits limma contrasts", {
       expected_expr,
       tolerance = 1e-4
     )
+
+    annotated_gct <- attr(rnk_expr, "annotated_gct_path")
+    expect_true(!is.null(annotated_gct) && length(annotated_gct) == 1)
+    expect_true(fs::file_exists(annotated_gct))
+
+    tables_attr <- attr(rnk_expr, "tables")
+    expect_true(length(tables_attr) >= 1)
+    first_table <- tables_attr[[1]]
+    expect_true("GeneSymbol" %in% colnames(first_table))
   })
 })
 

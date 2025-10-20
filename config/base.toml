@@ -153,15 +153,20 @@ collapse = true
 [params.model]
 name = "primary"
 type = "limma"
-design = ""  # e.g. "~ 0 + treat" or "~ scale(ERBB2)"
+design = ""  # e.g. "~ 0 + treat" or "~ 0 + scale(ERBB2)"
+# design can also reference expression features directly, e.g. "~ 0 + factor(I(ERBB2 > median(ERBB2)))"
+# Optional limma extras:
+# volcano_padj_cutoff = 0.05  # highlight/significance threshold for volcano plots
+# volcano_top_n = 35          # number of genes labelled on volcano plots
 contrasts = []  # e.g. ["treatDrug - treatControl", "MvF = (treatDrugsexMale + treatControlsexMale)/2 - (treatDrugsexFemale + treatControlsexFemale)/2"]
 
 
 # [[params.models]]
-# name = "secondary"
+# name = "secondary"       # Additional models can be declared in this array.
 # type = "limma"
 # design = "~ 0 + treat:sex"
 # contrasts = ["treatMale = treatDrugsexMale - treatControlsexMale"]
+# volcano_padj_cutoff = 0.1
 
 [params.advanced]
 parallel = true

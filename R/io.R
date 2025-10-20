@@ -526,7 +526,9 @@ load_and_process_ranks <- function(params) {
         exclude_samples_from_data = exclude_samples_from_data,
         output_dir = model_dir,
         replace = replace_outputs,
-        model_index = idx
+        model_index = idx,
+        cache = params$advanced$cache %||% TRUE,
+        cache_dir = params$advanced$cachedir %||% NULL
       )
       if (length(spec_ranks) == 0) {
         next
