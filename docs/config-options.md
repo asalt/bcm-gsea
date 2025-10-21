@@ -43,11 +43,13 @@ $ tackle2 describe params.bubbleplot --json
 - `type` (string, default `"limma"`): Modelling backend used to generate rank files when `ranks_from = "model"`.
 - `design` (string): R formula describing the model matrix (for example `~ 0 + treat`).
 - `contrasts` (array of strings, default `[]`): Optional limma contrast expressions; entries may be unnamed (`"treatDrug - treatControl"`) or named (`"MvF = ..."`). When empty, all non-intercept coefficients are exported.
+- `volcano_padj_cutoff` (float, default `0.05`): Adjusted P-value threshold used to colour points and compute the `(n / total)` footer in limma volcano plots.
+- `volcano_top_n` (int, default `35`): Number of genes automatically labelled on the limma volcano plots, ordered by nominal P-value.
 
 ### params.models
 
 An optional array of additional model tables. Each entry accepts the same keys as `params.model` (`name`, `type`, `design`, `contrasts`, `model_file`). When both `params.model` and `params.models` are provided, all models are executed and their ranks concatenated.
-Generated limma summaries, volcano-ready tables, and PDF plots are stored under `savedir/model/<type>/<name>/` inside `tables/`, `volcano/`, and `volcano_plots/`.
+Generated limma summaries and volcano PDFs are stored under `savedir/model/<type>/<name>/` inside `tables/`, `volcano_plots/`, and (when expression-derived covariates are used) `metadata/` for the annotated GCT files.
 
 ## params.barplot
 

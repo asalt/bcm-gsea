@@ -25,6 +25,30 @@ header h1 {
   margin-bottom: 0.2rem;
 }
 
+.llm-summary {
+  margin: 2rem 0;
+  padding: 1.2rem 1.4rem;
+  background: rgba(82, 96, 179, 0.18);
+  border: 1px solid rgba(140, 180, 255, 0.28);
+  border-radius: 12px;
+}
+
+.llm-summary h2 {
+  margin-top: 0;
+  font-size: 1.25rem;
+  color: #d3dcff;
+}
+
+.llm-summary ul {
+  margin: 0.8rem 0 0;
+  padding-left: 1.25rem;
+  color: #c3ccf5;
+}
+
+.llm-summary li {
+  margin: 0.35rem 0;
+}
+
 .subtitle {
   color: #9aa7d0;
   margin: 0;

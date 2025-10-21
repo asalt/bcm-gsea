@@ -15,6 +15,23 @@
     {% endif %}
   </header>
 
+  {% if llm_summary %}
+  <section class="llm-summary">
+    <h2>AI Overview</h2>
+    <p>{{ llm_summary.text }}</p>
+    {% if llm_summary.bullets %}
+    <ul>
+      {% for bullet in llm_summary.bullets %}
+      <li>{{ bullet }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if llm_summary.model %}
+    <p class="meta">Generated with {{ llm_summary.model }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <section class="stats">
     <div class="stat">
       <div class="value">{{ stats.collections }}</div>

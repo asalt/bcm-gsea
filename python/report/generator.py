@@ -8,14 +8,21 @@ import socket
 import socketserver
 import webbrowser
 import re
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Iterable
+from typing import Optional, List, Dict, Any, Iterable, TYPE_CHECKING
 
 import click
 
 from .. import export_packager
 from . import assets, catalog, summary, templating
+
+if TYPE_CHECKING:
+    from .llm import ReportSummarizer
+
+
+logger = logging.getLogger(__name__)
 
 
 class ReportGenerationError(RuntimeError):
@@ -187,6 +194,7 @@ def generate_report(
     savedir: Optional[Path] = None,
     config: Optional[Path] = None,
     output: Optional[Path] = None,
+    summarizer: Optional["ReportSummarizer"] = None,
 ) -> Path:
     """Create the static HTML report and return the generated index path."""
 
@@ -194,6 +202,41 @@ def generate_report(
 
     artefacts = catalog.scan_savedir(paths.savedir)
     context = summary.build_context(paths.savedir, artefacts, config_path=paths.config_path)
+
+    collections = context.get("collections", [])
+
+    if summarizer and collections:
+        try:
+            llm_summary = summarizer.summarise_run(collections)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Run-level summarisation failed: %s", exc)
+            llm_summary = None
+        if llm_summary:
+            context["llm_summary"] = llm_summary
+
+        try:
+            collection_summaries = summarizer.summarise_collections(collections)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Collection summarisation failed: %s", exc)
+            collection_summaries = {}
+        if collection_summaries:
+            for collection in collections:
+                summary_obj = collection_summaries.get(collection.identifier)
+                if summary_obj:
+                    collection.llm_summary = summary_obj
+
+        for collection in collections:
+            try:
+                comparison_summaries = summarizer.summarise_comparisons(collection)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Comparison summarisation failed for %s: %s", collection.identifier, exc)
+                comparison_summaries = {}
+            if not comparison_summaries:
+                continue
+            for comparison in collection.comparisons:
+                summary_obj = comparison_summaries.get(comparison.identifier)
+                if summary_obj:
+                    comparison.llm_summary = summary_obj
 
     templating.install_static_assets(paths.output_dir)
 

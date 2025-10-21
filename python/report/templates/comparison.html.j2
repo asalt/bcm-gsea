@@ -13,6 +13,23 @@
     <p class="meta">Generated {{ generated_at }} from <code>{{ savedir_path }}</code></p>
   </header>
 
+  {% if comparison.llm_summary %}
+  <section class="llm-summary">
+    <h2>AI Summary</h2>
+    <p>{{ comparison.llm_summary.text }}</p>
+    {% if comparison.llm_summary.bullets %}
+    <ul>
+      {% for bullet in comparison.llm_summary.bullets %}
+      <li>{{ bullet }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if comparison.llm_summary.model %}
+    <p class="meta">Generated with {{ comparison.llm_summary.model }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {% if plot_groups %}
   {% for group in plot_groups %}
     {% if group.plots %}

@@ -5,11 +5,20 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
 from .catalog import SavedirArtefacts
+
+
+@dataclass
+class GeneratedSummary:
+    """Container for LLM-authored narrative snippets."""
+
+    text: str
+    bullets: Tuple[str, ...] = field(default_factory=tuple)
+    model: Optional[str] = None
 
 
 @dataclass
@@ -29,6 +38,7 @@ class ComparisonSummary:
     total_pathways: int
     significant_pathways: int
     top_pathways: List[TopPathway] = field(default_factory=list)
+    llm_summary: Optional[GeneratedSummary] = None
 
 
 @dataclass
@@ -36,6 +46,7 @@ class CollectionSummary:
     identifier: str
     display_name: str
     comparisons: List[ComparisonSummary] = field(default_factory=list)
+    llm_summary: Optional[GeneratedSummary] = None
 
 
 def _split_table_name(table_path: Path) -> tuple[str, str]:
@@ -62,7 +73,6 @@ def _summarise_table(table_path: Path, savedir: Path) -> ComparisonSummary:
     if padj_series is not None:
         significant = int(pd.to_numeric(padj_series, errors="coerce").lt(0.05).sum())
 
-    display_columns = df.columns.intersection(["pathway", "NES", "padj", "leadingEdge_genesymbol", "leadingEdge"])
     padj_sorted = pd.to_numeric(df.get("padj"), errors="coerce")
     nes_sorted = pd.to_numeric(df.get("NES"), errors="coerce")
     df = df.assign(_padj_sorted=padj_sorted, _nes_sorted=nes_sorted)
@@ -180,9 +190,10 @@ def build_context(
         "logs": logs,
         "has_tables": len(artefacts.gsea_tables) > 0,
         "config_path": str(config_path) if config_path else None,
+        "llm_summary": None,
     }
 
     return context
 
 
-__all__ = ["build_context", "CollectionSummary", "ComparisonSummary", "TopPathway"]
+__all__ = ["build_context", "CollectionSummary", "ComparisonSummary", "TopPathway", "GeneratedSummary"]

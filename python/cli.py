@@ -20,11 +20,8 @@ import pandas as pd
 
 from . import export_packager
 from . import config_schema
-from .report.generator import (
-    ReportGenerationError,
-    generate_report,
-    serve_directory,
-)
+from .report.generator import ReportGenerationError, generate_report, serve_directory
+from .report.llm import OllamaConfig, OllamaSummarizer
 
 # from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -285,7 +282,37 @@ def package(
     show_default=True,
     help="Logging verbosity for report generation.",
 )
-def report(savedir, config, output, serve, port, no_browser, log_level):
+@click.option("--llm-model", default=None, help="Ollama model for AI-generated summaries (e.g., 'llama3.2:3b').")
+@click.option("--llm-host", default=None, help="Override Ollama host URL (default uses OLLAMA_HOST or localhost).")
+@click.option("--llm-temperature", default=0.2, type=float, show_default=True, help="Sampling temperature for the LLM.")
+@click.option("--llm-max-tokens", default=512, type=int, show_default=True, help="Maximum tokens requested per summary.")
+@click.option("--llm-run-limit", default=6, type=int, show_default=True, help="Collections considered for the overall summary (0 = all).")
+@click.option("--llm-collections/--no-llm-collections", default=True, show_default=True, help="Generate per-collection summaries.")
+@click.option("--llm-collection-limit", default=3, type=int, show_default=True, help="Maximum collections with individual summaries (0 = all).")
+@click.option("--llm-comparisons/--no-llm-comparisons", default=False, show_default=True, help="Generate per-comparison summaries (experimental).")
+@click.option("--llm-comparison-limit", default=0, type=int, show_default=True, help="Limit per-collection comparison summaries when enabled (0 = all).")
+@click.option("--llm-comparisons-per-collection", default=3, type=int, show_default=True, help="Comparisons per collection included in prompts (0 = all).")
+@click.option("--llm-pathway-limit", default=3, type=int, show_default=True, help="Top pathways per comparison shared with the LLM (0 = all).")
+def report(
+    savedir,
+    config,
+    output,
+    serve,
+    port,
+    no_browser,
+    log_level,
+    llm_model,
+    llm_host,
+    llm_temperature,
+    llm_max_tokens,
+    llm_run_limit,
+    llm_collections,
+    llm_collection_limit,
+    llm_comparisons,
+    llm_comparison_limit,
+    llm_comparisons_per_collection,
+    llm_pathway_limit,
+):
     """Generate an HTML report summarising analysis outputs."""
 
     logging.basicConfig(
@@ -294,11 +321,32 @@ def report(savedir, config, output, serve, port, no_browser, log_level):
         force=True,
     )
 
+    summarizer = None
+    if llm_model:
+        try:
+            summarizer_config = OllamaConfig(
+                model=llm_model,
+                host=llm_host,
+                temperature=llm_temperature,
+                max_tokens=max(0, llm_max_tokens),
+                run_collection_limit=max(0, llm_run_limit),
+                enable_collection_summaries=llm_collections,
+                collection_summary_limit=max(0, llm_collection_limit),
+                enable_comparison_summaries=llm_comparisons,
+                comparison_summary_limit=max(0, llm_comparison_limit),
+                comparisons_per_collection=max(0, llm_comparisons_per_collection),
+                pathways_per_comparison=max(0, llm_pathway_limit),
+            )
+            summarizer = OllamaSummarizer(summarizer_config)
+        except Exception as exc:  # pragma: no cover - defensive
+            raise click.ClickException(f"Failed to initialise LLM summariser: {exc}") from exc
+
     try:
         index_path = generate_report(
             savedir=Path(savedir) if savedir else None,
             config=Path(config) if config else None,
             output=Path(output) if output else None,
+            summarizer=summarizer,
         )
     except ReportGenerationError as exc:
         raise click.ClickException(str(exc)) from exc
