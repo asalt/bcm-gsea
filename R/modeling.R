@@ -12,6 +12,190 @@ source(file.path(here("R"), "lazyloader.R"))
 util_tools <- get_tool_env("utils")
 log_msg <- util_tools$make_partial(util_tools$log_msg)
 
+# Custom MNAR imputation function: normal draw shifted down by 2 SD
+# Usage from mice: set method = "mnar_shift_norm" for a variable
+mice.impute.mnar_shift_norm <- function(y, ry, x, wy = NULL, ...) {
+  imp <- mice::mice.impute.norm(y, ry, x, wy, ...)
+  shift <- 2 * stats::sd(y[ry], na.rm = TRUE)
+  imp_shifted <- imp - shift
+  imp_shifted
+}
+
+# Ensure the custom imputation function is discoverable by mice by placing it in the
+# global environment as `mice.impute.mnar_shift_norm` when not already defined there.
+tryCatch({
+  if (!exists("mice.impute.mnar_shift_norm", envir = .GlobalEnv, inherits = FALSE)) {
+    assign("mice.impute.mnar_shift_norm", mice.impute.mnar_shift_norm, envir = .GlobalEnv)
+  }
+}, error = function(e) {
+  if (exists("log_msg")) log_msg(warning = paste0("Failed to register custom imputer globally: ", conditionMessage(e)))
+})
+
+# Plot overlay histogram/density of observed vs imputed values
+plot_imputation_diagnostics <- function(imp, original_metadata, vars, outdir, model_label = NULL, logger = NULL) {
+  if (is.null(outdir) || !nzchar(outdir) || is.null(imp)) return(invisible(NULL))
+  diag_dir <- fs::path(outdir, "diagnostics", "imputation")
+  fs::dir_create(diag_dir, recurse = TRUE)
+  m <- tryCatch(imp$m, error = function(e) 1L)
+  for (var in vars) {
+    if (!var %in% colnames(original_metadata)) next
+    orig <- original_metadata[[var]]
+    miss_idx <- which(is.na(orig))
+    if (length(miss_idx) == 0) next
+    observed <- orig[!is.na(orig)]
+
+    # Collect imputed values across all m imputations
+    imputed_vals <- c()
+    for (k in seq_len(max(1L, m))) {
+      completed <- mice::complete(imp, k)
+      if (var %in% colnames(completed)) {
+        imputed_vals <- c(imputed_vals, completed[miss_idx, var, drop = TRUE])
+      }
+    }
+
+    # Skip plotting if we have no observed or no imputed values to compare
+    if (length(observed) == 0 || length(imputed_vals) == 0) {
+      if (!is.null(logger)) logger(warning = paste0("Skipping imputation diagnostic for ", var, ": insufficient data (observed=", length(observed), ", imputed=", length(imputed_vals), ")"))
+      next
+    }
+
+    fname <- util_tools$safe_filename(model_label %||% "model", var, fallback = var)
+    pdf_path <- fs::path(diag_dir, paste0(fname, ".pdf"))
+
+    # Choose numeric vs categorical plotting
+    if (is.numeric(observed) || is.integer(observed)) {
+      # Drop non-finite values to avoid ggplot errors
+      observed_num <- as.numeric(observed)
+      imputed_num <- suppressWarnings(as.numeric(imputed_vals))
+      observed_num <- observed_num[is.finite(observed_num)]
+      imputed_num <- imputed_num[is.finite(imputed_num)]
+      if (length(observed_num) == 0 || length(imputed_num) == 0) {
+        if (!is.null(logger)) logger(warning = paste0("Skipping numeric imputation diagnostic for ", var, ": non-finite values only"))
+        next
+      }
+      df_obs <- data.frame(value = observed_num, status = "observed")
+      df_imp <- data.frame(value = imputed_num, status = "imputed")
+      df <- rbind(df_obs, df_imp)
+      p <- ggplot2::ggplot(df, ggplot2::aes(x = value, fill = status, color = status)) +
+        ggplot2::geom_histogram(ggplot2::aes(y = ..density..), bins = 30, alpha = 0.35, position = "identity") +
+        ggplot2::geom_density(alpha = 0.7) +
+        ggplot2::theme_minimal(base_size = 11) +
+        ggplot2::labs(
+          title = paste0("Imputation diagnostics: ", var, if (!is.null(model_label)) paste0(" (", model_label, ")") else ""),
+          x = var,
+          y = "Density"
+        )
+      ggplot2::ggsave(pdf_path, plot = p, width = 7.2, height = 5.0)
+      if (!is.null(logger)) logger(info = paste0("Wrote imputation diagnostic plot: ", pdf_path))
+    } else {
+      df_obs <- data.frame(value = as.character(observed), status = "observed")
+      df_imp <- data.frame(value = as.character(imputed_vals), status = "imputed")
+      df <- rbind(df_obs, df_imp)
+      p <- ggplot2::ggplot(df, ggplot2::aes(x = value, fill = status)) +
+        ggplot2::geom_bar(position = "dodge") +
+        ggplot2::theme_minimal(base_size = 11) +
+        ggplot2::labs(
+          title = paste0("Imputation diagnostics: ", var, if (!is.null(model_label)) paste0(" (", model_label, ")") else ""),
+          x = var,
+          y = "Count"
+        )
+      ggplot2::ggsave(pdf_path, plot = p, width = 7.2, height = 5.0)
+      if (!is.null(logger)) logger(info = paste0("Wrote imputation diagnostic plot: ", pdf_path))
+    }
+  }
+  invisible(NULL)
+}
+
+# Univariate expression imputation via mice's imputation functions, per gene row.
+# Applies the given method (e.g., "pmm", "norm", "mnar_shift_norm").
+# - expression_mat: numeric matrix [genes x samples]
+# - meta_df: data.frame of sample metadata aligned to columns in expression_mat
+# Returns an imputed expression matrix (same dimensions) with NAs filled where possible.
+impute_expression_with_mice <- function(expression_mat, meta_df, method = "pmm", logger = NULL) {
+  if (!is.matrix(expression_mat)) return(expression_mat)
+  if (!requireNamespace("mice", quietly = TRUE)) {
+    if (!is.null(logger)) logger(warning = "mice not installed; skipping expression imputation")
+    return(expression_mat)
+  }
+  # Identify genes (rows) with any NA
+  na_rows <- which(rowSums(is.na(expression_mat)) > 0)
+  if (length(na_rows) == 0) return(expression_mat)
+
+  # Build numeric predictor matrix from metadata (one-hot encode factors/characters)
+  meta_df2 <- meta_df
+  if (".sample_id" %in% colnames(meta_df2)) meta_df2$.sample_id <- NULL
+  # Drop columns with all NA (unusable as predictors)
+  drop_all_na <- vapply(meta_df2, function(v) all(is.na(v)), logical(1))
+  meta_df2 <- meta_df2[, !drop_all_na, drop = FALSE]
+  # If empty, fall back to intercept-only predictor
+  if (ncol(meta_df2) == 0) {
+    X <- matrix(1, nrow = nrow(meta_df), ncol = 1)
+  } else {
+    # Characters to factor
+    for (cn in colnames(meta_df2)) {
+      if (is.character(meta_df2[[cn]])) meta_df2[[cn]] <- factor(meta_df2[[cn]])
+    }
+    # model.matrix will drop rows with NA in predictors; replace remaining NA in predictors with explicit level for factors
+    # For numeric predictors with NA, set to column mean (na.rm) so imputation can still proceed
+    for (cn in colnames(meta_df2)) {
+      v <- meta_df2[[cn]]
+      if (is.factor(v)) {
+        levels(v) <- c(levels(v), "NA_level")
+        v[is.na(v)] <- "NA_level"
+        meta_df2[[cn]] <- v
+      } else if (is.numeric(v)) {
+        mu <- suppressWarnings(mean(v, na.rm = TRUE))
+        if (!is.finite(mu)) mu <- 0
+        v[is.na(v)] <- mu
+        meta_df2[[cn]] <- v
+      }
+    }
+    X <- stats::model.matrix(~ . , data = meta_df2)
+  }
+
+  method_fun <- switch(tolower(method),
+    pmm = mice::mice.impute.pmm,
+    norm = mice::mice.impute.norm,
+    mnar_shift_norm = mice.impute.mnar_shift_norm,
+    # default fallback
+    mice::mice.impute.pmm
+  )
+
+  # Iterate over NA rows and impute missing entries using the selected method.
+  # We keep predictors constant across genes for speed.
+  for (ri in na_rows) {
+    y <- expression_mat[ri, ]
+    ry <- !is.na(y)
+    if (sum(ry) < 2) {
+      # Not enough observed values; fill with median or zero
+      fill <- suppressWarnings(median(y, na.rm = TRUE))
+      if (!is.finite(fill)) fill <- 0
+      y[!ry] <- fill
+      expression_mat[ri, ] <- y
+      next
+    }
+    # Call the univariate imputer; wy defaults to missing positions
+    imp_vals <- tryCatch({
+      method_fun(y = as.numeric(y), ry = ry, x = X, wy = NULL)
+    }, error = function(e) {
+      if (!is.null(logger)) logger(warning = paste0("Expression impute failed for row ", ri, ": ", conditionMessage(e), "; using median"))
+      NA_real_
+    })
+    if (length(imp_vals) != sum(!ry) || any(!is.finite(imp_vals))) {
+      # Fallback
+      fill <- suppressWarnings(median(y, na.rm = TRUE))
+      if (!is.finite(fill)) fill <- 0
+      y[!ry] <- fill
+    } else {
+      y[!ry] <- imp_vals
+    }
+    expression_mat[ri, ] <- y
+  }
+
+  if (!is.null(logger)) logger(info = paste0("Imputed expression matrix rows with NA: ", length(na_rows)))
+  expression_mat
+}
+
 compute_model_cache_key <- function(
     gct_path,
     design,
@@ -22,7 +206,8 @@ compute_model_cache_key <- function(
     model_index,
     model_file = NULL,
     volcano_cutoff = 0.05,
-    volcano_top_n = 35) {
+    volcano_top_n = 35,
+    imputation = NULL) {
   info <- tryCatch(fs::file_info(gct_path), error = function(e) NULL)
   sample_exclude <- sort(unique(as.character(sample_exclude %||% character(0))))
   digest::digest(
@@ -39,7 +224,8 @@ compute_model_cache_key <- function(
       model_index = model_index,
       model_file = model_file %||% "",
       volcano_cutoff = volcano_cutoff,
-      volcano_top_n = volcano_top_n
+      volcano_top_n = volcano_top_n,
+      imputation = imputation %||% list()
     ),
     algo = "xxhash64"
   )
@@ -488,6 +674,33 @@ create_rnkfiles_from_model <- function(
   sig_cutoff <- spec$volcano_padj_cutoff %||% 0.05
   label_top_n <- spec$volcano_top_n %||% 35
 
+  # Optional missing value imputation configuration (e.g., via mice)
+  impute_spec <- spec$imputation %||% spec$missing_imputation %||% list()
+  do_impute <- impute_spec$do %||% FALSE
+  impute_m <- as.integer(impute_spec$m %||% 1L)
+  impute_engine <- tolower(as.character(impute_spec$engine %||% impute_spec$method %||% "mice"))
+  impute_maxit <- as.integer(impute_spec$maxit %||% 5L)
+  impute_seed <- impute_spec$seed %||% NULL
+  impute_vars <- impute_spec$variables %||% NULL
+  impute_defaultMethod <- impute_spec$defaultMethod %||% NULL
+  impute_methods <- impute_spec$methods %||% NULL  # mice methods vector or single string
+  impute_blocks <- impute_spec$blocks %||% NULL    # optional blocks definition
+  impute_apply_to <- tolower(as.character(impute_spec$apply_to %||% "metadata"))
+  impute_expr_method <- impute_spec$expression_method %||% impute_spec$expr_method %||% (if (is.character(impute_methods) && length(impute_methods) == 1 && is.null(names(impute_methods))) impute_methods else "pmm")
+  # Prepare a light-weight summary of imputation settings for caching
+  imputation_cache_info <- list(
+    engine = impute_engine,
+    m = impute_m,
+    maxit = impute_maxit,
+    seed = if (!is.null(impute_seed)) as.character(impute_seed) else NULL,
+    variables = if (!is.null(impute_vars)) as.character(impute_vars) else NULL,
+    defaultMethod = impute_defaultMethod,
+    methods = if (is.character(impute_methods)) impute_methods else NULL,
+    blocks = if (!is.null(impute_blocks)) "custom" else NULL,
+    apply_to = impute_apply_to,
+    expression_method = impute_expr_method
+  )
+
   cache_enabled <- isTRUE(cache) && !is.null(cache_dir) && nzchar(cache_dir)
   cache_key <- NULL
 
@@ -546,7 +759,8 @@ create_rnkfiles_from_model <- function(
       model_index = model_index,
       model_file = spec$model_file %||% NULL,
       volcano_cutoff = sig_cutoff,
-      volcano_top_n = label_top_n
+      volcano_top_n = label_top_n,
+      imputation = imputation_cache_info
     )
     cached <- load_cached_model_results(cache_dir, cache_key, logger = log_msg)
     if (!is.null(cached) && !isTRUE(replace)) {
@@ -596,295 +810,489 @@ create_rnkfiles_from_model <- function(
     }
   }
 
-  model_frame <- stats::model.frame(
-    design_formula,
-    metadata,
-    na.action = stats::na.omit,
-    drop.unused.levels = TRUE
-  )
+  # Optionally perform missing value imputation on covariates used by the model
+  # before constructing the model frame. Defaults to the previous behaviour
+  # (omit rows with missing values) when no imputation configuration is provided.
+  #do_impute <- identical(impute_engine, "mice")
 
-  sample_ids <- rownames(model_frame)
-  metadata <- metadata[sample_ids, , drop = FALSE]
-  if (length(sample_ids) == 0) {
-    stop("No samples remain after constructing the model frame (check missing values).")
-  }
+  # Helper: run fitting from a given metadata (possibly imputed), with optional label suffix
+  fit_one <- function(current_metadata, label_suffix = NULL) {
+    model_frame <- stats::model.frame(
+      design_formula,
+      current_metadata,
+      na.action = stats::na.omit,
+      drop.unused.levels = TRUE
+    )
 
-  expression_mat <- expression_mat[, sample_ids, drop = FALSE]
-  if (!is.numeric(expression_mat)) {
-    storage.mode(expression_mat) <- "double"
-  }
+    sample_ids <- rownames(model_frame)
+    current_metadata <- current_metadata[sample_ids, , drop = FALSE]
+    if (length(sample_ids) == 0) {
+      stop("No samples remain after constructing the model frame (check missing values).")
+    }
 
-  design_matrix <- stats::model.matrix(design_formula, model_frame)
-  original_terms <- colnames(design_matrix)
-  sanitized_terms <- sanitize_model_terms(original_terms)
-  colnames(design_matrix) <- sanitized_terms
-  term_lookup <- stats::setNames(original_terms, sanitized_terms)
+    expr_mat <- expression_mat[, sample_ids, drop = FALSE]
+    if (!is.numeric(expr_mat)) {
+      storage.mode(expr_mat) <- "double"
+    }
 
-  if (ncol(design_matrix) == 0) {
-    stop("Design matrix contains no columns after sanitisation.")
-  }
-
-  keep_cols <- vapply(
-    seq_len(ncol(design_matrix)),
-    function(i) any(abs(design_matrix[, i]) > .Machine$double.eps),
-    logical(1)
-  )
-  if (!all(keep_cols)) {
-    dropped <- sanitized_terms[!keep_cols]
-    log_msg(warning = paste0("Dropping zero-variance design columns: ", paste(dropped, collapse = ", ")))
-    design_matrix <- design_matrix[, keep_cols, drop = FALSE]
-    sanitized_terms <- colnames(design_matrix)
-    original_terms <- term_lookup[sanitized_terms]
+    design_matrix <- stats::model.matrix(design_formula, model_frame)
+    original_terms <- colnames(design_matrix)
+    sanitized_terms <- sanitize_model_terms(original_terms)
+    colnames(design_matrix) <- sanitized_terms
     term_lookup <- stats::setNames(original_terms, sanitized_terms)
-  }
 
-  if (isTRUE(spec$print_model_matrix)) {
-    preview <- utils::capture.output(print(head(as.data.frame(design_matrix), n = 10)))
-    log_msg(debug = paste0("Limma model matrix preview (first 10 rows):\n", paste(preview, collapse = "\n")))
-  }
-
-  if (ncol(design_matrix) == 0) {
-    stop("All design columns were dropped; check model specification.")
-  }
-
-  apply_contrasts <- length(contrasts) > 0
-  pretty_alias_map <- stats::setNames(
-    vapply(sanitized_terms, function(term) prettify_term_label(term_lookup[[term]], term), character(1)),
-    sanitized_terms
-  )
-  alias_to_term <- stats::setNames(names(pretty_alias_map), pretty_alias_map)
-
-  normalize_contrast_expression <- function(expr) {
-    updated <- expr
-    for (alias_label in names(alias_to_term)) {
-      target <- alias_to_term[[alias_label]]
-      pattern <- sprintf("(?<![A-Za-z0-9_.])%s(?![A-Za-z0-9_.])", alias_label)
-      updated <- gsub(pattern, target, updated, perl = TRUE)
+    if (ncol(design_matrix) == 0) {
+      stop("Design matrix contains no columns after sanitisation.")
     }
-    updated
-  }
 
-  if (apply_contrasts) {
-    contrast_defs <- parse_contrast_specs(contrasts)
-    for (idx in seq_along(contrast_defs)) {
-      raw_expr <- contrast_defs[[idx]]$expression
-      converted <- normalize_contrast_expression(raw_expr)
-      contrast_defs[[idx]]$expression <- converted
-      if (converted %in% sanitized_terms) {
-        contrast_defs[[idx]]$coef_name <- converted
-      } else if (raw_expr %in% alias_to_term) {
-        contrast_defs[[idx]]$coef_name <- alias_to_term[[raw_expr]]
+    keep_cols <- vapply(
+      seq_len(ncol(design_matrix)),
+      function(i) any(abs(design_matrix[, i]) > .Machine$double.eps),
+      logical(1)
+    )
+    if (!all(keep_cols)) {
+      dropped <- sanitized_terms[!keep_cols]
+      log_msg(warning = paste0("Dropping zero-variance design columns: ", paste(dropped, collapse = ", ")))
+      design_matrix <- design_matrix[, keep_cols, drop = FALSE]
+      sanitized_terms <- colnames(design_matrix)
+      original_terms <- term_lookup[sanitized_terms]
+      term_lookup <- stats::setNames(original_terms, sanitized_terms)
+    }
+
+    if (isTRUE(spec$print_model_matrix)) {
+      preview <- utils::capture.output(print(head(as.data.frame(design_matrix), n = 10)))
+      log_msg(debug = paste0("Limma model matrix preview (first 10 rows):\n", paste(preview, collapse = "\n")))
+    }
+
+    if (ncol(design_matrix) == 0) {
+      stop("All design columns were dropped; check model specification.")
+    }
+
+    apply_contrasts <- length(contrasts) > 0
+    pretty_alias_map <- stats::setNames(
+      vapply(sanitized_terms, function(term) prettify_term_label(term_lookup[[term]], term), character(1)),
+      sanitized_terms
+    )
+    alias_to_term <- stats::setNames(names(pretty_alias_map), pretty_alias_map)
+
+    normalize_contrast_expression <- function(expr) {
+      updated <- expr
+      for (alias_label in names(alias_to_term)) {
+        target <- alias_to_term[[alias_label]]
+        pattern <- sprintf("(?<![A-Za-z0-9_.])%s(?![A-Za-z0-9_.])", alias_label)
+        updated <- gsub(pattern, target, updated, perl = TRUE)
       }
-      if (is.null(contrast_defs[[idx]]$coef_name)) {
-        contrast_defs[[idx]]$coef_name <- converted
+      updated
+    }
+
+    if (apply_contrasts) {
+      contrast_defs <- parse_contrast_specs(contrasts)
+      for (idx in seq_along(contrast_defs)) {
+        raw_expr <- contrast_defs[[idx]]$expression
+        converted <- normalize_contrast_expression(raw_expr)
+        contrast_defs[[idx]]$expression <- converted
+        if (converted %in% sanitized_terms) {
+          contrast_defs[[idx]]$coef_name <- converted
+        } else if (raw_expr %in% alias_to_term) {
+          contrast_defs[[idx]]$coef_name <- alias_to_term[[raw_expr]]
+        }
+        if (is.null(contrast_defs[[idx]]$coef_name)) {
+          contrast_defs[[idx]]$coef_name <- converted
+        }
       }
-    }
-    contrast_args <- setNames(
-      lapply(contrast_defs, function(def) def$expression),
-      vapply(contrast_defs, function(def) def$alias, character(1))
-    )
-    contrast_matrix <- do.call(
-      limma::makeContrasts,
-      c(contrast_args, list(levels = sanitized_terms))
-    )
-    if (is.null(dim(contrast_matrix))) {
-      contrast_matrix <- matrix(
-        contrast_matrix,
-        ncol = 1,
-        dimnames = list(sanitized_terms, names(contrast_args))
+      contrast_args <- setNames(
+        lapply(contrast_defs, function(def) def$expression),
+        vapply(contrast_defs, function(def) def$alias, character(1))
       )
-    }
-  } else {
-    is_intercept <- sanitized_terms %in% c("(Intercept)", "Intercept", "XIntercept", "X.Intercept.")
-    base_terms <- sanitized_terms[!is_intercept]
-    if (length(base_terms) == 0) {
-      base_terms <- sanitized_terms
-    }
-    if (length(base_terms) == 0) {
-      stop("Design matrix contains no estimable terms after removing intercept.")
-    }
-    contrast_defs <- lapply(seq_along(base_terms), function(idx) {
-      term <- base_terms[[idx]]
-      original_term <- term_lookup[[term]] %||% term
-      pretty_alias <- prettify_term_label(original_term, term)
-      list(
-        alias = pretty_alias,
-        expression = term,
-        file_stub = util_tools$safe_filename(
-          pretty_alias,
-          fallback = paste0("coef_", idx)
-        ),
-        original_term = original_term,
-        coef_name = term
+      contrast_matrix <- do.call(
+        limma::makeContrasts,
+        c(contrast_args, list(levels = sanitized_terms))
       )
-    })
-    alias_unique <- make.unique(vapply(contrast_defs, function(def) def$alias, character(1)), sep = "_")
-    stub_unique <- make.unique(vapply(contrast_defs, function(def) def$file_stub, character(1)), sep = "_")
-    for (idx in seq_along(contrast_defs)) {
-      contrast_defs[[idx]]$alias <- alias_unique[[idx]]
-      contrast_defs[[idx]]$file_stub <- stub_unique[[idx]]
-    }
-  }
-
-  # TODO: add better logging here of the design matrix
-  print("Design matrix is :")
-  print(design_matrix)
-  fit <- limma::lmFit(expression_mat, design_matrix)
-  if (apply_contrasts) {
-    fit <- limma::contrasts.fit(fit, contrast_matrix)
-  }
-  fit <- limma::eBayes(fit)
-
-  # TODO: add better logging here of the fitted model
-
-  t_stats <- as.matrix(fit$t)
-  if (is.null(colnames(t_stats))) {
-    colnames(t_stats) <- vapply(contrast_defs, function(def) def$alias, character(1))
-  }
-
-  prefix <- util_tools$safe_filename(model_name, fallback = paste0("model", model_index))
-
-  output <- vector("list", length(contrast_defs))
-  result_tables <- vector("list", length(contrast_defs))
-  volcano_tables <- vector("list", length(contrast_defs))
-
-  names(output) <- vapply(
-    contrast_defs,
-    function(def) util_tools$safe_filename(prefix, def$file_stub),
-    character(1)
-  )
-
-  contrast_aliases <- vapply(contrast_defs, function(def) def$alias, character(1))
-  contrast_file_stubs <- vapply(contrast_defs, function(def) def$file_stub, character(1))
-  names(contrast_aliases) <- names(output)
-  names(contrast_file_stubs) <- names(output)
-
-  lookup_term <- function(key) {
-    if (!is.character(key) || length(key) == 0) {
-      return(NULL)
-    }
-    candidate <- key[[1]]
-    if (!nzchar(candidate) || is.null(names(term_lookup))) {
-      return(NULL)
-    }
-    if (!(candidate %in% names(term_lookup))) {
-      return(NULL)
-    }
-    term_lookup[[candidate]]
-  }
-
-  for (idx in seq_along(contrast_defs)) {
-    alias <- contrast_defs[[idx]]$alias
-    candidates <- c(
-      contrast_defs[[idx]]$coef_name,
-      contrast_defs[[idx]]$expression,
-      alias,
-      lookup_term(contrast_defs[[idx]]$coef_name),
-      lookup_term(contrast_defs[[idx]]$expression)
-    )
-    candidates <- unique(Filter(function(x) is.character(x) && nzchar(x), candidates))
-    available_cols <- colnames(t_stats)
-    hit <- candidates[candidates %in% available_cols]
-    if (length(hit) == 0) {
-      stop("Contrast '", alias, "' was not found in the fitted model output.")
-    }
-    coef_name <- hit[[1]]
-    output_name <- names(output)[[idx]]
-    values <- t_stats[, coef_name, drop = TRUE]
-    df <- data.frame(
-      id = rownames(t_stats),
-      value = as.numeric(values),
-      stringsAsFactors = FALSE
-    )
-    df <- df[is.finite(df$value), , drop = FALSE]
-    output[[output_name]] <- df
-
-    top_table <- limma::topTable(
-      fit,
-      coef = coef_name,
-      number = Inf,
-      sort.by = "none"
-    )
-    top_table$GeneID <- rownames(top_table)
-    if (!is.null(symbol_map)) {
-      gene_symbols <- symbol_map[as.character(top_table$GeneID)]
-      top_table$GeneSymbol <- ifelse(
-        is.na(gene_symbols) | gene_symbols == "",
-        NA_character_,
-        gene_symbols
-      )
-      top_table <- top_table[, c("GeneID", "GeneSymbol", setdiff(colnames(top_table), c("GeneID", "GeneSymbol")))]
+      if (is.null(dim(contrast_matrix))) {
+        contrast_matrix <- matrix(
+          contrast_matrix,
+          ncol = 1,
+          dimnames = list(sanitized_terms, names(contrast_args))
+        )
+      }
     } else {
-      top_table <- top_table[, c("GeneID", setdiff(colnames(top_table), "GeneID"))]
+      is_intercept <- sanitized_terms %in% c("(Intercept)", "Intercept", "XIntercept", "X.Intercept.")
+      base_terms <- sanitized_terms[!is_intercept]
+      if (length(base_terms) == 0) {
+        base_terms <- sanitized_terms
+      }
+      if (length(base_terms) == 0) {
+        stop("Design matrix contains no estimable terms after removing intercept.")
+      }
+      contrast_defs <- lapply(seq_along(base_terms), function(idx) {
+        term <- base_terms[[idx]]
+        original_term <- term_lookup[[term]] %||% term
+        pretty_alias <- prettify_term_label(original_term, term)
+        list(
+          alias = pretty_alias,
+          expression = term,
+          file_stub = util_tools$safe_filename(
+            pretty_alias,
+            fallback = paste0("coef_", idx)
+          ),
+          original_term = original_term,
+          coef_name = term
+        )
+      })
+      alias_unique <- make.unique(vapply(contrast_defs, function(def) def$alias, character(1)), sep = "_")
+      stub_unique <- make.unique(vapply(contrast_defs, function(def) def$file_stub, character(1)), sep = "_")
+      for (idx in seq_along(contrast_defs)) {
+        contrast_defs[[idx]]$alias <- alias_unique[[idx]]
+        contrast_defs[[idx]]$file_stub <- stub_unique[[idx]]
+      }
     }
-    result_tables[[idx]] <- top_table
 
-    volcano_plot <- top_table
-    volcano_plot$signedlogP <- sign(volcano_plot$logFC) * -log10(pmax(volcano_plot$P.Value, .Machine$double.eps))
-    volcano_plot$neg_log10_p <- -log10(pmax(volcano_plot$P.Value, .Machine$double.eps))
-    volcano_plot$significant <- !is.na(volcano_plot$`adj.P.Val`) & volcano_plot$`adj.P.Val` < sig_cutoff
-    volcano_plot$direction <- ifelse(
-      volcano_plot$significant,
-      ifelse(volcano_plot$logFC >= 0, "up", "down"),
-      "ns"
+    # Fit limma
+    print("Design matrix is :")
+    print(design_matrix)
+    fit <- limma::lmFit(expr_mat, design_matrix)
+    if (apply_contrasts) {
+      fit <- limma::contrasts.fit(fit, contrast_matrix)
+    }
+    fit <- limma::eBayes(fit, trend=TRUE, robust=TRUE)
+
+    t_stats <- as.matrix(fit$t)
+    if (is.null(colnames(t_stats))) {
+      colnames(t_stats) <- vapply(contrast_defs, function(def) def$alias, character(1))
+    }
+
+    # Allow distinct naming/labeling when running multiple imputations
+    run_model_name <- model_name
+    run_model_label <- model_label
+    if (!is.null(label_suffix) && nzchar(label_suffix)) {
+      run_model_name <- paste0(model_name, "_", label_suffix)
+      run_model_label <- paste0(model_label, " (", label_suffix, ")")
+    }
+
+    prefix <- util_tools$safe_filename(run_model_name, fallback = paste0("model", model_index))
+
+    output <- vector("list", length(contrast_defs))
+    result_tables <- vector("list", length(contrast_defs))
+    volcano_tables <- vector("list", length(contrast_defs))
+
+    names(output) <- vapply(
+      contrast_defs,
+      function(def) util_tools$safe_filename(prefix, def$file_stub),
+      character(1)
     )
-    volcano_tables[[idx]] <- volcano_plot
-  }
 
-  updated_metadata <- list()
-  annotated_gct_path <- NULL
-  if (length(predictor_columns) > 0) {
-    for (safe_name in names(predictor_columns)) {
-      predictor <- predictor_columns[[safe_name]]$values
-      aligned <- rep(NA_real_, length(metadata$.sample_id))
-      names(aligned) <- metadata$.sample_id
-      matches <- intersect(names(predictor), names(aligned))
-      aligned[matches] <- as.numeric(predictor[matches])
-      metadata[[safe_name]] <- aligned
-      updated_metadata[[safe_name]] <- aligned
+    contrast_aliases <- vapply(contrast_defs, function(def) def$alias, character(1))
+    contrast_file_stubs <- vapply(contrast_defs, function(def) def$file_stub, character(1))
+    names(contrast_aliases) <- names(output)
+    names(contrast_file_stubs) <- names(output)
+
+    lookup_term <- function(key) {
+      if (!is.character(key) || length(key) == 0) {
+        return(NULL)
+      }
+      candidate <- key[[1]]
+      if (!nzchar(candidate) || is.null(names(term_lookup))) {
+        return(NULL)
+      }
+      if (!(candidate %in% names(term_lookup))) {
+        return(NULL)
+      }
+      term_lookup[[candidate]]
     }
-    attr(output, "metadata_columns") <- names(updated_metadata)
-    attr(output, "metadata_values") <- updated_metadata
-    log_msg(info = paste0(
-      "Captured predictor metadata columns for model ",
-      model_name, ": ",
-      paste(names(updated_metadata), collapse = ", ")
-    ))
-    annotated_gct_path <- append_metadata_to_gct(
-      gct = gct,
-      metadata_values = updated_metadata,
-      output_dir = output_dir,
-      model_label = model_label,
+
+    for (idx in seq_along(contrast_defs)) {
+      alias <- contrast_defs[[idx]]$alias
+      candidates <- c(
+        contrast_defs[[idx]]$coef_name,
+        contrast_defs[[idx]]$expression,
+        alias,
+        lookup_term(contrast_defs[[idx]]$coef_name),
+        lookup_term(contrast_defs[[idx]]$expression)
+      )
+      candidates <- unique(Filter(function(x) is.character(x) && nzchar(x), candidates))
+      available_cols <- colnames(t_stats)
+      hit <- candidates[candidates %in% available_cols]
+      if (length(hit) == 0) {
+        stop("Contrast '", alias, "' was not found in the fitted model output.")
+      }
+      coef_name <- hit[[1]]
+      output_name <- names(output)[[idx]]
+      values <- t_stats[, coef_name, drop = TRUE]
+      df <- data.frame(
+        id = rownames(t_stats),
+        value = as.numeric(values),
+        stringsAsFactors = FALSE
+      )
+      df <- df[is.finite(df$value), , drop = FALSE]
+      output[[output_name]] <- df
+
+      top_table <- limma::topTable(
+        fit,
+        coef = coef_name,
+        number = Inf,
+        sort.by = "none"
+      )
+      top_table$GeneID <- rownames(top_table)
+      if (!is.null(symbol_map)) {
+        gene_symbols <- symbol_map[as.character(top_table$GeneID)]
+        top_table$GeneSymbol <- ifelse(
+          is.na(gene_symbols) | gene_symbols == "",
+          NA_character_,
+          gene_symbols
+        )
+        top_table <- top_table[, c("GeneID", "GeneSymbol", setdiff(colnames(top_table), c("GeneID", "GeneSymbol")))]
+      } else {
+        top_table <- top_table[, c("GeneID", setdiff(colnames(top_table), "GeneID"))]
+      }
+      result_tables[[idx]] <- top_table
+
+      volcano_plot <- top_table
+      volcano_plot$signedlogP <- sign(volcano_plot$logFC) * -log10(pmax(volcano_plot$P.Value, .Machine$double.eps))
+      volcano_plot$neg_log10_p <- -log10(pmax(volcano_plot$P.Value, .Machine$double.eps))
+      volcano_plot$significant <- !is.na(volcano_plot$`adj.P.Val`) & volcano_plot$`adj.P.Val` < sig_cutoff
+      volcano_plot$direction <- ifelse(
+        volcano_plot$significant,
+        ifelse(volcano_plot$logFC >= 0, "up", "down"),
+        "ns"
+      )
+      volcano_tables[[idx]] <- volcano_plot
+    }
+
+    updated_metadata <- list()
+    annotated_gct_path <- NULL
+    if (length(predictor_columns) > 0) {
+      for (safe_name in names(predictor_columns)) {
+        predictor <- predictor_columns[[safe_name]]$values
+        aligned <- rep(NA_real_, length(current_metadata$.sample_id))
+        names(aligned) <- current_metadata$.sample_id
+        matches <- intersect(names(predictor), names(aligned))
+        aligned[matches] <- as.numeric(predictor[matches])
+        current_metadata[[safe_name]] <- aligned
+        updated_metadata[[safe_name]] <- aligned
+      }
+      attr(output, "metadata_columns") <- names(updated_metadata)
+      attr(output, "metadata_values") <- updated_metadata
+      log_msg(info = paste0(
+        "Captured predictor metadata columns for model ",
+        run_model_name, ": ",
+        paste(names(updated_metadata), collapse = ", ")
+      ))
+      annotated_gct_path <- append_metadata_to_gct(
+        gct = gct,
+        metadata_values = updated_metadata,
+        output_dir = output_dir,
+        model_label = run_model_label,
+        replace = replace,
+        logger = log_msg
+      )
+    }
+
+    attr(output, "tables") <- setNames(result_tables, names(output))
+    attr(output, "volcano") <- setNames(volcano_tables, names(output))
+    attr(output, "model_name") <- run_model_name
+    attr(output, "model_type") <- model_type
+    attr(output, "aliases") <- contrast_aliases
+    attr(output, "file_stubs") <- contrast_file_stubs
+    attr(output, "volcano_sig_cutoff") <- sig_cutoff
+    attr(output, "volcano_top_n") <- label_top_n
+    if (!is.null(annotated_gct_path)) {
+      attr(output, "annotated_gct_path") <- annotated_gct_path
+    }
+
+    persist_model_outputs(
+      output,
+      output_dir,
       replace = replace,
-      logger = log_msg
+      model_label = run_model_label,
+      logger = log_msg,
+      sig_cutoff = sig_cutoff,
+      label_top_n = label_top_n
     )
+
+    output
   }
 
-  attr(output, "tables") <- setNames(result_tables, names(output))
-  attr(output, "volcano") <- setNames(volcano_tables, names(output))
-  attr(output, "model_name") <- model_name
-  attr(output, "model_type") <- model_type
-  attr(output, "aliases") <- contrast_aliases
-  attr(output, "file_stubs") <- contrast_file_stubs
-  attr(output, "volcano_sig_cutoff") <- sig_cutoff
-  attr(output, "volcano_top_n") <- label_top_n
-  if (!is.null(annotated_gct_path)) {
-    attr(output, "annotated_gct_path") <- annotated_gct_path
+  if (do_impute) {
+    if (!requireNamespace("mice", quietly = TRUE)) {
+      stop("The 'mice' package is required for imputation but is not installed.")
+    }
+    # If expression has any NA, widen scope to include expression even if user
+    # only requested metadata (to satisfy "any NA in whole dataset" semantics)
+    expr_na_total <- sum(is.na(expression_mat))
+    impute_apply_to_eff <- impute_apply_to
+    if (identical(impute_apply_to, "metadata") && expr_na_total > 0) {
+      impute_apply_to_eff <- "both"
+      log_msg(info = paste0("Detected NAs in expression matrix (", expr_na_total, "); expanding imputation scope to 'both'."))
+    }
+    # Determine variables eligible for imputation across the entire metadata
+    all_cols <- setdiff(colnames(metadata), c(".sample_id"))
+    if (!is.null(impute_vars)) {
+      impute_cols <- intersect(as.character(impute_vars), all_cols)
+    } else {
+      impute_cols <- all_cols
+    }
+    # keep only atomic (non-list) columns
+    if (length(impute_cols) > 0) {
+      keep_mask <- vapply(metadata[, impute_cols, drop = FALSE], function(v) is.atomic(v) && !is.list(v), logical(1))
+      impute_cols <- impute_cols[keep_mask]
+    }
+
+    if (length(impute_cols) == 0) {
+      log_msg(info = "mice imputation requested but no eligible metadata columns found; proceeding without imputation.")
+      do_impute <- FALSE
+    } else {
+      # Count missing before
+      na_counts <- vapply(impute_cols, function(v) sum(is.na(metadata[[v]])), integer(1))
+      total_na <- sum(na_counts)
+      impute_cols_with_na <- impute_cols[na_counts > 0]
+      if (total_na == 0 && !(impute_apply_to_eff %in% c("both", "expression") && expr_na_total > 0)) {
+        log_msg(info = "No missing values detected in metadata; skipping imputation.")
+        do_impute <- FALSE
+      } else {
+        log_msg(info = paste0(
+          "Running mice imputation on ", length(impute_cols),
+          " metadata columns (", total_na, " total missing values)"
+        ))
+
+        # Prepare data for mice: selected metadata; convert characters to factors for mice
+        mice_data <- metadata[, impute_cols, drop = FALSE]
+        orig_types <- vapply(mice_data, function(x) class(x)[1], character(1))
+        char_cols <- names(orig_types)[orig_types == "character"]
+        if (length(char_cols) > 0) {
+          for (cn in char_cols) mice_data[[cn]] <- factor(mice_data[[cn]])
+        }
+
+        # Respect user-provided defaultMethod if supplied
+        args <- list(
+          data = mice_data,
+          m = max(1L, impute_m),
+          maxit = max(1L, impute_maxit),
+          printFlag = FALSE
+        )
+        # Optional: methods vector mapping variables to specific imputation functions
+        if (!is.null(impute_methods)) {
+          cols <- colnames(mice_data)
+          if (is.character(impute_methods) && length(impute_methods) == 1 && is.null(names(impute_methods))) {
+            # Single method string applied to all columns with missingness
+            miss_cols <- cols[vapply(cols, function(cn) any(is.na(mice_data[[cn]])), logical(1))]
+            method_vec <- rep("", length(cols))
+            names(method_vec) <- cols
+            method_vec[miss_cols] <- impute_methods
+            args$method <- method_vec
+          } else {
+            # Named vector or list mapping variable -> method
+            method_vec <- rep("", length(cols))
+            names(method_vec) <- cols
+            if (is.list(impute_methods)) impute_methods <- unlist(impute_methods, use.names = TRUE)
+            for (nm in intersect(names(impute_methods), cols)) {
+              if (any(is.na(mice_data[[nm]]))) method_vec[[nm]] <- as.character(impute_methods[[nm]])
+            }
+            args$method <- method_vec
+          }
+        }
+        # Optional: blocks grouping
+        if (!is.null(impute_blocks)) {
+          args$blocks <- impute_blocks
+        }
+        if (!is.null(impute_defaultMethod)) {
+          args$defaultMethod <- impute_defaultMethod
+        }
+        if (!is.null(impute_seed)) {
+          # do not set global seed; pass to mice if provided
+          args$seed <- impute_seed
+        }
+
+        imp <- do.call(mice::mice, args)
+
+        # Create overlay density/hist diagnostics for imputed variables
+        tryCatch({
+          plot_imputation_diagnostics(
+            imp = imp,
+            original_metadata = metadata,
+            vars = impute_cols_with_na,
+            outdir = output_dir,
+            model_label = model_label,
+            logger = log_msg
+          )
+        }, error = function(e) {
+          if (!is.null(log_msg)) log_msg(warning = paste0("Imputation diagnostics failed: ", conditionMessage(e)))
+        }, warning = function(w) {
+          if (!is.null(log_msg)) log_msg(warning = paste0("Imputation diagnostics warning: ", conditionMessage(w)))
+        })
+
+        # Single imputation: fit once on completed data
+        if (imp$m <= 1L) {
+          completed <- mice::complete(imp, 1)
+          # Convert back character columns that were coerced to factor
+          for (cn in intersect(char_cols, colnames(completed))) {
+            completed[[cn]] <- as.character(completed[[cn]])
+          }
+          metadata[, colnames(completed)] <- completed
+          # Optional expression matrix imputation
+          if (impute_apply_to_eff %in% c("both", "expression")) {
+            expression_mat <<- impute_expression_with_mice(
+              expression_mat,
+              meta_df = metadata,
+              method = impute_expr_method,
+              logger = log_msg
+            )
+          }
+          output <- fit_one(metadata, label_suffix = NULL)
+          # attach imputation meta
+          attr(output, "imputation") <- imputation_cache_info
+
+          if (cache_enabled && !is.null(cache_key)) {
+            write_cached_model_results(cache_dir, cache_key, output, logger = log_msg)
+          }
+          return(output)
+        }
+
+        # Multiple imputations: fit per completed dataset and combine outputs
+        all_outputs <- list()
+        for (k in seq_len(imp$m)) {
+          completed <- mice::complete(imp, k)
+          md_k <- metadata
+          # Convert back character columns that were coerced to factor
+          for (cn in intersect(char_cols, colnames(completed))) {
+            completed[[cn]] <- as.character(completed[[cn]])
+          }
+          md_k[, colnames(completed)] <- completed
+          # Optional expression matrix imputation per imputation k
+          if (impute_apply_to_eff %in% c("both", "expression")) {
+            expression_mat_k <- impute_expression_with_mice(
+              expression_mat,
+              meta_df = md_k,
+              method = impute_expr_method,
+              logger = log_msg
+            )
+            # replace for this run
+            expression_mat_backup <- expression_mat
+            expression_mat <<- expression_mat_k
+          } else {
+            expression_mat_backup <- NULL
+          }
+          suffix <- paste0("imp", k)
+          out_k <- fit_one(md_k, label_suffix = suffix)
+          # restore expression matrix if modified
+          if (!is.null(expression_mat_backup)) expression_mat <<- expression_mat_backup
+          attr(out_k, "imputation") <- modifyList(imputation_cache_info, list(imputation_index = k))
+          all_outputs <- c(all_outputs, out_k)
+        }
+
+        # For caching, store the combined list
+        if (cache_enabled && !is.null(cache_key)) {
+          write_cached_model_results(cache_dir, cache_key, all_outputs, logger = log_msg)
+        }
+        return(all_outputs)
+      }
+    }
   }
 
-  persist_model_outputs(
-    output,
-    output_dir,
-    replace = replace,
-    model_label = model_label,
-    logger = log_msg,
-    sig_cutoff = sig_cutoff,
-    label_top_n = label_top_n
-  )
-
+  # No imputation requested or needed: fit once on the original data
+  output <- fit_one(metadata, label_suffix = NULL)
+  attr(output, "imputation") <- list(engine = "none")
   if (cache_enabled && !is.null(cache_key)) {
     write_cached_model_results(cache_dir, cache_key, output, logger = log_msg)
   }
-
   output
 }
